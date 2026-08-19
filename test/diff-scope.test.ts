@@ -13,6 +13,13 @@ import { resolveBase } from '../lib/gate-diff/git';
 
 const SCRIPT = join(import.meta.dir, '..', 'bin', 'gstack-diff-scope');
 
+// Hermeticity: isolate every git call (fixture setup AND the script under
+// test) from user/system git config. A user-global gitignore silently drops
+// fixtures from `git add .` — measured on a machine whose ~/.gitignore_global
+// carries `*.sql`, which vanished every migration fixture and turned the two
+// migration cases below red while the script's logic was correct.
+const GIT_ENV = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+
 const dirs: string[] = [];
 
 function createRepo(files: string[]): string {
@@ -20,7 +27,7 @@ function createRepo(files: string[]): string {
   dirs.push(dir);
 
   const run = (cmd: string, args: string[]) =>
-    spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000 });
+    spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV } });
 
   run('git', ['init', '-b', 'main']);
   run('git', ['config', 'user.email', 'test@test.com']);
@@ -47,7 +54,7 @@ function createRepo(files: string[]): string {
 
 function runScope(dir: string): Record<string, string> {
   const result = spawnSync('bash', [SCRIPT, 'main'], {
-    cwd: dir, stdio: 'pipe', timeout: 5000,
+    cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV },
   });
   const output = result.stdout.toString().trim();
   const vars: Record<string, string> = {};
@@ -282,7 +289,7 @@ describe('gstack-diff-scope', () => {
 
 function runScopeFull(dir: string): { vars: Record<string, string>; status: number; stdout: string } {
   const result = spawnSync('bash', [SCRIPT, 'main'], {
-    cwd: dir, stdio: 'pipe', timeout: 5000,
+    cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV },
   });
   const stdout = result.stdout.toString();
   const vars: Record<string, string> = {};
@@ -393,7 +400,7 @@ describe('exit-code contract (#2526)', () => {
 
   test('unresolvable base → SCOPE_ERROR=no_base + exit 2 (a green would mean "could not look")', () => {
     const dir = createRepo(['app.ts']);
-    const result = spawnSync('bash', [SCRIPT, 'no-such-branch'], { cwd: dir, stdio: 'pipe', timeout: 5000 });
+    const result = spawnSync('bash', [SCRIPT, 'no-such-branch'], { cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV } });
     expect(result.status).toBe(2);
     const out = result.stdout.toString();
     expect(out).toContain('SCOPE_ERROR=no_base');
@@ -407,7 +414,7 @@ describe('exit-code contract (#2526)', () => {
     // every output line is a valid assignment or comment.
     const dir = createRepo(['weird/layout.xyz']);
     const result = spawnSync('bash', ['-c', `out="$(bash "${SCRIPT}" main)"; eval "$out"; echo "ERR=$SCOPE_ERROR FRONT=$SCOPE_FRONTEND"`], {
-      cwd: dir, stdio: 'pipe', timeout: 5000,
+      cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV },
     });
     expect(result.stdout.toString()).toContain('ERR=unmatched FRONT=false');
   });
@@ -481,7 +488,7 @@ describe('uncommitted work is visible (#2299)', () => {
   test('uncommitted change on a branch with no commits sets the scope', () => {
     const dir = mkdtempSync(join(tmpdir(), 'diff-scope-dirty-'));
     dirs.push(dir);
-    const run = (cmd: string, args: string[]) => spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000 });
+    const run = (cmd: string, args: string[]) => spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV } });
     run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 't@t.com']);
     run('git', ['config', 'user.name', 'T']);
@@ -499,7 +506,7 @@ describe('uncommitted work is visible (#2299)', () => {
   test('an UNTRACKED new migration sets SCOPE_MIGRATIONS (reviewers must see it)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'diff-scope-untracked-'));
     dirs.push(dir);
-    const run = (cmd: string, args: string[]) => spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000 });
+    const run = (cmd: string, args: string[]) => spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV } });
     run('git', ['init', '-b', 'main']);
     run('git', ['config', 'user.email', 't@t.com']);
     run('git', ['config', 'user.name', 'T']);
