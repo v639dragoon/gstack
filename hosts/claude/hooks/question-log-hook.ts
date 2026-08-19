@@ -49,6 +49,12 @@ interface HookStdin {
       options?: Array<string | { label?: string; description?: string }>;
       multiSelect?: boolean;
     }>;
+    // Claude Code's permission component writes the collected answers back
+    // onto the tool INPUT, so tool_response alone is not enough. Probed as a
+    // fallback in main(). LOCAL PATCH (dohma): re-ported onto 1.65.0.0 after
+    // /gstack-upgrade reverted the 1.62 patch; upstream's Shape D parser
+    // reads this same answers map, it just never receives tool_input.
+    answers?: Record<string, unknown>;
   };
   tool_response?: unknown;
   cwd?: string;
@@ -206,9 +212,26 @@ function extractUserChoices(
         l.replace(RECOMMENDED_LABEL_RE, '').trim().toLowerCase(),
       );
       const notes = annotations[key]?.notes;
-      const isFreeText = !Array.isArray(v) && labels.length > 0 && !labels.includes(choice.toLowerCase());
+      let choiceOut = choice;
+      let isFreeText = !Array.isArray(v) && labels.length > 0 && !labels.includes(choice.toLowerCase());
+      // LOCAL PATCH (dohma): a multiSelect pick can arrive as ONE comma-joined
+      // string carrying a "(Recommended)" suffix mid-string ("Alpha
+      // (Recommended), Beta"), which the whole-string strip above cannot fix.
+      // Whole-string match ran FIRST (so an option label that legitimately
+      // contains a comma is never split); only when it failed, strip each
+      // comma segment's suffix and require EVERY segment to match a declared
+      // label before calling it a declared multi pick.
+      if (isFreeText && choice.includes(',')) {
+        const segs = choice
+          .split(',')
+          .map((s) => s.replace(RECOMMENDED_LABEL_RE, '').trim());
+        if (segs.length > 1 && segs.every((s) => labels.includes(s.toLowerCase()))) {
+          choiceOut = segs.join(', ');
+          isFreeText = false;
+        }
+      }
       const freeText = notes !== undefined ? String(notes) : isFreeText ? rawChoice : undefined;
-      out.push(freeText !== undefined ? { choice, free_text: freeText } : { choice });
+      out.push(freeText !== undefined ? { choice: choiceOut, free_text: freeText } : { choice: choiceOut });
     }
     return out;
   }
@@ -291,9 +314,20 @@ async function main(): Promise<void> {
   }
 
   const skill = detectSkill(stdin.cwd);
-  const choices = extractUserChoices(stdin.tool_response, questions, (msg) =>
-    logHookError(`${msg} (tool_use_id=${stdin.tool_use_id || 'n/a'})`),
-  );
+  const diag = (msg: string) =>
+    logHookError(`${msg} (tool_use_id=${stdin.tool_use_id || 'n/a'})`);
+  const choices = extractUserChoices(stdin.tool_response, questions, diag);
+  // LOCAL PATCH (dohma): the native AUQ's permission component writes the
+  // collected answers back onto the tool INPUT, so a response-only probe
+  // logs user_choice="__unknown__" with no error. Upstream's Shape D parser
+  // already understands the answers map — feed it tool_input as a per-question
+  // fallback whenever the response probe came up empty.
+  const inputChoices = extractUserChoices(stdin.tool_input, questions, diag);
+  for (let i = 0; i < questions.length; i++) {
+    if ((!choices[i] || choices[i].choice === '__unknown__') && inputChoices[i]) {
+      choices[i] = inputChoices[i];
+    }
+  }
 
   for (let i = 0; i < questions.length; i++) {
     const q = questions[i];
