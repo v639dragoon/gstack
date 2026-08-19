@@ -1750,8 +1750,9 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
   test('branches correctly per skillName — different prompts', () => {
     const planContent = readSkillUnion('plan-design-review');
     const consultContent = fs.readFileSync(path.join(ROOT, 'design-consultation', 'SKILL.md'), 'utf-8');
-    // plan-design-review uses analytical prompt (high reasoning)
-    expect(planContent).toContain('model_reasoning_effort="high"');
+    // plan-design-review is a plan-stage voice: routed to medium (Phase 0
+    // effort routing — only the live design-review audit keeps high)
+    expect(planContent).toContain('model_reasoning_effort="medium"');
     // design-consultation uses creative prompt (medium reasoning)
     expect(consultContent).toContain('model_reasoning_effort="medium"');
   });

@@ -616,6 +616,16 @@ per-mode default below. Otherwise, use the per-mode defaults:
 - Challenge (2B): `high` — adversarial but bounded by diff
 - Consult (2C): `medium` — large context, interactive, needs speed
 
+**xhigh must be RECORDED (Phase 0 effort control):** an xhigh run is never
+implicit — it exists only through this explicit flag, and the record is part
+of the contract. Whenever `--xhigh` was applied, the review-log/gate-log
+record for that call MUST include
+`"effort":"xhigh","effort_source":"user-override","effort_reason":"<the
+user's stated reason, or 'user --xhigh flag, no reason given'>"` — an
+unrecorded xhigh run is a bug (`gstack-gate-log` refuses a user-override
+record without a reason). Default-effort calls record
+`"effort_source":"default"` with the per-mode value.
+
 ---
 
 ## Filesystem Boundary
