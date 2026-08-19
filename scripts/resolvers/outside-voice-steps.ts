@@ -210,7 +210,7 @@ its original token. If it never started because it was unavailable, disabled or
 size-gated, omit \`--finish PASS_START\` and set completed/converged false.
 Do not create or borrow a token just to save a result.
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
 \`\`\`
 PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
 Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.8'} result:
@@ -225,6 +225,26 @@ Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.
 - GATE is "informational" for adversarial passes. For structured review, use
   "pass" or "fail" from its completed result, "skipped" when size-gated, or
   "informational" with completed:false when coverage is missing.
+The \`effort\` fields describe the CODEX passes (both high; plan and doc voices medium).
+
+**Persist per-gate telemetry (Phase 0; one record per pass that ran):**
+Append one gate record per pass, substituting the literal values you carried
+(RUN_ID/MANIFEST_WTREE from the Step 9.1 manifest when this runs inside
+/ship or /review; if no manifest was generated this run, run
+\`~/.claude/skills/gstack/bin/gstack-diff-manifest <base>\` now and use its
+values). \`tokens.total\` for a codex pass comes from the \`tokens used\` line
+in that pass's stderr (read it BEFORE the \`rm -f\` cleanup); omit \`tokens\`
+when unavailable.
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null or "fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null or "fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean = GATE pass, fail = GATE fail, timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null, "fix-loop", or "p1-gate"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+\`\`\`
+
+Only emit records for passes that actually dispatched (a skipped structured
+review at DIFF_TOTAL < 200 gets NO record — absence is the skip signal, the
+trigger stays honest). Telemetry is best-effort: failures never block.
 
 ---`;
 }
@@ -416,7 +436,7 @@ completed output. Use private temporary paths, with no background jobs.` : `Run 
 Finish a failed attempt's termination before fallback; consume only its completed
 output. No background jobs or shared temporary paths.`}
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000 })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium' })}
 
 Present the full output verbatim:
 
@@ -650,7 +670,7 @@ ${codexPlanBoundedWait(ctx, ceo, needsApprovalReadiness)}
 
 ${codexPlanCrossModelTension(ctx)}**Persist the result:**${ctx.skillName === 'plan-ceo-review' ? '\nThis is best-effort review history under Step 0\'s Artifact outcomes table. Attempt it only when permitted. On failure, retain the error, show the actual fields as not persisted and continue; when forbidden, show those fields without attempting the write.' : ''}
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"plan-review","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
 
 Substitute: STATUS = "clean" only if a reviewer completed and found no issues; "issues_found" if findings exist, or "unavailable" if neither reviewer completed. Never count missing coverage as a clean review.${['plan-ceo-review', 'plan-eng-review'].includes(ctx.skillName) ? ' A completed native fallback uses SOURCE=in-host, OUTSIDE_STATUS=unavailable, and STATUS=clean or issues_found from its findings. These findings are the reviewer\'s, even if later resolved by the parent.' : ''}
@@ -720,7 +740,7 @@ THE DOCS AND DIFF: <include current contents of each touched document, with its 
 
 **If \`CODEX_MODE: ready\` (or \`unverified\`) — run ${outsideVoiceFor(ctx).label}:**
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, diffCommand: 'DOC_DIFF_BASE=$(git merge-base origin/<base> HEAD 2>/dev/null || git merge-base <base> HEAD) && git diff "$DOC_DIFF_BASE" HEAD' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', diffCommand: 'DOC_DIFF_BASE=$(git merge-base origin/<base> HEAD 2>/dev/null || git merge-base <base> HEAD) && git diff "$DOC_DIFF_BASE" HEAD' })}
 
 Present the full output verbatim under \`${outsideVoiceFor(ctx).label.toUpperCase()} SAYS (documentation review):\`.
 
@@ -759,7 +779,7 @@ rewrites docs), respecting the skill's CHANGELOG and VERSION restrictions. Step 
 
 **Persist the result:**
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-doc-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"documentation","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-doc-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"documentation","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
 Substitute: STATUS = "clean" only if a reviewer completed and found no gaps; "issues_found" if gaps exist, or "unavailable" if neither reviewer completed. ${outsideVoiceProvenance(ctx, 'documentation')}
 
