@@ -917,9 +917,9 @@ echoed): an open PR at HEAD takes pr-body's existing-PR path (body and title onl
 
 Log metrics for `/retro` through `gstack-review-log`; it takes **no path argument**.
 
-(Per-gate invocation telemetry lives separately in `<branch>-gates.jsonl`,
-written by `gstack-gate-log` at each gate throughout the run — this step's
-reviews.jsonl row is unchanged and stays the aggregate record.)
+(Per-gate
+telemetry lives separately in `<branch>-gates.jsonl` via `gstack-gate-log`;
+this reviews.jsonl row is unchanged.)
 
 ```bash
 [ -d "${GSTACK_ROOT:-/-}/bin" ]&&[ -d "$GSTACK_ROOT/lib" ]||{ _r=$(git rev-parse --show-toplevel 2>/dev/null)/.factory/skills/gstack;[ -d "$_r/bin" ]||_r=~/.factory/skills/gstack;[ -d "$_r/bin" ]||{ echo "gstack: no install found (tried $_r). Fix: ./setup --host factory from your gstack checkout; ./setup --status shows it.">&2;exit 1;};GSTACK_ROOT=$_r;}

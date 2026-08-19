@@ -58,7 +58,7 @@ describe('Red Team scheduling (Phase 0)', () => {
       // The manifest is an index, never a diff replacement — the raw diff
       // command must still be in the specialist prompt.
       expect(content).toContain('git diff "$DIFF_BASE"');
-      expect(content).toContain('never replaces the diff');
+      expect(content).toMatch(/never\s+replaces the (raw )?diff/);
     });
 
     test(`${site}: the narrower security-specialist trigger wording never returns`, () => {
