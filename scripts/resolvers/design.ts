@@ -692,7 +692,10 @@ export function generateDesignOutsideVoices(ctx: TemplateContext): string {
 
   // Determine opt-in behavior and reasoning effort
   const isAutomatic = isDesignReview; // design-review runs automatically
-  const reasoningEffort = isDesignConsultation ? 'medium' : 'high'; // creative vs analytical
+  // Phase 0 effort routing: only the live design-review audit keeps high.
+  // Plan-stage voices (plan-design-review) route to medium alongside the
+  // other plan voices; design-consultation was already medium (creative).
+  const reasoningEffort = isDesignReview ? 'high' : 'medium';
 
   // Build the skill-specific outside-review prompt.
   let codexPrompt: string;
