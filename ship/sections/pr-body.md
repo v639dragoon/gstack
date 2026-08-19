@@ -6,13 +6,11 @@
 
 **Sequencing:** This step runs AFTER Step 17 (Push) and BEFORE Step 19 (Create PR). The PR is created once from final HEAD with the `## Documentation` section baked into the initial body. No create-then-re-edit dance.
 
-**Single-dispatch guard (Phase 0):** doc-release was the pipeline's #1
-sole-blocker, and 12 of its 36 observed dispatches were re-dispatches from
-ship-flow re-entry. Before dispatching, compute the doc fingerprint and check
-for a completed dispatch THIS run:
+**Single-dispatch guard (Phase 0):** before dispatching, compute the doc
+fingerprint and check for a completed dispatch THIS run:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-diff-manifest <base> <RUN_ID from Step 9.1, if one was minted this run> 2>/dev/null | grep -E '^(RUN_ID|DOC_FP|SHADOW_TIER)=' || true
+~/.claude/skills/gstack/bin/gstack-diff-manifest <base> <run_id if minted in Step 9.1> 2>/dev/null | grep -E '^(RUN_ID|DOC_FP)=' || true
 eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)"
 grep '"gate":"doc-release"' "${GSTACK_HOME:-$HOME/.gstack}/projects/$SLUG/$BRANCH-gates.jsonl" 2>/dev/null | tail -5
 ```
@@ -20,15 +18,14 @@ grep '"gate":"doc-release"' "${GSTACK_HOME:-$HOME/.gstack}/projects/$SLUG/$BRANC
 **Skip the redispatch ONLY when ALL THREE hold** on one prior record: same
 `run_id` as this run, same `doc_fingerprint` as the `DOC_FP` just printed, and
 a `verdict` that is not `error`/`timeout`. Then print `Documentation already
-synced this run (fingerprint unchanged) — reusing prior result`, reuse that
-record's stored `documentation_section` for Step 19, and skip the dispatch. If
-the record has no stored `documentation_section`, dispatch anyway — never
-degrade the PR body to honor a cache.
+synced this run — reusing prior result`, reuse its stored
+`documentation_section` for Step 19, and skip the dispatch. If the record has
+no stored `documentation_section`, dispatch anyway.
 
 If a completed record matches the fingerprint but belongs to a DIFFERENT run:
 still dispatch (cross-run skipping is NOT active in Phase 0), and set
-`"redispatch_would_skip":true` in this dispatch's shadow block below — that
-logged disagreement is the Phase 1 evidence for widening the skip.
+`"redispatch_would_skip":true` in the shadow block below — the Phase 1
+evidence for widening the skip.
 
 **Subagent prompt:**
 
@@ -49,18 +46,17 @@ logged disagreement is the Phase 1 evidence for widening the skip.
 
 **If the subagent fails or returns invalid JSON:** Print a warning and proceed to Step 19 without a `## Documentation` section. Do not block /ship on subagent failure. The user can run `/document-release` manually after the PR lands.
 
-**Persist the doc-release gate record (Phase 0; on every dispatch, including failures):**
+**Persist the doc-release gate record (Phase 0; every dispatch, failures included):**
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","commit":"{short HEAD SHA}","started_at":"{dispatch timestamp}","ended_at":"{completion timestamp}","model":"claude-subagent","effort":null,"verdict":"{clean if files_updated is empty, issues_found if non-empty, error on failure/invalid JSON}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array from the subagent},"files_updated_count":{N},"doc_commit":{"sha" or null},"pushed":{true|false},"documentation_section":{the JSON-escaped markdown string, or null — stored verbatim so a same-run skip can reuse it},"fix_cycle":{N},"rerun_cause":{null on first dispatch, "ship-reentry" on a re-dispatch},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{from the manifest shadow, or null},"false_negative":{true iff would_dispatch=false AND files_updated_count>0, else false; null when would_dispatch is null},"redispatch_would_skip":{true iff a completed prior-run record matched this fingerprint}}}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array},"files_updated_count":{N},"doc_commit":{"sha" or null},"pushed":{true|false},"documentation_section":{JSON-escaped markdown or null},"fix_cycle":{N},"rerun_cause":{null|"ship-reentry"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{from the manifest, or null},"false_negative":{true iff would_dispatch=false AND files_updated_count>0; null when would_dispatch null},"redispatch_would_skip":{true iff a completed prior-run record matched this fingerprint}}}' 2>/dev/null || true
 ```
 
 Substitute every {placeholder} with literals; JSON-escape the
-`documentation_section` markdown (quotes, newlines) — `gstack-gate-log`
-rejects malformed JSON loudly rather than corrupting the log. On a same-run
-SKIP, write no new record (the reused record already exists; absence of a
-second record is the skip signal). Telemetry is best-effort: a failed
-gate-log call never blocks the PR.
+`documentation_section` markdown (`gstack-gate-log` rejects malformed JSON
+loudly). On a same-run SKIP, write no new record — absence of a second record
+is the skip signal. Telemetry is best-effort: a failed gate-log call never
+blocks the PR.
 
 ---
 

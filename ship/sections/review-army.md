@@ -161,20 +161,17 @@ TEST_FW=""
 echo "TEST_FW: ${TEST_FW:-unknown}"
 ```
 
-### Generate the shared diff/risk manifest (Phase 0 telemetry)
+### Shared diff/risk manifest (Phase 0)
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-diff-manifest <base> 2>/dev/null || true
 date -u +%Y-%m-%dT%H:%M:%SZ
 ```
 
-Note the printed `RUN_ID`, `MANIFEST_PATH`, `MANIFEST_WTREE`, and `DOC_FP`
-values plus the timestamp — carry all of them as LITERALS into the gate-log
-calls below (and, in /ship, into Step 18's doc fingerprint check). If a
-manifest was already generated earlier in THIS skill run (e.g. a fix cycle),
-pass its RUN_ID as the second argument — `gstack-diff-manifest <base>
-<run_id>` — so one skill run keeps ONE run id across cycles. The manifest is
-an INDEX for the subagents; it never replaces the raw diff.
+Carry the printed `RUN_ID`, `MANIFEST_PATH`, `MANIFEST_WTREE`, `DOC_FP`
+and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
+a fix cycle, pass the earlier RUN_ID as arg 2 — one skill run, ONE run id.
+The manifest is an INDEX for the subagents; it never replaces the raw diff.
 
 ### Read specialist hit rates (adaptive gating)
 
@@ -237,9 +234,9 @@ If learnings are found, include them: "Past learnings for this domain: {learning
 
 4. Instructions:
 
-"You are a specialist code reviewer. A precomputed diff/risk manifest is at
-{MANIFEST_PATH} — read it FIRST as an index of what changed (files, sizes,
-scope flags). The manifest never replaces the diff: after reading it, run
+"You are a specialist code reviewer. A diff/risk manifest is at
+{MANIFEST_PATH} — read it FIRST as an index of what changed. It never
+replaces the diff: after reading it, run
 `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"` to get the full diff. Apply the checklist against the diff.
 
 For each finding, output a JSON object on its own line:
@@ -268,13 +265,9 @@ CHECKLIST:
 
 **Early Red Team (large diffs):** If DIFF_LINES > 200, the Red Team trigger is
 ALREADY known — include the Red Team subagent in this SAME parallel dispatch
-message instead of waiting for the specialists to finish (measured: it
-previously launched strictly after the last specialist in 12/14 runs, adding
-its whole p50 7.5 min to the critical path). Build its prompt per the "Red
-Team dispatch" section below, EARLY path. Do not dispatch it again later; the
-late path exists only for the specialist-CRITICAL trigger when no early
-dispatch happened. This changes WHEN Red Team runs on the >200 path, never
-WHETHER — the activation condition is unchanged.
+message. Build its prompt per the "Red Team dispatch" section below, EARLY
+path, and do not dispatch it again later. This changes WHEN Red Team runs,
+never WHETHER — the activation condition is unchanged.
 
 ---
 
@@ -358,18 +351,17 @@ lens into permanent silence after 10 dispatches.
 Include the Design specialist even though it uses `design-checklist.md` instead of the specialist schema files.
 Remember these stats — you will need them for the review-log entry in Step 5.8.
 
-**Persist per-gate telemetry (Phase 0; one line per dispatched gate):**
-For EACH dispatched specialist (and the Red Team, whichever path it ran on),
-append one gate record, substituting every {placeholder} with the literal
-values you carried from the manifest step and this merge:
+**Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
+the Red Team, either path), append one gate record, substituting every
+{placeholder} with the literals you carried:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"specialist:{name}","trigger":"{exact reason: always-on | SCOPE_AUTH=true | SCOPE_BACKEND=true&DIFF_LINES>100 | DIFF_LINES={N}>200 | user-flag:--{name}}","commit":"{short reviewed SHA}","started_at":"{batch launch timestamp}","ended_at":"{this gate's completion timestamp, or the merge timestamp if not individually observable}","model":"claude-subagent","effort":null,"tokens":{"total":{subagent tokens if reported, else null},"source":{"task-notification" or null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{0-based fix-cycle index; 0 on the first pass},"rerun_cause":{null on the first pass, "fix-loop" on re-dispatch},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"specialist:{name}","trigger":"{exact reason, e.g. always-on | SCOPE_AUTH=true | DIFF_LINES={N}>200 | user-flag:--{name}}","commit":"{short SHA}","started_at":"{batch launch ts}","ended_at":"{completion ts, or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N or null},"source":{"task-notification" or null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N, 0-based},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
 Telemetry is best-effort and additive: a failed gate-log call never blocks or
-changes the review. It also replaces nothing — the aggregate `specialists`
-object above still goes into the reviews.jsonl row exactly as before.
+changes the review, and the aggregate `specialists` object above still goes
+into the reviews.jsonl row exactly as before.
 
 ---
 
@@ -377,23 +369,21 @@ object above still goes into the reviews.jsonl row exactly as before.
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-Two dispatch paths, ONE activation condition (the condition above is the whole
-trigger surface — the paths only change WHEN the dispatch happens):
+Two dispatch paths, ONE activation condition — the paths only change WHEN the
+dispatch happens:
 
-**EARLY path (DIFF_LINES > 200):** the trigger was knowable before the
-specialists ran, so the Red Team subagent was already launched in the SAME
-parallel dispatch message as the specialists (see "Early Red Team" above). Do
-not dispatch again. Its prompt receives the red-team checklist from
+**EARLY path (DIFF_LINES > 200):** the Red Team subagent was already launched
+in the SAME parallel dispatch message as the specialists (see "Early Red Team"
+above); do not dispatch again. It receives the red-team checklist from
 `~/.claude/skills/gstack/review/specialists/red-team.md`, the manifest path,
-and the git diff command — but NOT merged specialist findings (they do not
-exist yet). Early prompt: "You are a red team reviewer. N specialists are
-reviewing this diff CONCURRENTLY — you will not see their findings, and your
-job is NOT to repeat their checklists. A diff/risk manifest is at
-{MANIFEST_PATH}; read it first as an index, then run
+and the git diff command — NOT merged findings (none exist yet). Early
+prompt: "You are a red team reviewer. N specialists are reviewing
+this diff CONCURRENTLY — you will not see their findings. A diff/risk
+manifest is at {MANIFEST_PATH}; read it first as an index, then run
 `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"`.
 Hunt for cross-cutting concerns, integration boundary issues, and failure
-modes that specialist checklists don't cover. Output findings as JSON objects
-(same schema as the specialists)."
+modes that specialist checklists don't cover. Output specialist-schema JSON
+findings."
 
 **LATE path (no early dispatch AND any specialist produced a CRITICAL
 finding):** dispatch one more subagent via the Agent tool now (foreground, not
@@ -411,8 +401,8 @@ don't cover."
 
 On either path: if the Red Team finds additional issues, merge them into the findings list before
 the Fix-First flow (item 4). Red Team findings are tagged with `"specialist":"red-team"`.
-Log its gate record with `"gate":"red-team"` and `trigger` set to
-`"DIFF_LINES={N}>200 (early)"` or `"specialist-critical (late)"`.
+Its gate record uses `"gate":"red-team"`, trigger `"DIFF_LINES={N}>200
+(early)"` or `"specialist-critical (late)"`.
 
 If the Red Team returns NO FINDINGS, note: "Red Team review: no additional issues found."
 If the Red Team subagent fails or times out, skip silently and continue.
@@ -466,7 +456,7 @@ Output a summary header: `Pre-Landing Review: N issues (X critical, Y informatio
 7. **After all fixes (auto + user-approved):**
    - If ANY fixes were applied: commit fixed files by name (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`), then **stay in this invocation and loop**: re-run the test suite (Step 5) on the fixed code, then re-run this review (Step 9 items 2-6) against the updated diff. Repeat until one full pass applies ZERO fixes — tests green and review clean — then continue to Step 12. NEVER stop to tell the user to run `/ship` again; a fix-and-rerun cycle has no user decision in it, and stopping there breaks the fully-automated contract (#2391).
    - **Bound: 3 fix cycles.** If the 3rd cycle still applies fixes, STOP and report which findings keep reappearing — a review that won't converge is a genuine blocker worth human eyes, not a re-run request.
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based (the first pass is cycle 0). Every gate re-dispatched by a later cycle carries `"fix_cycle":{cycle index}` and `"rerun_cause":"fix-loop"` in its gate-log record, so rerun cost is measurable per cycle. Telemetry only — it changes nothing about the loop itself.
+   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; every gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"` in its gate-log record. Telemetry only — it changes nothing about the loop itself.
    - If no fixes applied (all ASK items skipped, or no issues found): continue to Step 12.
 
 8. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
