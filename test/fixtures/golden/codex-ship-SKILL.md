@@ -1794,7 +1794,7 @@ Output a summary header: `Pre-Landing Review: N issues (X critical, Y informatio
 7. **After all fixes (auto + user-approved):**
    - If ANY fixes were applied: commit fixed files by name (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`), then **stay in this invocation and loop**: re-run the test suite (Step 5) on the fixed code, then re-run this review (Step 9 items 2-6) against the updated diff. Repeat until one full pass applies ZERO fixes — tests green and review clean — then continue to Step 12. NEVER stop to tell the user to run `/ship` again; a fix-and-rerun cycle has no user decision in it, and stopping there breaks the fully-automated contract (#2391).
    - **Bound: 3 fix cycles.** If the 3rd cycle still applies fixes, STOP and report which findings keep reappearing — a review that won't converge is a genuine blocker worth human eyes, not a re-run request.
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based (the first pass is cycle 0). Every gate re-dispatched by a later cycle carries `"fix_cycle":{cycle index}` and `"rerun_cause":"fix-loop"` in its gate-log record, so rerun cost is measurable per cycle. Telemetry only — it changes nothing about the loop itself.
+   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; every gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"` in its gate-log record. Telemetry only — it changes nothing about the loop itself.
    - If no fixes applied (all ASK items skipped, or no issues found): continue to Step 12.
 
 8. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
@@ -2299,13 +2299,11 @@ git push -u origin <branch-name>
 
 **Sequencing:** This step runs AFTER Step 17 (Push) and BEFORE Step 19 (Create PR). The PR is created once from final HEAD with the `## Documentation` section baked into the initial body. No create-then-re-edit dance.
 
-**Single-dispatch guard (Phase 0):** doc-release was the pipeline's #1
-sole-blocker, and 12 of its 36 observed dispatches were re-dispatches from
-ship-flow re-entry. Before dispatching, compute the doc fingerprint and check
-for a completed dispatch THIS run:
+**Single-dispatch guard (Phase 0):** before dispatching, compute the doc
+fingerprint and check for a completed dispatch THIS run:
 
 ```bash
-$GSTACK_ROOT/bin/gstack-diff-manifest <base> <RUN_ID from Step 9.1, if one was minted this run> 2>/dev/null | grep -E '^(RUN_ID|DOC_FP|SHADOW_TIER)=' || true
+$GSTACK_ROOT/bin/gstack-diff-manifest <base> <run_id if minted in Step 9.1> 2>/dev/null | grep -E '^(RUN_ID|DOC_FP)=' || true
 eval "$($GSTACK_ROOT/bin/gstack-slug 2>/dev/null)"
 grep '"gate":"doc-release"' "${GSTACK_HOME:-$HOME/.gstack}/projects/$SLUG/$BRANCH-gates.jsonl" 2>/dev/null | tail -5
 ```
@@ -2313,15 +2311,14 @@ grep '"gate":"doc-release"' "${GSTACK_HOME:-$HOME/.gstack}/projects/$SLUG/$BRANC
 **Skip the redispatch ONLY when ALL THREE hold** on one prior record: same
 `run_id` as this run, same `doc_fingerprint` as the `DOC_FP` just printed, and
 a `verdict` that is not `error`/`timeout`. Then print `Documentation already
-synced this run (fingerprint unchanged) — reusing prior result`, reuse that
-record's stored `documentation_section` for Step 19, and skip the dispatch. If
-the record has no stored `documentation_section`, dispatch anyway — never
-degrade the PR body to honor a cache.
+synced this run — reusing prior result`, reuse its stored
+`documentation_section` for Step 19, and skip the dispatch. If the record has
+no stored `documentation_section`, dispatch anyway.
 
 If a completed record matches the fingerprint but belongs to a DIFFERENT run:
 still dispatch (cross-run skipping is NOT active in Phase 0), and set
-`"redispatch_would_skip":true` in this dispatch's shadow block below — that
-logged disagreement is the Phase 1 evidence for widening the skip.
+`"redispatch_would_skip":true` in the shadow block below — the Phase 1
+evidence for widening the skip.
 
 **Subagent prompt:**
 
@@ -2355,18 +2352,17 @@ logged disagreement is the Phase 1 evidence for widening the skip.
 
 **If the subagent fails, returns invalid JSON, or never completes (backgrounded despite the flag, or no final output by the ~10-minute deadline):** First, if a backgrounded task is still running, STOP it (the harness's task-stop tool) — a live doc-sync agent shares this working tree and must not mutate it concurrently with Step 19. If it cannot be stopped, do NOT race it: wait one more bounded window (~5 minutes) for it to finish on its own; if it is still running after that, stop and tell the user — concurrent mutation of the working tree is worse than a paused ship. Then reconcile against the pre-dispatch HEAD you recorded: if HEAD advanced past it, the subagent committed before dying — first vet each new commit with `git show --stat <sha>` and confirm it touches only documentation files (never VERSION, package.json, or CHANGELOG.md — the parent owns all three this run). Pushing any commit pushes its ancestors, so if ANY new commit touches those files, push NONE of them — leave them all local and name them in the console message. Only an all-docs-only sequence gets pushed (never force; on rejection follow item 6's second-failure branch). Then run `git status`: if the failed run left staged or uncommitted doc edits, leave them out of the PR — do not commit them; if they were left staged, unstage them but NEVER discard the content (no checkout/clean) — and name them in the console message. Print `document-release did not complete — run /document-release manually after the PR lands`, then proceed to Step 19 without a `## Documentation` section. Do not block /ship on subagent failure or slowness — a missing Documentation section is recoverable after the PR lands; a stranded ship run is not. The user can run `/document-release` manually after the PR lands.
 
-**Persist the doc-release gate record (Phase 0; on every dispatch, including failures):**
+**Persist the doc-release gate record (Phase 0; every dispatch, failures included):**
 
 ```bash
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","commit":"{short HEAD SHA}","started_at":"{dispatch timestamp}","ended_at":"{completion timestamp}","model":"claude-subagent","effort":null,"verdict":"{clean if files_updated is empty, issues_found if non-empty, error on failure/invalid JSON}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array from the subagent},"files_updated_count":{N},"doc_commit":{"sha" or null},"pushed":{true|false},"documentation_section":{the JSON-escaped markdown string, or null — stored verbatim so a same-run skip can reuse it},"fix_cycle":{N},"rerun_cause":{null on first dispatch, "ship-reentry" on a re-dispatch},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{from the manifest shadow, or null},"false_negative":{true iff would_dispatch=false AND files_updated_count>0, else false; null when would_dispatch is null},"redispatch_would_skip":{true iff a completed prior-run record matched this fingerprint}}}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array},"files_updated_count":{N},"doc_commit":{"sha" or null},"pushed":{true|false},"documentation_section":{JSON-escaped markdown or null},"fix_cycle":{N},"rerun_cause":{null|"ship-reentry"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{from the manifest, or null},"false_negative":{true iff would_dispatch=false AND files_updated_count>0; null when would_dispatch null},"redispatch_would_skip":{true iff a completed prior-run record matched this fingerprint}}}' 2>/dev/null || true
 ```
 
 Substitute every {placeholder} with literals; JSON-escape the
-`documentation_section` markdown (quotes, newlines) — `gstack-gate-log`
-rejects malformed JSON loudly rather than corrupting the log. On a same-run
-SKIP, write no new record (the reused record already exists; absence of a
-second record is the skip signal). Telemetry is best-effort: a failed
-gate-log call never blocks the PR.
+`documentation_section` markdown (`gstack-gate-log` rejects malformed JSON
+loudly). On a same-run SKIP, write no new record — absence of a second record
+is the skip signal. Telemetry is best-effort: a failed gate-log call never
+blocks the PR.
 
 ---
 
@@ -2558,10 +2554,9 @@ Print the branch name, remote URL, and instruct the user to create the PR/MR man
 
 ## Step 20: Persist ship metrics
 
-Log coverage and plan completion data so `/retro` can track trends.
-(Per-gate invocation telemetry lives separately in `<branch>-gates.jsonl`,
-written by `gstack-gate-log` at each gate throughout the run — this step's
-reviews.jsonl row is unchanged and stays the aggregate record.)
+Log coverage and plan completion data so `/retro` can track trends. (Per-gate
+telemetry lives separately in `<branch>-gates.jsonl` via `gstack-gate-log`;
+this reviews.jsonl row is unchanged.)
 
 Route the append through `gstack-review-log`. It resolves the project slug and
 the canonical branch form itself, creates the directory, validates the JSON, and
