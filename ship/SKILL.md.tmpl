@@ -510,10 +510,9 @@ git push -u origin <branch-name>
 
 ## Step 20: Persist ship metrics
 
-Log coverage and plan completion data so `/retro` can track trends.
-(Per-gate invocation telemetry lives separately in `<branch>-gates.jsonl`,
-written by `gstack-gate-log` at each gate throughout the run — this step's
-reviews.jsonl row is unchanged and stays the aggregate record.)
+Log coverage and plan completion data so `/retro` can track trends. (Per-gate
+telemetry lives separately in `<branch>-gates.jsonl` via `gstack-gate-log`;
+this reviews.jsonl row is unchanged.)
 
 Route the append through `gstack-review-log`. It resolves the project slug and
 the canonical branch form itself, creates the directory, validates the JSON, and
