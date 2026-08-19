@@ -909,6 +909,10 @@ echoed): an open PR at HEAD takes pr-body's existing-PR path (body and title onl
 
 Log metrics for `/retro` through `gstack-review-log`; it takes **no path argument**.
 
+(Per-gate invocation telemetry lives separately in `<branch>-gates.jsonl`,
+written by `gstack-gate-log` at each gate throughout the run — this step's
+reviews.jsonl row is unchanged and stays the aggregate record.)
+
 ```bash
 ~/.gemini/antigravity-cli/skills/gstack/bin/gstack-review-log '{"skill":"ship","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","coverage_pct":COVERAGE_PCT,"coverage_schema":2,"coverage_pct_value":COVERAGE_PCT_VALUE,"weak_gaps":WEAK_GAPS,"tests_extended":TESTS_EXTENDED,"tests_rejected":TESTS_REJECTED,"regression_proof":REGRESSION_PROOF,"plan_items_total":PLAN_TOTAL,"plan_items_done":PLAN_DONE,"verification_result":"VERIFY_RESULT","version":"VERSION","branch":"'"$(git rev-parse --abbrev-ref HEAD)"'"}'
 ```
