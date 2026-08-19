@@ -284,6 +284,10 @@ cat > "$GSTACK_HOME/.brain-allowlist" <<'EOF'
 # below the marker and survive re-init.
 projects/*/learnings.jsonl
 projects/*/*-reviews.jsonl
+# Per-gate-invocation telemetry (Phase 0 PR-gating instrumentation, written by
+# gstack-gate-log). Manifests (projects/*/manifests/) stay local on purpose:
+# content-addressed and regenerable from the repo.
+projects/*/*-gates.jsonl
 projects/*/ceo-plans/*.md
 projects/*/ceo-plans/*/*.md
 projects/*/designs/*.md
@@ -329,6 +333,7 @@ cat > "$GSTACK_HOME/.brain-privacy-map.json" <<'EOF'
 [
   {"pattern": "projects/*/learnings.jsonl", "class": "artifact"},
   {"pattern": "projects/*/*-reviews.jsonl", "class": "artifact"},
+  {"pattern": "projects/*/*-gates.jsonl", "class": "artifact"},
   {"pattern": "projects/*/ceo-plans/*.md", "class": "artifact"},
   {"pattern": "projects/*/ceo-plans/*/*.md", "class": "artifact"},
   {"pattern": "projects/*/designs/*.md", "class": "artifact"},
