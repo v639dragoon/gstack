@@ -697,7 +697,7 @@ export function generateDesignOutsideVoices(ctx: TemplateContext): string {
 
   // design-review asks no question; codex_reviews (enforced by the send) is its consent
   const isAutomatic = isDesignReview;
-  const reasoningEffort = isDesignConsultation ? 'medium' : 'high'; // creative vs analytical
+  const reasoningEffort = isDesignReview ? 'high' : 'medium'; // only the live audit keeps high
 
   // Build the skill-specific outside-review prompt.
   let codexPrompt: string;

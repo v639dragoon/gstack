@@ -2379,10 +2379,10 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
   test('branches correctly per skillName — different prompts', () => {
     const planContent = readSkillUnion('plan-design-review');
     const consultContent = readSkillUnion('design-consultation');
-    // plan-design-review uses analytical prompt (high reasoning); run-with-timeout
+    // plan-design-review uses analytical prompt (medium reasoning); run-with-timeout
     // turns --effort X into -c model_reasoning_effort="X" (test/codex-probe-subcommands.test.ts)
-    expect(planContent).toContain('run-with-timeout --effort high ');
-    expect(planContent).not.toContain('--effort medium');
+    expect(planContent).toContain('run-with-timeout --effort medium ');
+    expect(planContent).not.toContain('--effort high');
     // design-consultation uses creative prompt (medium reasoning)
     expect(consultContent).toContain('run-with-timeout --effort medium ');
     expect(consultContent).not.toContain('--effort high');
