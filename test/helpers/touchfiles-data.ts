@@ -65,7 +65,7 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'review-army-delivery-audit':   ['review/**', 'scripts/resolvers/review.ts', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts'],
   'review-army-quality-score':    ['review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts'],
   'review-army-json-findings':    ['review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts'],
-  'review-army-red-team':         ['review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts'],
+  'review-army-red-team':         ['review/**', 'scripts/resolvers/review-army.ts', 'bin/gstack-diff-manifest', 'bin/gstack-diff-manifest.ts', 'bin/gstack-gate-log', 'test/skill-e2e-review-army.test.ts'],
   'review-army-simplification':   ['review/**', 'scripts/resolvers/review-army.ts', 'test/fixtures/review-army-overbuild.js', 'test/fixtures/review-army-lean-complete.js', 'test/skill-e2e-review-army.test.ts'],
   'review-army-simplification-precision': ['review/**', 'scripts/resolvers/review-army.ts', 'test/fixtures/review-army-overbuild.js', 'test/fixtures/review-army-lean-complete.js', 'test/skill-e2e-review-army.test.ts'],
   'review-army-consensus':        ['review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts'],
