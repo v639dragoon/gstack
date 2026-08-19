@@ -1,6 +1,6 @@
 # Red Team Review
 
-Scope: When diff > 200 lines OR security specialist found CRITICAL findings. Runs AFTER other specialists.
+Scope: When diff > 200 lines OR any specialist found CRITICAL findings. Runs IN PARALLEL with the other specialists on the >200-line path (the trigger is knowable up front), or AFTER them when a specialist CRITICAL is what activated it.
 Output: JSON objects, one finding per line. Schema:
 {"severity":"CRITICAL|INFORMATIONAL","confidence":N,"path":"file","line":N,"category":"red-team","summary":"...","fix":"...","fingerprint":"path:line:red-team","specialist":"red-team"}
 Optional: line, fix, fingerprint, evidence, test_stub.
