@@ -494,7 +494,7 @@ cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 source "$HOME/.claude/skills/gstack/bin/gstack-codex-probe" || exit 1
 _OUTSIDE_PROMPT=$(cat "$_OUTSIDE_INPUT") || exit 1
 _OUTSIDE_EXIT=0
-_gstack_codex_timeout_wrapper 300 codex exec "$_OUTSIDE_PROMPT" -C "$_REPO_ROOT" -s read-only -c "model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" -c 'model_reasoning_effort="high"' -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+_gstack_codex_timeout_wrapper 300 codex exec "$_OUTSIDE_PROMPT" -C "$_REPO_ROOT" -s read-only -c "model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" -c 'model_reasoning_effort="medium"' -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 # Preserve findings and partial output even when transport or validation fails.
 cat "$_OUTSIDE_TMP/text" || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
 
@@ -618,7 +618,7 @@ also supplies no cross-model agreement or clean-review credit.
 **Persist the result:**
 This is best-effort review history under Step 0's Artifact outcomes table. Attempt it only when permitted. On failure, retain the error, show the actual fields as not persisted and continue; when forbidden, show those fields without attempting the write.
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"plan-review","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
 ```
 
 Substitute: STATUS = "clean" only if a reviewer completed and found no issues; "issues_found" if findings exist, or "unavailable" if neither reviewer completed. Never count missing coverage as a clean review. A completed native fallback uses SOURCE=in-host, OUTSIDE_STATUS=unavailable, and STATUS=clean or issues_found from its findings. These findings are the reviewer's, even if later resolved by the parent.
