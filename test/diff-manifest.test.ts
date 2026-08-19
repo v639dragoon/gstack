@@ -1,0 +1,237 @@
+/**
+ * Tests for bin/gstack-diff-manifest — the Phase 0 shared diff/risk manifest.
+ *
+ * Pattern follows test/diff-scope.test.ts (throwaway git repos → run script →
+ * assert), plus a temp GSTACK_HOME so manifests land in an inspectable
+ * sandbox. Everything here is deterministic and free-tier.
+ *
+ * The shadow verdicts asserted here are LOGGED-ONLY in Phase 0 — these tests
+ * pin what gets recorded.
+ *
+ * Hermeticity: every git invocation (fixture setup AND the script under test)
+ * runs with GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM pointed at /dev/null. A
+ * user-global gitignore is enough to silently drop fixtures from commits —
+ * measured on a real machine whose ~/.gitignore_global carries `*.sql`, which
+ * made every migration fixture vanish from `git add .` and turned this exact
+ * test red while the logic under test was correct. (The same mechanism
+ * explains test/diff-scope.test.ts's migration-case failures on that machine.)
+ */
+import { describe, test, expect, afterAll } from 'bun:test';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { spawnSync } from 'child_process';
+
+const SCRIPT = join(import.meta.dir, '..', 'bin', 'gstack-diff-manifest');
+
+// Isolate every git call from user/system config (see header).
+const GIT_ENV = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };
+
+const dirs: string[] = [];
+
+const TEST_POLICY = {
+  version: 1,
+  auth_surfaces: ['lib/auth/**', 'middleware.ts', '**/magic-link/**'],
+  d_surfaces: ['supabase/migrations/**', 'lib/env/**', '.github/workflows/**'],
+  load_bearing_docs: ['TODOS.md', 'docs/runbooks/**'],
+  doc_impact_map: [
+    { paths: ['supabase/migrations/**'], docs: ['docs/runbooks/schema.md'] },
+    { paths: ['lib/env/**'], docs: ['.env.example'] },
+  ],
+};
+
+function createRepo(files: string[], opts: { policy?: object | null } = {}): { dir: string; home: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'diff-manifest-test-'));
+  const home = mkdtempSync(join(tmpdir(), 'diff-manifest-home-'));
+  dirs.push(dir, home);
+
+  const run = (cmd: string, args: string[]) =>
+    spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV } });
+
+  run('git', ['init', '-b', 'main']);
+  run('git', ['config', 'user.email', 'test@test.com']);
+  run('git', ['config', 'user.name', 'Test']);
+
+  // Base commit. The policy file is committed at BASE on purpose: it must not
+  // appear in the changed-file set and pollute tier classification.
+  writeFileSync(join(dir, 'README.md'), '# test\n');
+  if (opts.policy !== null) {
+    writeFileSync(join(dir, '.gstack-policy.json'), JSON.stringify(opts.policy ?? TEST_POLICY, null, 2));
+  }
+  run('git', ['add', '.']);
+  run('git', ['commit', '-m', 'initial']);
+
+  run('git', ['checkout', '-b', 'feature/test']);
+  for (const f of files) {
+    const fullPath = join(dir, f);
+    const dirPath = fullPath.substring(0, fullPath.lastIndexOf('/'));
+    if (dirPath !== dir) mkdirSync(dirPath, { recursive: true });
+    writeFileSync(fullPath, 'line one\nline two\n');
+  }
+  run('git', ['add', '.']);
+  run('git', ['commit', '-m', 'add files']);
+
+  return { dir, home };
+}
+
+type ManifestRun = { vars: Record<string, string>; status: number; manifest: any | null; stdout: string };
+
+function runManifest(dir: string, home: string, args: string[] = ['main']): ManifestRun {
+  const result = spawnSync('bash', [SCRIPT, ...args], {
+    cwd: dir,
+    stdio: 'pipe',
+    timeout: 15000,
+    env: { ...process.env, ...GIT_ENV, GSTACK_HOME: home },
+  });
+  const stdout = result.stdout.toString().trim();
+  const vars: Record<string, string> = {};
+  for (const line of stdout.split('\n')) {
+    const eq = line.indexOf('=');
+    if (eq > 0) vars[line.slice(0, eq)] = line.slice(eq + 1);
+  }
+  let manifest: any | null = null;
+  if (vars.MANIFEST_PATH && existsSync(vars.MANIFEST_PATH)) {
+    manifest = JSON.parse(readFileSync(vars.MANIFEST_PATH, 'utf-8'));
+  }
+  return { vars, status: result.status ?? -1, manifest, stdout };
+}
+
+afterAll(() => {
+  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+});
+
+describe('gstack-diff-manifest', () => {
+  test('a d_surface file classifies tier D with a rule naming the surface (fail-upward)', () => {
+    const { dir, home } = createRepo(['supabase/migrations/0001_init.sql', 'lib/util.ts']);
+    const r = runManifest(dir, home);
+    expect(r.status).toBe(0);
+    expect(r.vars.SHADOW_TIER).toBe('D');
+    expect(r.manifest.shadow.risk_tier).toBe('D');
+    expect(r.manifest.shadow.tier_rule).toContain('supabase/migrations/0001_init.sql');
+    expect(r.manifest.shadow.d_surface_matches).toContain('supabase/migrations/0001_init.sql');
+  });
+
+  test('auth glob-vs-policy disagreement: *session* filename trips the glob, not the explicit list', () => {
+    // The audit's core AUTH finding: `sessions` is dohma's product noun, so the
+    // *session* glob over-triggers ~3.7x. The shadow record captures exactly that.
+    const { dir, home } = createRepo(['app/sessions/page.tsx']);
+    const r = runManifest(dir, home);
+    expect(r.status).toBe(0);
+    expect(r.vars.SCOPE_AUTH).toBe('true');
+    expect(r.manifest.shadow.auth_glob).toBe(true);
+    expect(r.manifest.shadow.auth_policy).toBe(false);
+    expect(r.manifest.shadow.auth_disagreement).toBe(true);
+  });
+
+  test('an explicit auth surface matches the policy list (agreement, no disagreement flag)', () => {
+    const { dir, home } = createRepo(['lib/auth/token.ts']);
+    const r = runManifest(dir, home);
+    expect(r.manifest.shadow.auth_glob).toBe(true); // *auth* glob also fires
+    expect(r.manifest.shadow.auth_policy).toBe(true);
+    expect(r.manifest.shadow.auth_disagreement).toBe(false);
+  });
+
+  test('no policy file → graceful degradation: null verdicts, exit 0, manifest still written', () => {
+    const { dir, home } = createRepo(['lib/util.ts'], { policy: null });
+    const r = runManifest(dir, home);
+    expect(r.status).toBe(0);
+    expect(r.vars.SHADOW_TIER).toBe('null');
+    expect(r.manifest.policy.present).toBe(false);
+    expect(r.manifest.shadow.risk_tier).toBe(null);
+    expect(r.manifest.shadow.auth_policy).toBe(null);
+    expect(r.manifest.shadow.doc_impact_would_dispatch).toBe(null);
+  });
+
+  test('docs-only change is tier A; a load-bearing doc demotes it to B', () => {
+    const a = createRepo(['docs/notes.md']);
+    expect(runManifest(a.dir, a.home).vars.SHADOW_TIER).toBe('A');
+
+    const b = createRepo(['docs/notes.md', 'TODOS.md']);
+    const rb = runManifest(b.dir, b.home);
+    expect(rb.vars.SHADOW_TIER).toBe('B');
+    expect(rb.manifest.shadow.tier_rule).toContain('TODOS.md');
+    expect(rb.manifest.shadow.load_bearing_doc_matches).toContain('TODOS.md');
+  });
+
+  test('content-addressed immutability: same tree → same path; changed tree → new path', () => {
+    const { dir, home } = createRepo(['lib/util.ts']);
+    const r1 = runManifest(dir, home);
+    const r2 = runManifest(dir, home);
+    expect(r2.vars.MANIFEST_PATH).toBe(r1.vars.MANIFEST_PATH);
+
+    writeFileSync(join(dir, 'lib/util.ts'), 'line one\nline two\nline three\n');
+    const r3 = runManifest(dir, home);
+    expect(r3.vars.MANIFEST_PATH).not.toBe(r1.vars.MANIFEST_PATH);
+    // The original manifest is untouched — immutability, not replacement.
+    expect(existsSync(r1.vars.MANIFEST_PATH)).toBe(true);
+  });
+
+  test('a diff-scope SCOPE_ERROR is carried in-band; the manifest survives and exit stays 0', () => {
+    // A file matching no diff-scope category trips its exit-2 unmatched
+    // tripwire. The manifest must carry that in scope.error, not vanish.
+    const { dir, home } = createRepo(['strangefile.xyz']);
+    const r = runManifest(dir, home);
+    expect(r.status).toBe(0);
+    expect(r.vars.SCOPE_ERROR).toBe('unmatched');
+    expect(r.manifest.scope.error).toBe('unmatched');
+    // Unclassifiable scope fails UPWARD, never down.
+    expect(r.manifest.shadow.risk_tier).toBe('C');
+  });
+
+  test('doc-impact map: hit sets would_dispatch and the fingerprint reacts to the file list', () => {
+    const { dir, home } = createRepo(['lib/env/server.ts']);
+    const r1 = runManifest(dir, home);
+    expect(r1.manifest.shadow.doc_impact_would_dispatch).toBe(true);
+    expect(r1.manifest.shadow.doc_impact_matches[0].docs).toContain('.env.example');
+
+    // Same tree, same fingerprint (stability).
+    const r2 = runManifest(dir, home);
+    expect(r2.vars.DOC_FP).toBe(r1.vars.DOC_FP);
+
+    // New file → different fingerprint.
+    writeFileSync(join(dir, 'newfile.ts'), 'x\n');
+    const r3 = runManifest(dir, home);
+    expect(r3.vars.DOC_FP).not.toBe(r1.vars.DOC_FP);
+  });
+
+  test('run_id: minted when absent, reused verbatim when passed (one skill run, one id)', () => {
+    const { dir, home } = createRepo(['lib/util.ts']);
+    const minted = runManifest(dir, home);
+    expect(minted.vars.RUN_ID).toMatch(/^\d+-\d+$/);
+
+    const passed = runManifest(dir, home, ['main', 'ship-run-42']);
+    expect(passed.vars.RUN_ID).toBe('ship-run-42');
+  });
+
+  test('stdout is shell-safe for source <(...): every line is a KEY=VALUE assignment', () => {
+    const { dir, home } = createRepo(['lib/util.ts']);
+    const r = runManifest(dir, home);
+    for (const line of r.stdout.split('\n')) {
+      expect(line).toMatch(/^[A-Z_]+=[^\s]*$/);
+    }
+  });
+
+  test('per-file additions/deletions and untracked files land in the manifest', () => {
+    const { dir, home } = createRepo(['lib/util.ts']);
+    writeFileSync(join(dir, 'untracked-new.ts'), 'a\nb\nc\n');
+    const r = runManifest(dir, home);
+    const byPath = Object.fromEntries(r.manifest.files.map((f: any) => [f.path, f]));
+    expect(byPath['lib/util.ts'].additions).toBe(2);
+    expect(byPath['lib/util.ts'].untracked).toBe(false);
+    expect(byPath['untracked-new.ts'].additions).toBe(3);
+    expect(byPath['untracked-new.ts'].untracked).toBe(true);
+    expect(parseInt(r.vars.DIFF_LINES, 10)).toBeGreaterThanOrEqual(5);
+  });
+
+  test('outside a git repo: MANIFEST_ERROR=no_git and exit 2', () => {
+    const nonGit = mkdtempSync(join(tmpdir(), 'diff-manifest-nongit-'));
+    const home = mkdtempSync(join(tmpdir(), 'diff-manifest-home-'));
+    dirs.push(nonGit, home);
+    const result = spawnSync('bash', [SCRIPT, 'main'], {
+      cwd: nonGit, stdio: 'pipe', timeout: 15000,
+      env: { ...process.env, ...GIT_ENV, GSTACK_HOME: home },
+    });
+    expect(result.status).toBe(2);
+    expect(result.stdout.toString()).toContain('MANIFEST_ERROR=no_git');
+  });
+});

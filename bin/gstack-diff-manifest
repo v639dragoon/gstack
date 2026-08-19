@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# gstack-diff-manifest — shared immutable diff/risk manifest (Phase 0 PR-gating)
+# Usage: gstack-diff-manifest <base> [run_id]
+#   source <(gstack-diff-manifest main)          → sets RUN_ID=... MANIFEST_PATH=... etc.
+#   gstack-diff-manifest main 84213-1755550000   → reuse a run_id minted earlier
+#                                                  in the SAME skill run (the model
+#                                                  carries it as a literal between
+#                                                  bash blocks — one run, one id)
+#
+# Writes ONE JSON manifest per working-tree content to
+#   $GSTACK_HOME/projects/<slug>/manifests/<wtree12>.json
+# content-addressed by bin/gstack-wtree (wtree equality proves identical
+# content — the same premise land-and-deploy's content-first staleness rule
+# rests on). Same content → same file (reused); any content change → new file.
+# That IS the immutability contract: nothing edits an existing manifest in
+# place except a policy-hash mismatch, which overwrites wholesale.
+#
+# The manifest is an INDEX for reviewer subagents (what changed, how big,
+# which scopes) — it never replaces the raw diff, and every reviewer prompt
+# keeps its own git diff command. Shadow fields (risk tier, auth policy
+# comparison, doc impact) are LOGGED verdicts only; nothing routes on them
+# in Phase 0.
+#
+# Output contract (stdout, every line shell-safe for `source <(...)`):
+#   RUN_ID=            this run's id (arg 2 if given, else freshly minted)
+#   MANIFEST_PATH=     absolute path of the manifest JSON
+#   MANIFEST_WTREE=    12-char wtree prefix the file is addressed by
+#   DIFF_LINES=        insertions+deletions vs merge-base (+ untracked lines)
+#   DOC_FP=            doc fingerprint (sha256; see below)
+#   SHADOW_TIER=       A|B|C|D|null (shadow-only; null when no policy file)
+#   SCOPE_*=           passthrough from gstack-diff-scope
+#   SCOPE_ERROR=       carried IN-BAND when diff-scope exits 2 — this script
+#                      still exits 0 (deliberate divergence from diff-scope:
+#                      the manifest record must not be lost because a scope
+#                      category didn't match; consumers see scope.error)
+# Exit 2 + MANIFEST_ERROR=no_git only when there is no git repo at all.
+#
+# Doc fingerprint: sha256 over (sorted changed-file list, base name, sorted
+# doc-impact-matched paths). Deliberately LIST-based, not wtree-based: a fix
+# cycle that edits already-listed files keeps the fingerprint stable, so the
+# ship Step 18 same-run redispatch guard can recognise "docs already synced
+# for this change-set" while any file added/removed changes it.
+#
+# Policy file: <repo-root>/.gstack-policy.json (version 1; tracked in the
+# project repo). Absent → policy.present:false and every shadow verdict that
+# needs it is null. Other repos degrade gracefully to a policy-less manifest.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "MANIFEST_ERROR=no_git"
+  exit 2
+fi
+
+eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
+GSTACK_HOME="${GSTACK_HOME:-$HOME/.gstack}"
+MANIFEST_DIR="$GSTACK_HOME/projects/$SLUG/manifests"
+mkdir -p "$MANIFEST_DIR"
+
+# Base resolution mirrors gstack-diff-scope's default chain.
+_default_base() {
+  git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' && return
+  git rev-parse --verify -q origin/main >/dev/null 2>&1 && { echo "main"; return; }
+  git rev-parse --verify -q origin/master >/dev/null 2>&1 && { echo "master"; return; }
+  echo "main"
+}
+BASE="${1:-$(_default_base)}"
+RUN_ID="${2:-$$-$(date +%s)}"
+
+# Scope flags: capture output AND exit code; exit 2 (unmatched / no_base) is
+# carried in-band, never swallowed and never fatal here.
+set +e
+SCOPE_OUT=$("$SCRIPT_DIR/gstack-diff-scope" "$BASE" 2>/dev/null)
+SCOPE_EXIT=$?
+set -e
+
+COMMIT_FULL=$(git rev-parse HEAD 2>/dev/null || true)
+WTREE=$("$SCRIPT_DIR/gstack-wtree" 2>/dev/null || true)
+DIRTY="false"
+[ -n "$(git status --porcelain -uno 2>/dev/null | head -1)" ] && DIRTY="true"
+
+# Merge base mirrors review-army's DIFF_LINES convention (origin/<base> first).
+MERGE_BASE=$(git merge-base "origin/$BASE" HEAD 2>/dev/null || git merge-base "$BASE" HEAD 2>/dev/null || true)
+
+# numstat vs merge-base covers committed + staged + unstaged in one pass
+# (no second rev ⇒ diff against the working tree). Untracked files are the
+# third source, same union as gstack-diff-scope; their line counts come from
+# wc -l (binary/unreadable → 0).
+NUMSTAT=""
+[ -n "$MERGE_BASE" ] && NUMSTAT=$(git diff --numstat "$MERGE_BASE" 2>/dev/null || true)
+UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
+UNTRACKED_STAT=""
+if [ -n "$UNTRACKED" ]; then
+  while IFS= read -r uf; do
+    [ -n "$uf" ] || continue
+    lines=$(wc -l < "$uf" 2>/dev/null | tr -d ' ' || echo 0)
+    UNTRACKED_STAT="${UNTRACKED_STAT}${lines}	0	${uf}
+"
+  done <<EOF
+$UNTRACKED
+EOF
+fi
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
+POLICY_PATH=""
+[ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.gstack-policy.json" ] && POLICY_PATH="$REPO_ROOT/.gstack-policy.json"
+
+# All heavy lifting (glob matching, tier computation, fingerprint, JSON
+# emission, manifest reuse/cleanup) lives in the adjacent .ts file, executed
+# under bun with inputs on env + stdin. A separate file, NOT `bun -e`: the
+# glob→regex code is backslash-dense, and double-quoted-bash escaping of it
+# is exactly the class of embedded-one-liner bug this repo keeps finding.
+# Precedent for the wrapper+.ts split: bin/gstack-gbrain-sync.ts.
+printf '%s\n---UNTRACKED---\n%s\n---SCOPE---\n%s\n' "$NUMSTAT" "$UNTRACKED_STAT" "$SCOPE_OUT" | \
+  GDM_RUN_ID="$RUN_ID" GDM_BASE="$BASE" GDM_MERGE_BASE="$MERGE_BASE" \
+  GDM_COMMIT_FULL="$COMMIT_FULL" GDM_WTREE="$WTREE" GDM_DIRTY="$DIRTY" \
+  GDM_SCOPE_EXIT="$SCOPE_EXIT" GDM_MANIFEST_DIR="$MANIFEST_DIR" \
+  GDM_POLICY_PATH="$POLICY_PATH" GDM_SESSION_ID="${GSTACK_SESSION_ID:-}" \
+  bun "$SCRIPT_DIR/gstack-diff-manifest.ts"
