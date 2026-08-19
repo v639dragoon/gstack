@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# gstack-gate-log — atomically log ONE gate invocation (Phase 0 PR-gating telemetry)
+# Usage: gstack-gate-log '{"record_type":"gate","gate":"specialist:security","run_id":"...",...}'
+#
+# Writes one line per gate INVOCATION to <branch>-gates.jsonl — a SIBLING of
+# <branch>-reviews.jsonl, deliberately a separate file: gstack-review-read cats
+# the whole reviews file into model context on every dashboard render, and
+# gstack-specialist-stats globs `*-reviews.jsonl` only, so per-invocation gate
+# rows (~10-20 per ship) stay invisible to every existing reader by
+# construction instead of by filtering.
+#
+# Validation beyond gstack-review-log's JSON check:
+#   - record_type must be exactly "gate" (discriminator; keeps a copy-pasted
+#     review-log call from landing here and vice versa)
+#   - gate and run_id must be non-empty strings
+#   - effort_source:"user-override" REQUIRES a non-empty effort_reason — an
+#     unrecorded xhigh override is the exact failure this writer exists to
+#     make impossible ("prohibit implicit xhigh")
+# Everything else passes through untouched (schema-free like review-log), so
+# shadow-classifier fields ride along without writer changes.
+#
+# Binding fields (content-addressed staleness): every appended record is
+# stamped with commit_full, tree, dirty and wtree, computed AUTHORITATIVELY
+# here — caller-supplied values for the four keys are ignored. This block is
+# a deliberate duplicate of bin/gstack-review-log:27-57; keep the two in sync
+# (duplicated rather than shared because review-log is load-bearing for 12+
+# call sites and 4 consumers, and this file must be safe to evolve alone).
+# Same known limitation as review-log: binding happens at LOG time, not
+# gate-START time; the started_at/ended_at fields inside the record are the
+# caller's own clock and are NOT certified by the stamp.
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
+GSTACK_HOME="${GSTACK_HOME:-$HOME/.gstack}"
+mkdir -p "$GSTACK_HOME/projects/$SLUG"
+
+INPUT="$1"
+
+# Compute binding fields (best-effort; empty outside a git repo).
+COMMIT_FULL=$(git rev-parse HEAD 2>/dev/null || true)
+TREE=""
+WTREE=""
+DIRTY=""
+if [ -n "$COMMIT_FULL" ]; then
+  TREE=$(git rev-parse 'HEAD^{tree}' 2>/dev/null || true)
+  WTREE=$("$SCRIPT_DIR/gstack-wtree" 2>/dev/null || true)
+  if [ -n "$(git status --porcelain -uno 2>/dev/null | head -1)" ]; then
+    DIRTY="true"
+  else
+    DIRTY="false"
+  fi
+fi
+
+# Validate (reject malformed input, missing gate identity, or an unrecorded
+# effort override) AND stamp in one pass. Caller values for the binding keys
+# are dropped before stamping.
+STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" bun -e "
+const rec = JSON.parse(await Bun.stdin.text());
+const fail = (msg) => { console.error('gstack-gate-log: ' + msg); process.exit(1); };
+if (rec.record_type !== 'gate') fail('record_type must be \"gate\"');
+if (typeof rec.gate !== 'string' || rec.gate.length === 0) fail('missing required field: gate');
+if (typeof rec.run_id !== 'string' || rec.run_id.length === 0) fail('missing required field: run_id');
+if (rec.effort_source === 'user-override' && !(typeof rec.effort_reason === 'string' && rec.effort_reason.trim().length > 0)) {
+  fail('effort_source \"user-override\" requires a non-empty effort_reason');
+}
+for (const k of ['commit_full', 'tree', 'wtree', 'dirty']) delete rec[k];
+const env = process.env;
+if (env.GSTACK_STAMP_COMMIT_FULL) rec.commit_full = env.GSTACK_STAMP_COMMIT_FULL;
+if (env.GSTACK_STAMP_TREE) rec.tree = env.GSTACK_STAMP_TREE;
+if (env.GSTACK_STAMP_WTREE) rec.wtree = env.GSTACK_STAMP_WTREE;
+if (env.GSTACK_STAMP_DIRTY) rec.dirty = env.GSTACK_STAMP_DIRTY === 'true';
+console.log(JSON.stringify(rec));
+") || {
+  echo "gstack-gate-log: invalid or rejected record, skipping" >&2
+  exit 1
+}
+
+echo "$STAMPED" >> "$GSTACK_HOME/projects/$SLUG/$BRANCH-gates.jsonl"
+
+# gbrain-sync: enqueue for cross-machine sync (no-op if sync is off).
+"$SCRIPT_DIR/gstack-brain-enqueue" "projects/$SLUG/$BRANCH-gates.jsonl" 2>/dev/null &
