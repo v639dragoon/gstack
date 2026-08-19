@@ -54,6 +54,21 @@ same content is same content.)
 and is CURRENT, mention it in the readiness report as an extra confidence signal.
 If not run, note as informational (not a blocker): "No adversarial review on record."
 
+**Log both staleness verdicts (Phase 0 shadow telemetry — behavior unchanged):**
+The content-first wtree rule still DECIDES exactly as above. But for the
+diff-scoped entry that drove the decision, ALSO compute the commit heuristic
+(steps 3-4 + the critical check) even when the wtree rule already graded
+CURRENT and short-circuited it, and log the pair — the audit found the
+commit heuristic biased toward STALE by construction in a WIP-commit
+workflow, and this record is how that claim gets measured instead of argued:
+
+```bash
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"'"$$-$(date +%s)"'","skill":"land-and-deploy","gate":"staleness-check","trigger":"always-on (3.5a)","commit":"'"$(git rev-parse --short HEAD)"'","started_at":"{check start ts}","ended_at":"{check end ts}","model":"claude-subagent","verdict":"{the DECIDING verdict: CURRENT|RECENT|STALE|UNKNOWN|NOT_RUN}","diff_scope":"full","critical_path":false,"shadow":{"staleness":{"heuristic_verdict":"{CURRENT|RECENT|STALE|UNKNOWN}","heuristic_basis":"{e.g. 6 commits, max 9 files, keyword: refactor}","wtree_verdict":"{CURRENT|STALE|N/A when no wtree field}","disagreement":{true iff the two verdicts differ}}}}' 2>/dev/null || true
+```
+
+The heuristic verdict is LOGGED, never routed: nothing about the readiness
+decision, the STALE thresholds, or the inline review offer changes here.
+
 ### 3.5a-bis: Inline review offer
 
 **We are extra careful about deploys.** If engineering review is STALE (4+ commits since)
