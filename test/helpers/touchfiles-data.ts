@@ -126,7 +126,7 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   'review-army-delivery-audit':   [ 'review/**', 'scripts/resolvers/review-dashboard.ts', 'scripts/resolvers/plan-gates.ts', 'scripts/resolvers/spec-review.ts', 'scripts/resolvers/outside-voice-steps.ts', 'scripts/resolvers/review-scope.ts', 'scripts/resolvers/outside-voice.ts', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts', 'test/helpers/office-hours-attempt.ts'],
   'review-army-quality-score':    [ 'review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts',  'test/helpers/office-hours-attempt.ts'],
   'review-army-json-findings':    [ 'review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts', 'test/helpers/office-hours-attempt.ts'],
-  'review-army-red-team':         [ 'review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts',
+  'review-army-red-team':         [ 'bin/gstack-diff-manifest', 'bin/gstack-diff-manifest.ts', 'bin/gstack-gate-log', 'review/**', 'scripts/resolvers/review-army.ts', 'test/skill-e2e-review-army.test.ts',
     'test/helpers/office-hours-attempt.ts'  
   ],
   'review-army-simplification':   [ 'review/**', 'scripts/resolvers/review-army.ts', 'test/fixtures/review-army-overbuild.js', 'test/fixtures/review-army-lean-complete.js', 'test/skill-e2e-review-army.test.ts', 'test/helpers/office-hours-attempt.ts'],
