@@ -589,9 +589,28 @@ If \`DIFF_TOTAL < 200\`: skip this section silently. The ${outsideVoiceFor(ctx).
 
 After all passes complete, persist:
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
-Substitute: PHASE = "adversarial" or "structured" for the corresponding pass. STATUS = "clean" only for a completed pass with no findings, "issues_found" if any pass found issues. SOURCE = the completed outside provider for its record; use a separate in-host record for the native subagent. GATE = the ${outsideVoiceFor(ctx).label} structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if ${outsideVoiceFor(ctx).label} was unavailable. If all passes failed, persist status "unavailable" with outside_status "unavailable"; never persist "clean". Record the adversarial and structured phases separately if their coverage differs.
+Substitute: PHASE = "adversarial" or "structured" for the corresponding pass. STATUS = "clean" only for a completed pass with no findings, "issues_found" if any pass found issues. SOURCE = the completed outside provider for its record; use a separate in-host record for the native subagent. GATE = the ${outsideVoiceFor(ctx).label} structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if ${outsideVoiceFor(ctx).label} was unavailable. If all passes failed, persist status "unavailable" with outside_status "unavailable"; never persist "clean". Record the adversarial and structured phases separately if their coverage differs. The \`effort\` fields describe the CODEX passes (both run at high — adversarial work deliberately stays at high effort; only plan and doc voices are routed to medium).
+
+**Persist per-gate telemetry (Phase 0; one record per pass that ran):**
+Append one gate record per pass, substituting the literal values you carried
+(RUN_ID/MANIFEST_WTREE from the Step 9.1 manifest when this runs inside
+/ship or /review; if no manifest was generated this run, run
+\`~/.claude/skills/gstack/bin/gstack-diff-manifest <base>\` now and use its
+values). \`tokens.total\` for a codex pass comes from the \`tokens used\` line
+in that pass's stderr (read it BEFORE the \`rm -f\` cleanup); omit \`tokens\`
+when unavailable.
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null or "fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null or "fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean = GATE pass, fail = GATE fail, timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null, "fix-loop", or "p1-gate"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+\`\`\`
+
+Only emit records for passes that actually dispatched (a skipped structured
+review at DIFF_TOTAL < 200 gets NO record — absence is the skip signal, the
+trigger stays honest). Telemetry is best-effort: failures never block.
 
 ---
 
@@ -685,7 +704,7 @@ THE PLAN:
 
 **If \`CODEX_MODE: ready\` — run ${outsideVoiceFor(ctx).label}:**
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000 })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium' })}
 
 Present the full output verbatim:
 
@@ -766,7 +785,7 @@ If no tension points exist, note: "No cross-model tension — both reviewers agr
 
 **Persist the result:**
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"plan-review","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
 
 Substitute: STATUS = "clean" only if a reviewer completed and found no issues; "issues_found" if findings exist, or "unavailable" if neither reviewer completed. Never count missing coverage as a clean review.
@@ -835,7 +854,7 @@ THE DOCS AND DIFF: <include current contents of each touched document, with its 
 
 **If \`CODEX_MODE: ready\` — run ${outsideVoiceFor(ctx).label}:**
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, diffCommand: 'DOC_DIFF_BASE=$(git merge-base origin/<base> HEAD 2>/dev/null || git merge-base <base> HEAD) && git diff "$DOC_DIFF_BASE" HEAD' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', diffCommand: 'DOC_DIFF_BASE=$(git merge-base origin/<base> HEAD 2>/dev/null || git merge-base <base> HEAD) && git diff "$DOC_DIFF_BASE" HEAD' })}
 
 Present the full output verbatim under \`${outsideVoiceFor(ctx).label.toUpperCase()} SAYS (documentation review):\`.
 
@@ -874,7 +893,7 @@ rewrites docs), respecting the skill's CHANGELOG and VERSION restrictions. Step 
 
 **Persist the result:**
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-doc-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"documentation","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-doc-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"documentation","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
 Substitute: STATUS = "clean" only if a reviewer completed and found no gaps; "issues_found" if gaps exist, or "unavailable" if neither reviewer completed. ${outsideVoiceProvenance(ctx, 'documentation')}
 

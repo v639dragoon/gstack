@@ -189,13 +189,17 @@ CROSS-MODEL ANALYSIS:
 
 7. Persist the review result:
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-review","timestamp":"TIMESTAMP","status":"STATUS","gate":"GATE","findings":N,"findings_fixed":N,"commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-review","timestamp":"TIMESTAMP","status":"STATUS","gate":"GATE","findings":N,"findings_fixed":N,"effort":"EFFORT","effort_source":"EFFORT_SOURCE","commit":"'"$(git rev-parse --short HEAD)"'"}'
 ```
 
 Substitute: TIMESTAMP (ISO 8601), STATUS ("clean" if PASS, "issues_found" if FAIL),
 GATE ("pass" or "fail" — fail-closed verdicts log as "fail"), findings (count of
 [P0] + [P1] + [P2] markers; 0 for fail-closed runs, which reviewed nothing),
-findings_fixed (count of findings that were addressed/fixed before shipping).
+findings_fixed (count of findings that were addressed/fixed before shipping),
+EFFORT (the model_reasoning_effort actually used), EFFORT_SOURCE ("default", or
+"user-override" when `--xhigh` was applied — then ALSO add
+`"effort_reason":"<the user's stated reason, or 'user --xhigh flag, no reason
+given'>"` per the recording rule in the effort-override section above).
 
 8. Clean up temp files:
 ```bash
