@@ -58,8 +58,8 @@ date -u +%Y-%m-%dT%H:%M:%SZ
 
 Carry the printed \`RUN_ID\`, \`MANIFEST_PATH\`, \`MANIFEST_WTREE\`, \`DOC_FP\`
 and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
-a fix cycle, pass the earlier RUN_ID as arg 2 — one skill run, ONE run id.
-The manifest is an INDEX for the subagents; it never replaces the raw diff.
+a fix cycle pass the earlier RUN_ID as arg 2 — one run, ONE run id. The
+manifest is an INDEX; it never replaces the raw diff.
 
 ### Read specialist hit rates (adaptive gating)
 
@@ -177,11 +177,9 @@ Past learnings: {learnings or 'none'}"
 - Pass ${FOREGROUND_IF_AVAILABLE} on every specialist Agent call — background is the default since ${CC_BACKGROUND_DEFAULT_SINCE}; omitting an available flag is not foreground. ${BACKGROUND_RECOVERY}
 
 ${WAIT_FOR_READERS}
-**Early Red Team (large diffs):** If DIFF_LINES > 200, the Red Team trigger is
-ALREADY known — include the Red Team subagent in this SAME parallel dispatch
-message. Build its prompt per the "Red Team dispatch" section below, EARLY
-path, and do not dispatch it again later. This changes WHEN Red Team runs,
-never WHETHER — the activation condition is unchanged.`;
+**Early Red Team (large diffs):** If DIFF_LINES > 200 the trigger is ALREADY
+known — include Red Team in this SAME parallel dispatch message, prompt per
+the "Red Team dispatch" section below (EARLY path); do not dispatch it again.`;
 }
 
 const WAIT_FOR_READERS = `**Wait for readers before editing:**
@@ -326,16 +324,16 @@ core-only advice must not create a specialist dispatch or finding.
 Normal AUTO-FIX/ASK rules apply, with advice ASK-only. Missing coverage still blocks
 completion. Advice never permits edits while readers are active or replaces a required review.
 **Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
-the Red Team, either path), append one gate record, substituting every
-{placeholder} with the literals you carried:
+Red Team, either path), append one gate record, substituting {placeholder}s
+with carried literals:
 
 \`\`\`bash
-${ctx.paths.binDir}/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"specialist:{name}","trigger":"{exact reason, e.g. always-on | SCOPE_AUTH=true | DIFF_LINES={N}>200 | user-flag:--{name}}","commit":"{short SHA}","started_at":"{batch launch ts}","ended_at":"{completion ts, or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N or null},"source":{"task-notification" or null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N, 0-based},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+${ctx.paths.binDir}/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 \`\`\`
 
-Telemetry is best-effort and additive: a failed gate-log call never blocks or
-changes the review, and the aggregate \`specialists\` object above still goes
-into the reviews.jsonl row exactly as before.`;
+Telemetry is best-effort: a failed gate-log call never blocks or changes the
+review, and the aggregate \`specialists\` object still goes into reviews.jsonl
+unchanged.`;
 }
 
 function generateRedTeam(ctx: TemplateContext): string {
@@ -348,14 +346,14 @@ function generateRedTeam(ctx: TemplateContext): string {
 
 Two dispatch paths, ONE activation condition (the condition above is the whole trigger surface — the paths only change WHEN the dispatch happens):
 
-**EARLY path (DIFF_LINES > 200):** the Red Team subagent was already launched
-in the SAME parallel dispatch message as the specialists (see "Early Red Team"
-above); do not dispatch again. It receives the red-team checklist from
+**EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
+dispatch message as the specialists (see "Early Red Team" above); do not
+dispatch again. It receives the checklist from
 \`${ctx.paths.skillRoot}/review/specialists/red-team.md\`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Early
-prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch: "You are a red team reviewer. N specialists are reviewing
-this diff CONCURRENTLY — you will not see their findings. A diff/risk
-manifest is at {MANIFEST_PATH}; read it first as an index, then run
+and the git diff command — NOT merged findings (none exist yet). Early prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch:
+"You are a red team reviewer. N specialists are reviewing this diff
+CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
+{MANIFEST_PATH}; read it first as an index, then run
 \`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"\`.
 Hunt for cross-cutting concerns, integration boundary issues, and failure
 modes that specialist checklists don't cover. Output specialist-schema JSON
