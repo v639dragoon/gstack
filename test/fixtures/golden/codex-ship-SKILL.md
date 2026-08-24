@@ -2221,7 +2221,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    Save each explicit Skip immediately in the invocation action list with its
    identity, scope and supporting source evidence; keep it across repeats.
 
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; every gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"` in its gate-log record. Telemetry only — it changes nothing about the loop itself.
+   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
 
 4. **Finish and log this pass before choosing the next step.** Recheck freshness
    (Step 9.2.1) before items 5–6. Increment CYCLES
@@ -2628,23 +2628,22 @@ Fill fields from this attempt, not the parent's Step 9.4 result:
 - GATE is "informational" for adversarial passes. For structured review, use
   "pass" or "fail" from its completed result, "skipped" when size-gated, or
   "informational" with completed:false when coverage is missing.
-The `effort` fields describe the CODEX passes (both high; plan and doc voices medium).
+The `effort` fields describe the CODEX passes — both stay at high; only plan and doc voices route to medium.
 
 **Persist per-gate telemetry (Phase 0):** one gate record per pass that ran,
-substituting the literals you carried (RUN_ID/MANIFEST_WTREE from the Step
-9.1 manifest; if none was generated this run, run
-`$GSTACK_ROOT/bin/gstack-diff-manifest <base>` now).
+substituting carried literals (RUN_ID/MANIFEST_WTREE from the Step 9.1
+manifest; if none this run, run `gstack-diff-manifest <base>` now).
 `tokens.total` for a codex pass comes from the `tokens used` line in its
-stderr (read BEFORE the `rm -f` cleanup); omit `tokens` when unavailable.
+stderr (read BEFORE `rm -f`); omit `tokens` when unavailable.
 
 ```bash
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=GATE pass, fail=GATE fail, timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
-Only emit records for passes that actually dispatched — absence is the skip
-signal. Telemetry is best-effort: failures never block.
+Emit records only for passes that dispatched — absence is the skip signal.
+Telemetry is best-effort: failures never block.
 
 ---
 
