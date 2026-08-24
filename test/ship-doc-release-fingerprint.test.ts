@@ -43,7 +43,7 @@ describe('document-release dispatch control (Phase 0)', () => {
     });
 
     test(`${site}: a cross-run fingerprint match STILL dispatches (shadow only)`, () => {
-      expect(content).toMatch(/DIFFERENT run:\s*\nstill dispatch \(cross-run skipping is NOT active in Phase 0\)/);
+      expect(content).toMatch(/DIFFERENT run:\s+still dispatch \(cross-run skipping is\s+NOT active in Phase 0\)/);
       expect(content).toContain('redispatch_would_skip');
     });
 
@@ -79,7 +79,7 @@ describe('document-release dispatch control (Phase 0)', () => {
     const reviewArmy = fs.readFileSync(path.join(ROOT, 'ship/sections/review-army.md'), 'utf-8');
     expect(reviewArmy).toContain('Track the fix-cycle index');
     expect(reviewArmy).toContain('"rerun_cause":"fix-loop"');
-    expect(reviewArmy).toContain('it changes nothing about the loop itself');
+    expect(reviewArmy).toContain('Telemetry only — the loop is unchanged');
     // The loop's own contract is untouched (also pinned by ship-review-loop).
     expect(reviewArmy).toContain('Bound: 3 fix cycles.');
   });
