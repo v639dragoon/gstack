@@ -63,7 +63,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    Save each explicit Skip immediately in the invocation action list with its
    identity, scope and supporting source evidence; keep it across repeats.
 
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; every gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"` in its gate-log record. Telemetry only — it changes nothing about the loop itself.
+   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
 
 4. **Finish and log this pass before choosing the next step.** Recheck freshness
    (Step 9.2.1) before items 5–6. Increment CYCLES
