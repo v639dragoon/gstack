@@ -1811,8 +1811,8 @@ date -u +%Y-%m-%dT%H:%M:%SZ
 
 Carry the printed `RUN_ID`, `MANIFEST_PATH`, `MANIFEST_WTREE`, `DOC_FP`
 and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
-a fix cycle, pass the earlier RUN_ID as arg 2 — one skill run, ONE run id.
-The manifest is an INDEX for the subagents; it never replaces the raw diff.
+a fix cycle pass the earlier RUN_ID as arg 2 — one run, ONE run id. The
+manifest is an INDEX; it never replaces the raw diff.
 
 ### Read specialist hit rates (adaptive gating)
 
@@ -1876,8 +1876,8 @@ If learnings are found, include them: "Past learnings for this domain: {learning
 4. Instructions:
 
 "You are a specialist code reviewer. A diff/risk manifest is at
-{MANIFEST_PATH} — read it FIRST as an index of what changed. It never
-replaces the diff: after reading it, run
+{MANIFEST_PATH} — read it FIRST as an index. It never replaces the diff:
+after reading it, run
 `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"` to get the full diff. Apply the checklist against the diff.
 
 For each finding, output a JSON object on its own line:
@@ -1904,11 +1904,9 @@ CHECKLIST:
 - Pass `run_in_background: false` on every specialist Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198, and all specialists must complete before merge. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.)
 - If any specialist subagent fails or times out, log the failure and continue with results from successful specialists. Specialists are additive — partial results are better than no results.
 
-**Early Red Team (large diffs):** If DIFF_LINES > 200, the Red Team trigger is
-ALREADY known — include the Red Team subagent in this SAME parallel dispatch
-message. Build its prompt per the "Red Team dispatch" section below, EARLY
-path, and do not dispatch it again later. This changes WHEN Red Team runs,
-never WHETHER — the activation condition is unchanged.
+**Early Red Team (large diffs):** If DIFF_LINES > 200 the trigger is ALREADY
+known — include Red Team in this SAME parallel dispatch message, prompt per
+the "Red Team dispatch" section below (EARLY path); do not dispatch it again.
 
 ---
 
@@ -1993,16 +1991,16 @@ Include the Design specialist even though it uses `design-checklist.md` instead 
 Remember these stats — you will need them for the review-log entry in Step 5.8.
 
 **Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
-the Red Team, either path), append one gate record, substituting every
-{placeholder} with the literals you carried:
+Red Team, either path), append one gate record, substituting {placeholder}s
+with carried literals:
 
 ```bash
-$GSTACK_BIN/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"specialist:{name}","trigger":"{exact reason, e.g. always-on | SCOPE_AUTH=true | DIFF_LINES={N}>200 | user-flag:--{name}}","commit":"{short SHA}","started_at":"{batch launch ts}","ended_at":"{completion ts, or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N or null},"source":{"task-notification" or null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N, 0-based},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+$GSTACK_BIN/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
-Telemetry is best-effort and additive: a failed gate-log call never blocks or
-changes the review, and the aggregate `specialists` object above still goes
-into the reviews.jsonl row exactly as before.
+Telemetry is best-effort: a failed gate-log call never blocks or changes the
+review, and the aggregate `specialists` object still goes into reviews.jsonl
+unchanged.
 
 ---
 
@@ -2010,17 +2008,16 @@ into the reviews.jsonl row exactly as before.
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-Two dispatch paths, ONE activation condition — the paths only change WHEN the
-dispatch happens:
+Two dispatch paths, ONE activation condition — they differ only in WHEN:
 
-**EARLY path (DIFF_LINES > 200):** the Red Team subagent was already launched
-in the SAME parallel dispatch message as the specialists (see "Early Red Team"
-above); do not dispatch again. It receives the red-team checklist from
+**EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
+dispatch message as the specialists (see "Early Red Team" above); do not
+dispatch again. It receives the checklist from
 `$GSTACK_ROOT/review/specialists/red-team.md`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Early
-prompt: "You are a red team reviewer. N specialists are reviewing
-this diff CONCURRENTLY — you will not see their findings. A diff/risk
-manifest is at {MANIFEST_PATH}; read it first as an index, then run
+and the git diff command — NOT merged findings (none exist yet). Early prompt:
+"You are a red team reviewer. N specialists are reviewing this diff
+CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
+{MANIFEST_PATH}; read it first as an index, then run
 `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"`.
 Hunt for cross-cutting concerns, integration boundary issues, and failure
 modes that specialist checklists don't cover. Output specialist-schema JSON
@@ -2042,8 +2039,8 @@ don't cover."
 
 On either path: if the Red Team finds additional issues, merge them into the findings list before
 the Fix-First flow (item 4). Red Team findings are tagged with `"specialist":"red-team"`.
-Its gate record uses `"gate":"red-team"`, trigger `"DIFF_LINES={N}>200
-(early)"` or `"specialist-critical (late)"`.
+Gate record: `"gate":"red-team"`, trigger `"DIFF_LINES={N}>200 (early)"` or
+`"specialist-critical (late)"`.
 
 If the Red Team returns NO FINDINGS, note: "Red Team review: no additional issues found."
 If the Red Team subagent fails or times out, skip silently and continue.
@@ -2097,7 +2094,7 @@ Output a summary header: `Pre-Landing Review: N issues (X critical, Y informatio
 7. **After all fixes (auto + user-approved):**
    - If ANY fixes were applied: commit fixed files by name (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`), then **stay in this invocation and loop**: re-run the test suite (Step 5) on the fixed code, then re-run this review (Step 9 items 2-6) against the updated diff. Repeat until one full pass applies ZERO fixes — tests green and review clean — then continue to Step 12. NEVER stop to tell the user to run `/ship` again; a fix-and-rerun cycle has no user decision in it, and stopping there breaks the fully-automated contract (#2391).
    - **Bound: 3 fix cycles.** If the 3rd cycle still applies fixes, STOP and report which findings keep reappearing — a review that won't converge is a genuine blocker worth human eyes, not a re-run request.
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; every gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"` in its gate-log record. Telemetry only — it changes nothing about the loop itself.
+   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
    - If no fixes applied (all ASK items skipped, or no issues found): continue to Step 12.
 
 8. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
@@ -2333,23 +2330,22 @@ After all passes complete, persist:
 ```bash
 $GSTACK_ROOT/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'"}'
 ```
-Substitute: STATUS = "clean" if no findings across ALL passes, "issues_found" if any pass found issues. SOURCE = "both" if Codex ran, "claude" if only Claude subagent ran. GATE = the Codex structured review gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if Codex was unavailable. If all passes failed, do NOT persist. The `effort` fields describe the CODEX passes (both run at high — adversarial work deliberately stays at high effort; only plan and doc voices are routed to medium).
+Substitute: STATUS = "clean" if no findings across ALL passes, else "issues_found". SOURCE = "both" if Codex ran, else "claude". GATE = the Codex structured gate result ("pass"/"fail"), "skipped" if diff < 200, or "informational" if Codex was unavailable. If all passes failed, do NOT persist. The `effort` fields describe the CODEX passes — both stay at high; only plan and doc voices route to medium.
 
 **Persist per-gate telemetry (Phase 0):** one gate record per pass that ran,
-substituting the literals you carried (RUN_ID/MANIFEST_WTREE from the Step
-9.1 manifest; if none was generated this run, run
-`$GSTACK_ROOT/bin/gstack-diff-manifest <base>` now).
+substituting carried literals (RUN_ID/MANIFEST_WTREE from the Step 9.1
+manifest; if none this run, run `gstack-diff-manifest <base>` now).
 `tokens.total` for a codex pass comes from the `tokens used` line in its
-stderr (read BEFORE the `rm -f` cleanup); omit `tokens` when unavailable.
+stderr (read BEFORE `rm -f`); omit `tokens` when unavailable.
 
 ```bash
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=GATE pass, fail=GATE fail, timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
-Only emit records for passes that actually dispatched — absence is the skip
-signal. Telemetry is best-effort: failures never block.
+Emit records only for passes that dispatched — absence is the skip signal.
+Telemetry is best-effort: failures never block.
 
 ---
 
@@ -2810,16 +2806,15 @@ grep '"gate":"doc-release"' "${GSTACK_HOME:-$HOME/.gstack}/projects/$SLUG/$BRANC
 ```
 
 **Skip the redispatch ONLY when ALL THREE hold** on one prior record: same
-`run_id` as this run, same `doc_fingerprint` as the `DOC_FP` just printed, and
-a `verdict` that is not `error`/`timeout`. Then print `Documentation already
-synced this run — reusing prior result`, reuse its stored
-`documentation_section` for Step 19, and skip the dispatch. If the record has
-no stored `documentation_section`, dispatch anyway.
+`run_id`, same `doc_fingerprint` as the `DOC_FP` just printed, and a `verdict`
+that is not `error`/`timeout`. Then print `Documentation already synced this
+run — reusing prior result`, reuse its stored `documentation_section` for Step
+19, and skip the dispatch. If that field is absent, dispatch anyway.
 
-If a completed record matches the fingerprint but belongs to a DIFFERENT run:
-still dispatch (cross-run skipping is NOT active in Phase 0), and set
-`"redispatch_would_skip":true` in the shadow block below — the Phase 1
-evidence for widening the skip.
+Same fingerprint from a DIFFERENT run: still dispatch (cross-run skipping is
+NOT active in Phase 0) and set
+`"redispatch_would_skip":true` in the shadow block below — Phase 1 evidence
+for widening the skip.
 
 **Subagent prompt:**
 
@@ -2853,17 +2848,15 @@ evidence for widening the skip.
 
 **If the subagent fails, returns invalid JSON, or never completes (backgrounded despite the flag, or no final output by the ~10-minute deadline):** First, if a backgrounded task is still running, STOP it (the harness's task-stop tool) — a live doc-sync agent shares this working tree and must not mutate it concurrently with Step 19. If it cannot be stopped, do NOT race it: wait one more bounded window (~5 minutes) for it to finish on its own; if it is still running after that, stop and tell the user — concurrent mutation of the working tree is worse than a paused ship. Then reconcile against the pre-dispatch HEAD you recorded: if HEAD advanced past it, the subagent committed before dying — first vet each new commit with `git show --stat <sha>` and confirm it touches only documentation files (never VERSION, package.json, or CHANGELOG.md — the parent owns all three this run). Pushing any commit pushes its ancestors, so if ANY new commit touches those files, push NONE of them — leave them all local and name them in the console message. Only an all-docs-only sequence gets pushed (never force; on rejection follow item 6's second-failure branch). Then run `git status`: if the failed run left staged or uncommitted doc edits, leave them out of the PR — do not commit them; if they were left staged, unstage them but NEVER discard the content (no checkout/clean) — and name them in the console message. Print `document-release did not complete — run /document-release manually after the PR lands`, then proceed to Step 19 without a `## Documentation` section. Do not block /ship on subagent failure or slowness — a missing Documentation section is recoverable after the PR lands; a stranded ship run is not. The user can run `/document-release` manually after the PR lands.
 
-**Persist the doc-release gate record (Phase 0; every dispatch, failures included):**
+**Persist the doc-release gate record (Phase 0; every dispatch, failures too):**
 
 ```bash
-$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array},"files_updated_count":{N},"doc_commit":{"sha" or null},"pushed":{true|false},"documentation_section":{JSON-escaped markdown or null},"fix_cycle":{N},"rerun_cause":{null|"ship-reentry"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{from the manifest, or null},"false_negative":{true iff would_dispatch=false AND files_updated_count>0; null when would_dispatch null},"redispatch_would_skip":{true iff a completed prior-run record matched this fingerprint}}}' 2>/dev/null || true
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array},"files_updated_count":{N},"doc_commit":{"sha"|null},"pushed":{true|false},"documentation_section":{escaped md|null},"fix_cycle":{N},"rerun_cause":{null|"ship-reentry"},"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{manifest|null},"false_negative":{true iff would_dispatch=false AND count>0; null if would_dispatch null},"redispatch_would_skip":{true iff a completed prior-run record matched this fp}}}' 2>/dev/null || true
 ```
 
-Substitute every {placeholder} with literals; JSON-escape the
-`documentation_section` markdown (`gstack-gate-log` rejects malformed JSON
-loudly). On a same-run SKIP, write no new record — absence of a second record
-is the skip signal. Telemetry is best-effort: a failed gate-log call never
-blocks the PR.
+Substitute every {placeholder} with literals; JSON-escape
+`documentation_section` (`gstack-gate-log` rejects malformed JSON loudly). On a same-run SKIP write no new record — absence is the skip signal.
+Telemetry is best-effort: a failed gate-log call never blocks the PR.
 
 ---
 
