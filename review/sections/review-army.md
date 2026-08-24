@@ -38,8 +38,8 @@ date -u +%Y-%m-%dT%H:%M:%SZ
 
 Carry the printed `RUN_ID`, `MANIFEST_PATH`, `MANIFEST_WTREE`, `DOC_FP`
 and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
-a fix cycle, pass the earlier RUN_ID as arg 2 — one skill run, ONE run id.
-The manifest is an INDEX for the subagents; it never replaces the raw diff.
+a fix cycle pass the earlier RUN_ID as arg 2 — one run, ONE run id. The
+manifest is an INDEX; it never replaces the raw diff.
 
 ### Read specialist hit rates (adaptive gating)
 
@@ -103,8 +103,8 @@ If learnings are found, include them: "Past learnings for this domain: {learning
 4. Instructions:
 
 "You are a specialist code reviewer. A diff/risk manifest is at
-{MANIFEST_PATH} — read it FIRST as an index of what changed. It never
-replaces the diff: after reading it, run
+{MANIFEST_PATH} — read it FIRST as an index. It never replaces the diff:
+after reading it, run
 `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"` to get the full diff. Apply the checklist against the diff.
 
 For each finding, output a JSON object on its own line:
@@ -131,11 +131,9 @@ CHECKLIST:
 - Pass `run_in_background: false` on every specialist Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198, and all specialists must complete before merge. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.)
 - If any specialist subagent fails or times out, log the failure and continue with results from successful specialists. Specialists are additive — partial results are better than no results.
 
-**Early Red Team (large diffs):** If DIFF_LINES > 200, the Red Team trigger is
-ALREADY known — include the Red Team subagent in this SAME parallel dispatch
-message. Build its prompt per the "Red Team dispatch" section below, EARLY
-path, and do not dispatch it again later. This changes WHEN Red Team runs,
-never WHETHER — the activation condition is unchanged.
+**Early Red Team (large diffs):** If DIFF_LINES > 200 the trigger is ALREADY
+known — include Red Team in this SAME parallel dispatch message, prompt per
+the "Red Team dispatch" section below (EARLY path); do not dispatch it again.
 
 ---
 
@@ -220,16 +218,16 @@ Include the Design specialist even though it uses `design-checklist.md` instead 
 Remember these stats — you will need them for the review-log entry in Step 5.8.
 
 **Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
-the Red Team, either path), append one gate record, substituting every
-{placeholder} with the literals you carried:
+Red Team, either path), append one gate record, substituting {placeholder}s
+with carried literals:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"review","gate":"specialist:{name}","trigger":"{exact reason, e.g. always-on | SCOPE_AUTH=true | DIFF_LINES={N}>200 | user-flag:--{name}}","commit":"{short SHA}","started_at":"{batch launch ts}","ended_at":"{completion ts, or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N or null},"source":{"task-notification" or null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N, 0-based},"rerun_cause":{null|"fix-loop"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"review","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
-Telemetry is best-effort and additive: a failed gate-log call never blocks or
-changes the review, and the aggregate `specialists` object above still goes
-into the reviews.jsonl row exactly as before.
+Telemetry is best-effort: a failed gate-log call never blocks or changes the
+review, and the aggregate `specialists` object still goes into reviews.jsonl
+unchanged.
 
 ---
 
@@ -237,17 +235,16 @@ into the reviews.jsonl row exactly as before.
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-Two dispatch paths, ONE activation condition — the paths only change WHEN the
-dispatch happens:
+Two dispatch paths, ONE activation condition — they differ only in WHEN:
 
-**EARLY path (DIFF_LINES > 200):** the Red Team subagent was already launched
-in the SAME parallel dispatch message as the specialists (see "Early Red Team"
-above); do not dispatch again. It receives the red-team checklist from
+**EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
+dispatch message as the specialists (see "Early Red Team" above); do not
+dispatch again. It receives the checklist from
 `~/.claude/skills/gstack/review/specialists/red-team.md`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Early
-prompt: "You are a red team reviewer. N specialists are reviewing
-this diff CONCURRENTLY — you will not see their findings. A diff/risk
-manifest is at {MANIFEST_PATH}; read it first as an index, then run
+and the git diff command — NOT merged findings (none exist yet). Early prompt:
+"You are a red team reviewer. N specialists are reviewing this diff
+CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
+{MANIFEST_PATH}; read it first as an index, then run
 `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"`.
 Hunt for cross-cutting concerns, integration boundary issues, and failure
 modes that specialist checklists don't cover. Output specialist-schema JSON
@@ -269,8 +266,8 @@ don't cover."
 
 On either path: if the Red Team finds additional issues, merge them into the findings list before
 Step 5 Fix-First. Red Team findings are tagged with `"specialist":"red-team"`.
-Its gate record uses `"gate":"red-team"`, trigger `"DIFF_LINES={N}>200
-(early)"` or `"specialist-critical (late)"`.
+Gate record: `"gate":"red-team"`, trigger `"DIFF_LINES={N}>200 (early)"` or
+`"specialist-critical (late)"`.
 
 If the Red Team returns NO FINDINGS, note: "Red Team review: no additional issues found."
 If the Red Team subagent fails or times out, skip silently and continue.

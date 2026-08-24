@@ -177,6 +177,54 @@ describe('gstack-gate-log', () => {
     expect(rec.critical_path).toBe(true);
   });
 
+  // Derived/defaulted fields (the payload-compression change): the five call
+  // sites stopped hand-substituting `commit`, `diff_scope` and `critical_path`
+  // because the writer can supply all three. Each must be DERIVED when absent
+  // and OVERRIDABLE when present — a default that ignores an explicit value
+  // would silently mislabel a non-critical-path gate as blocking.
+  test('derives commit from HEAD when the caller omits it', () => {
+    expect(run(VALID).exitCode).toBe(0);
+    const rec = readNewestRecord();
+    expect(rec.commit).toMatch(/^[0-9a-f]{7,40}$/);
+    // and it must agree with the authoritative full stamp it is derived from
+    expect(rec.commit_full.startsWith(rec.commit)).toBe(true);
+  });
+
+  test('an explicit commit WINS over the derived one', () => {
+    const input = '{"record_type":"gate","gate":"red-team","run_id":"1-2","commit":"deadbee"}';
+    expect(run(input).exitCode).toBe(0);
+    expect(readNewestRecord().commit).toBe('deadbee');
+  });
+
+  test('defaults diff_scope to "full" and critical_path to true when omitted', () => {
+    expect(run(VALID).exitCode).toBe(0);
+    const rec = readNewestRecord();
+    expect(rec.diff_scope).toBe('full');
+    expect(rec.critical_path).toBe(true);
+  });
+
+  test('REGRESSION: an explicit critical_path:false / diff_scope survives the default', () => {
+    const input =
+      '{"record_type":"gate","gate":"red-team","run_id":"1-2","critical_path":false,"diff_scope":"scoped"}';
+    expect(run(input).exitCode).toBe(0);
+    const rec = readNewestRecord();
+    // A default that clobbered these would record a non-blocking, narrowly
+    // scoped gate as a full-diff blocking one — silently wrong telemetry.
+    expect(rec.critical_path).toBe(false);
+    expect(rec.diff_scope).toBe('scoped');
+  });
+
+  test('manifest_wtree is NOT derived — it stays absent when the caller omits it', () => {
+    // Deliberate asymmetry: manifest_wtree records the worktree the MANIFEST
+    // was built in, while the log-time worktree is already stamped as `wtree`.
+    // Deriving it would make the two always agree and destroy the only signal
+    // that a manifest came from a different tree than the gate it logs.
+    expect(run(VALID).exitCode).toBe(0);
+    const rec = readNewestRecord();
+    expect(rec.manifest_wtree).toBeUndefined();
+    expect(rec.wtree).toMatch(/^[0-9a-f]{40}$/);
+  });
+
   // The reader-isolation contract: gate records must be INVISIBLE to the two
   // existing reviews.jsonl consumers. This is the design's load-bearing claim
   // (separate file ⇒ isolation by construction) — pin it, don't assume it.

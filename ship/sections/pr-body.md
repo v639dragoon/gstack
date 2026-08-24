@@ -16,16 +16,15 @@ grep '"gate":"doc-release"' "${GSTACK_HOME:-$HOME/.gstack}/projects/$SLUG/$BRANC
 ```
 
 **Skip the redispatch ONLY when ALL THREE hold** on one prior record: same
-`run_id` as this run, same `doc_fingerprint` as the `DOC_FP` just printed, and
-a `verdict` that is not `error`/`timeout`. Then print `Documentation already
-synced this run — reusing prior result`, reuse its stored
-`documentation_section` for Step 19, and skip the dispatch. If the record has
-no stored `documentation_section`, dispatch anyway.
+`run_id`, same `doc_fingerprint` as the `DOC_FP` just printed, and a `verdict`
+that is not `error`/`timeout`. Then print `Documentation already synced this
+run — reusing prior result`, reuse its stored `documentation_section` for Step
+19, and skip the dispatch. If that field is absent, dispatch anyway.
 
-If a completed record matches the fingerprint but belongs to a DIFFERENT run:
-still dispatch (cross-run skipping is NOT active in Phase 0), and set
-`"redispatch_would_skip":true` in the shadow block below — the Phase 1
-evidence for widening the skip.
+Same fingerprint from a DIFFERENT run: still dispatch (cross-run skipping is
+NOT active in Phase 0) and set
+`"redispatch_would_skip":true` in the shadow block below — Phase 1 evidence
+for widening the skip.
 
 **Subagent prompt:**
 
@@ -46,17 +45,15 @@ evidence for widening the skip.
 
 **If the subagent fails or returns invalid JSON:** Print a warning and proceed to Step 19 without a `## Documentation` section. Do not block /ship on subagent failure. The user can run `/document-release` manually after the PR lands.
 
-**Persist the doc-release gate record (Phase 0; every dispatch, failures included):**
+**Persist the doc-release gate record (Phase 0; every dispatch, failures too):**
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","commit":"{short SHA}","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array},"files_updated_count":{N},"doc_commit":{"sha" or null},"pushed":{true|false},"documentation_section":{JSON-escaped markdown or null},"fix_cycle":{N},"rerun_cause":{null|"ship-reentry"},"diff_scope":"full","critical_path":true,"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{from the manifest, or null},"false_negative":{true iff would_dispatch=false AND files_updated_count>0; null when would_dispatch null},"redispatch_would_skip":{true iff a completed prior-run record matched this fingerprint}}}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"doc-release","trigger":"every-ship (S18)","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","doc_fingerprint":"{DOC_FP}","files_updated":{JSON array},"files_updated_count":{N},"doc_commit":{"sha"|null},"pushed":{true|false},"documentation_section":{escaped md|null},"fix_cycle":{N},"rerun_cause":{null|"ship-reentry"},"manifest_wtree":"{MANIFEST_WTREE}","shadow":{"doc_impact_would_dispatch":{manifest|null},"false_negative":{true iff would_dispatch=false AND count>0; null if would_dispatch null},"redispatch_would_skip":{true iff a completed prior-run record matched this fp}}}' 2>/dev/null || true
 ```
 
-Substitute every {placeholder} with literals; JSON-escape the
-`documentation_section` markdown (`gstack-gate-log` rejects malformed JSON
-loudly). On a same-run SKIP, write no new record — absence of a second record
-is the skip signal. Telemetry is best-effort: a failed gate-log call never
-blocks the PR.
+Substitute every {placeholder} with literals; JSON-escape
+`documentation_section` (`gstack-gate-log` rejects malformed JSON loudly). On a same-run SKIP write no new record — absence is the skip signal.
+Telemetry is best-effort: a failed gate-log call never blocks the PR.
 
 ---
 
