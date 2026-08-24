@@ -28,6 +28,19 @@
 # Same known limitation as review-log: binding happens at LOG time, not
 # gate-START time; the started_at/ended_at fields inside the record are the
 # caller's own clock and are NOT certified by the stamp.
+#
+# Derived/defaulted fields (only when the caller OMITS the key; an explicit
+# caller value always wins, so this is backward-compatible with every existing
+# call site and record):
+#   - commit        <- git rev-parse --short HEAD. Pure redundancy with the
+#                      authoritative commit_full stamped above, and every call
+#                      site was hand-substituting it from the same HEAD.
+#   - diff_scope    <- "full"   (every Phase 0 gate reviews the full diff)
+#   - critical_path <- true     (every Phase 0 gate blocks the ship)
+# manifest_wtree is deliberately NOT derived: it records the worktree the
+# MANIFEST was built in, and the log-time worktree is already stamped as
+# `wtree`. Deriving it would make the two always agree and destroy the only
+# signal that a manifest came from a different tree than the gate it logs.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
@@ -39,10 +52,12 @@ INPUT="$1"
 # Compute binding fields (best-effort; empty outside a git repo).
 COMMIT_FULL=$(git rev-parse HEAD 2>/dev/null || true)
 TREE=""
+COMMIT_SHORT=""
 WTREE=""
 DIRTY=""
 if [ -n "$COMMIT_FULL" ]; then
   TREE=$(git rev-parse 'HEAD^{tree}' 2>/dev/null || true)
+  COMMIT_SHORT=$(git rev-parse --short HEAD 2>/dev/null || true)
   WTREE=$("$SCRIPT_DIR/gstack-wtree" 2>/dev/null || true)
   if [ -n "$(git status --porcelain -uno 2>/dev/null | head -1)" ]; then
     DIRTY="true"
@@ -54,7 +69,7 @@ fi
 # Validate (reject malformed input, missing gate identity, or an unrecorded
 # effort override) AND stamp in one pass. Caller values for the binding keys
 # are dropped before stamping.
-STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" bun -e "
+STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" GSTACK_STAMP_COMMIT_SHORT="$COMMIT_SHORT" bun -e "
 const rec = JSON.parse(await Bun.stdin.text());
 const fail = (msg) => { console.error('gstack-gate-log: ' + msg); process.exit(1); };
 if (rec.record_type !== 'gate') fail('record_type must be \"gate\"');
@@ -69,6 +84,9 @@ if (env.GSTACK_STAMP_COMMIT_FULL) rec.commit_full = env.GSTACK_STAMP_COMMIT_FULL
 if (env.GSTACK_STAMP_TREE) rec.tree = env.GSTACK_STAMP_TREE;
 if (env.GSTACK_STAMP_WTREE) rec.wtree = env.GSTACK_STAMP_WTREE;
 if (env.GSTACK_STAMP_DIRTY) rec.dirty = env.GSTACK_STAMP_DIRTY === 'true';
+if (rec.commit === undefined && env.GSTACK_STAMP_COMMIT_SHORT) rec.commit = env.GSTACK_STAMP_COMMIT_SHORT;
+if (rec.diff_scope === undefined) rec.diff_scope = 'full';
+if (rec.critical_path === undefined) rec.critical_path = true;
 console.log(JSON.stringify(rec));
 ") || {
   echo "gstack-gate-log: invalid or rejected record, skipping" >&2
