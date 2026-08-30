@@ -2,11 +2,13 @@
  * Phase 0 Red Team scheduling — rendered-prose pins.
  *
  * Pattern follows test/ship-review-loop.test.ts: assert the RENDERED surfaces
- * (never the resolver source), across every host that inlines the Review Army
+ * (never the resolver source), across every host that renders the Review Army
  * section. The claude ship skill carries Review Army in
  * ship/sections/review-army.md (not inlined into ship/SKILL.md), /review
- * inlines it, and the factory golden inlines it; the codex host strips Review
- * Army entirely, so the codex golden is deliberately NOT a site here.
+ * carries it in review/sections/review-army.md behind a STOP pointer (v1.75
+ * lazy section loading — review/SKILL.md no longer inlines it), and the
+ * factory golden inlines it; the codex host strips Review Army entirely, so
+ * the codex golden is deliberately NOT a site here.
  *
  * What these pins protect, in both directions:
  *  - The activation condition is UNCHANGED — early launch moves WHEN Red Team
@@ -27,7 +29,7 @@ const ROOT = path.resolve(import.meta.dir, '..');
 
 const RENDERED_SITES = [
   'ship/sections/review-army.md',
-  'review/SKILL.md',
+  'review/sections/review-army.md',
   'test/fixtures/golden/factory-ship-SKILL.md',
 ];
 

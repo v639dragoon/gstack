@@ -45,7 +45,7 @@ function rowLine(content: string, skill: string): string {
 }
 
 describe('effort routing (Phase 0)', () => {
-  const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/SKILL.md', 'test/fixtures/golden/factory-ship-SKILL.md'];
+  const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', 'test/fixtures/golden/factory-ship-SKILL.md'];
   for (const site of ADVERSARIAL_SITES) {
     test(`${site}: codex adversarial AND structured review both stay at high`, () => {
       const content = read(site);
@@ -106,7 +106,9 @@ describe('effort routing (Phase 0)', () => {
   });
 
   test('/codex standalone review row records effort + source', () => {
-    const codexSkill = read('codex/SKILL.md');
+    // v1.75 lazy section loading: the review-mode steps render into
+    // codex/sections/review-mode.md, no longer inline in codex/SKILL.md.
+    const codexSkill = read('codex/sections/review-mode.md');
     const row = rowLine(codexSkill, 'codex-review');
     expect(row).toContain('"effort":"EFFORT"');
     expect(row).toContain('"effort_source":"EFFORT_SOURCE"');
