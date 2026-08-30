@@ -63,7 +63,9 @@ describe('document-release dispatch control (Phase 0)', () => {
     test(`${site}: no unconditional skip language`, () => {
       // The only skip is the guarded same-run one. A bare "skip the dispatch"
       // outside the ALL-THREE guard would be a silent policy widening.
-      const skips = content.match(/skip the dispatch/gi) ?? [];
+      // Negated forms ("Never skip the dispatch", v1.75 doc-sync invariant)
+      // are anti-skip language and deliberately not counted.
+      const skips = content.match(/(?<!never )skip the dispatch/gi) ?? [];
       expect(skips.length).toBeLessThanOrEqual(1);
     });
   }
