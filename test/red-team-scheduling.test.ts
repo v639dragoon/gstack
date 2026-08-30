@@ -2,7 +2,7 @@
  * Phase 0 Red Team scheduling — rendered-prose pins.
  *
  * Pattern follows test/ship-review-loop.test.ts: assert the RENDERED surfaces
- * (never the resolver source), across every host that inlines the Review Army
+ * (never the resolver source), across every host that renders the Review Army
  * section. The claude ship skill carries Review Army in
  * ship/sections/review-army.md (not inlined into ship/SKILL.md), /review
  * and factory also keep it in lazy section files; the codex host strips Review
