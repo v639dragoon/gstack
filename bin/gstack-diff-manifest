@@ -52,8 +52,8 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 2
 fi
 
-eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
-GSTACK_HOME="${GSTACK_HOME:-$HOME/.gstack}"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}"
+eval "$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
 MANIFEST_DIR="$GSTACK_HOME/projects/$SLUG/manifests"
 mkdir -p "$MANIFEST_DIR"
 
@@ -87,7 +87,9 @@ MERGE_BASE=$(git merge-base "origin/$BASE" HEAD 2>/dev/null || git merge-base "$
 # third source, same union as gstack-diff-scope; their line counts come from
 # wc -l (binary/unreadable → 0).
 NUMSTAT=""
-[ -n "$MERGE_BASE" ] && NUMSTAT=$(git diff --numstat "$MERGE_BASE" 2>/dev/null || true)
+# Disable rename display so every path is canonical. Otherwise numstat can
+# emit `{old => new}/file`, which bypasses policy globs for the destination.
+[ -n "$MERGE_BASE" ] && NUMSTAT=$(git diff --no-renames --numstat "$MERGE_BASE" 2>/dev/null || true)
 UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null || true)
 UNTRACKED_STAT=""
 if [ -n "$UNTRACKED" ]; then
@@ -105,6 +107,13 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || echo "")
 POLICY_PATH=""
 [ -n "$REPO_ROOT" ] && [ -f "$REPO_ROOT/.gstack-policy.json" ] && POLICY_PATH="$REPO_ROOT/.gstack-policy.json"
 
+# Outcome metadata is branch-scoped. Tests may inject the exact JSON without
+# touching git config; otherwise the outcome helper degrades to present:false.
+OUTCOME_JSON="${GDM_OUTCOME_JSON:-}"
+if [ -z "$OUTCOME_JSON" ]; then
+  OUTCOME_JSON=$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || true)
+fi
+
 # All heavy lifting (glob matching, tier computation, fingerprint, JSON
 # emission, manifest reuse/cleanup) lives in the adjacent .ts file, executed
 # under bun with inputs on env + stdin. A separate file, NOT `bun -e`: the
@@ -116,4 +125,5 @@ printf '%s\n---UNTRACKED---\n%s\n---SCOPE---\n%s\n' "$NUMSTAT" "$UNTRACKED_STAT"
   GDM_COMMIT_FULL="$COMMIT_FULL" GDM_WTREE="$WTREE" GDM_DIRTY="$DIRTY" \
   GDM_SCOPE_EXIT="$SCOPE_EXIT" GDM_MANIFEST_DIR="$MANIFEST_DIR" \
   GDM_POLICY_PATH="$POLICY_PATH" GDM_SESSION_ID="${GSTACK_SESSION_ID:-}" \
+  GDM_OUTCOME_JSON="$OUTCOME_JSON" \
   bun "$SCRIPT_DIR/gstack-diff-manifest.ts"
