@@ -451,7 +451,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
       gateAfterStop: 'EXIT PLAN MODE GATE',
     },
     behavioral: 'prompt',
-    maxSkeletonBytes: 57_800, // ponytail-import wave: reuse ladder + bounded closer + shortcut trail (AUQ repetition cut netted -236B, gated); measured 57_198
+    maxSkeletonBytes: 57_900, // ultra never-automatic clause (dohma ruling 2026-09-03); measured 57,809
     minUnionBytes: 83_400, // Phase 4 wave 1; measured union 84,304
     mustContain: ['GATE: PASS', 'CROSS-MODEL ANALYSIS', 'codex exec resume', 'sandbox_mode="read-only"', 'mktemp'],
     maxSizeRatio: 1.06, // measured 1.040 vs the v1.64.1.0 parity baseline
