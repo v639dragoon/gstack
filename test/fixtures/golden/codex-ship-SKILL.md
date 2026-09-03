@@ -454,14 +454,16 @@ STOP blocks advancement until the stated repair/resume route clears; without one
 Answer each AskUserQuestion before continuing.
 Routine authorization never waives those gates or their required user decisions.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
 **Routine work needs no confirmation:** include uncommitted changes, choose MICRO/PATCH
-under Step 12, draft CHANGELOG and commits, mark completed TODOs and auto-fix findings.
+under Step 12, draft CHANGELOG and commits, mark completed TODOs and retain advisories without fixes.
 When Step 7 coverage meets its target, report remaining gaps and verify generated
 tests without another permission question. Step 15 commits those tests.
 
 **Route:** integrate (1–3) → test and review (4–11.5) → prepare the release
 (12–15) → verify frozen content (16) → push and publish (17–21).
-Every new invocation repeats Steps 1–16, including both reviews and the docs audit.
+Every new invocation repeats Steps 1–16, including deterministic checks, tier-budgeted reviews and the docs audit.
 Steps 12, 17 and 19 prevent duplicate bumps, pushes and PRs, never verification.
 
 ### Keep state between steps
@@ -1131,6 +1133,14 @@ satisfy coverage.
 
 ## Step 7: Test Coverage Audit
 
+Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" coverage-audit --cycle <n>`.
+On exit 2 print its line and do not dispatch.
+
 ### Shared subagent dispatch
 
 For Steps 7, 8 and 10, use the Agent tool with `run_in_background: false`.
@@ -1139,7 +1149,7 @@ for a result while keeping a fresh context. Do not invoke the target as a Skill
 or run it inline instead. Inline work is allowed only under that section's
 documented fallback, after a failed subagent has stopped.
 
-Dispatch the audit through Agent with `subagent_type: "general-purpose"` and
+Dispatch the audit through Agent with `subagent_type: "general-purpose"`, `model: "sonnet"` and
 `run_in_background: false`, using the shared foreground-dispatch rule above.
 Wait for its LAST-line JSON before applying the coverage gate.
 
@@ -1479,7 +1489,7 @@ After your analysis, output a single JSON object on the LAST LINE of your respon
    No `tests_rejected` path may remain on disk as a new file. If every test written in
    a pass is rejected, print all <N> generated tests rejected by machine checks; see tests_rejected. The gate proceeds with the unchanged value-weighted coverage. (see $GSTACK_ROOT/docs/test-value-bar.md#all-generated-tests-rejected)
 4. **Rating dispatch.** When this run wrote tests that survived the machine checks,
-   dispatch one read-only Agent (`subagent_type: "general-purpose"`,
+   dispatch one read-only Agent (`subagent_type: "general-purpose"`, `model: "sonnet"`,
    `run_in_background: false`) with no generation permission; it uses no generation
    pass. Give it the diagram and the surviving test paths. It rates each against the
    ★ rubric and the test value bar and returns a LAST-line JSON
@@ -1547,13 +1557,21 @@ Y is `coverage_pct`; W is `weak_gaps.length`; N is `gaps`. Remaining slots = 2 �
 
 ## Step 8: Plan Completion Audit
 
+Run this step iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+On exit 2 print its line and do not dispatch.
+
 Complete this section in order:
 1. Dispatch the audit, validate its result and resolve its Gate Logic.
 2. Collect the plan's executable checks in Step 8.1; do not run them yet.
 3. Run Step 8.2 Scope Drift.
 4. Run Prior Learnings, including its setting question when offered, then proceed to Step 9 for review and QA.
 
-**Dispatch this step as a subagent** using Agent, `subagent_type: "general-purpose"`
+**Dispatch this step as a subagent** using Agent, `subagent_type: "general-purpose"`, `model: "sonnet"`
 and `run_in_background: false`. Use Step 7's shared foreground-dispatch rule.
 The child reads the plan and every referenced
 code file; the parent validates its report and applies the gates below.
@@ -2206,11 +2224,12 @@ or confirm termination; otherwise log incomplete through items 5–6 and STOP
 without edits. After terminal failure, independent evidence may support fixes,
 but missing dispatched output still blocks continuation, even with a QA exception.
 
-1. **Classify only unmatched or reopened findings as AUTO-FIX or ASK** after Step 9.3 matches all sources, including queued Steps 10–11 findings, per the Fix-First Heuristic in
-   checklist.md. Critical findings lean toward ASK; informational lean toward AUTO-FIX.
+1. **Classify unmatched/reopened findings:** BLOCKING means severity in
+   `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`. Everything else is
+   ADVISORY and NEVER fixed here: no AUTO-FIX and no ASK. Keep at most
+   `MAX_ADVISORIES` (5), sorted by confidence, under `## Advisories (not fixed)`.
 
-2. **Auto-fix all AUTO-FIX items.** Apply each fix. Output one line per fix:
-   `[AUTO-FIXED] [file:line] Problem → what you did`
+2. **BLOCKING findings require approval.** Never silently apply them.
 
 3. **If ASK items remain,** present them in ONE AskUserQuestion:
    - List each with number, severity, problem, recommended fix
@@ -2231,7 +2250,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    Then commit named fixed files, if any
    (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`).
 
-5. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
+5. Output summary: `Pre-Landing Review: N blocking issues — J fixed, L skipped`
 
    If coverage is incomplete: `Pre-Landing Review: INCOMPLETE — <missing reviewers>`.
    Otherwise, if no issues found: `Pre-Landing Review: No issues found.`
@@ -2257,7 +2276,8 @@ $GSTACK_ROOT/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","s
   `{"dispatched":false,"reason":"scope|gated"}`.
 - `findings`: checklist, specialist, exploratory QA and queued Steps 10–11 records with
   `{"fingerprint":"path:line:category","severity":"CRITICAL|INFORMATIONAL","action":"ACTION"}`.
-  ACTION: `"auto-fixed"`, `"fixed"` (approved), or `"skipped"` (explicit Skip).
+  ACTION: `"fixed"` (approved), or `"skipped"` (explicit Skip or retained advisory).
+  Informational findings are never recorded as auto-fixed.
   Merge revalidated invocation decisions by identity and advisory/defect kind;
   preserve `advisory`, `evidence_paths` and `helper_target`.
 Save the review output — it goes into the PR body in Step 19.
@@ -2271,11 +2291,19 @@ the invocation record. Apply these decisions in order:
    Red Team. Retain queued fixes and restore coverage. If this pass made edits,
    resume at the next decision; otherwise run a fresh complete Step 9. A successful
    peer or a QA exception cannot replace missing dispatched coverage.
-2. **Third fixing cycle reached (`CYCLES >= 3`):** STOP and report recurring findings with
-   `converged:false`; do not run a fourth fixing cycle.
-3. **Fixes applied below the cap:** Insert Step 5, affected Steps 6–8 and all of
-   Step 9 before the pending Step 10 in the work list. Tests must pass or retain approval for the same verified pre-existing
-   failures and scope. Keep CYCLES and scoped approvals across this repeat.
+2. **Fixes applied:** stay in this invocation and loop. Re-run the test suite (Step 5),
+   then run `$GSTACK_ROOT/bin/gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+   `FULL_RERUN=false`: re-dispatch ONLY the reviewer that raised each fixed finding,
+   first gating it with `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`.
+   Use `subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`;
+   confirm closure with quoted fixed lines and NO FINDINGS or the remaining finding.
+   `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log
+   `rerun_cause:"scope-expansion:{triggers}"`, refresh `gstack-diff-manifest <base> "$RUN_ID"`
+   and `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`. Carry the new tier
+   and REVIEWERS; dispatch, verdict and complete use cycle n+1.
+   Exit 3: STOP and report which findings keep reappearing. Never exceed `REPAIR_CYCLES_MAX`.
+   Continue only after zero remaining BLOCKING findings and complete required coverage.
+
 4. **No edits in this pass:** Resolve the required-probe gate below. Only after it
    clears may you continue to Step 10. Undispatched gated/unsupported specialists
    do not block independently, but never replace QA or required native review.
@@ -2292,7 +2320,7 @@ or independent test/security gates.
 
 ## Step 10: Address Greptile review comments (if PR exists)
 
-Dispatch a subagent through Agent with `subagent_type: "general-purpose"` and
+Dispatch a subagent through Agent with `subagent_type: "general-purpose"` , `model: "sonnet"` and
 `run_in_background: false`, using Step 7's shared foreground-dispatch rule.
 It fetches and classifies all Greptile comments,
 including escalation tiers; the parent handles decisions and queues approved fixes.
@@ -2941,8 +2969,13 @@ Reentry never resets the count or authorizes a launch.
 
 ## Launch the audit
 
+Before dispatch, run `$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
+On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
+D1: the documentation audit remains required on every ship, independent of slice metadata.
+
+
 **Dispatch /document-release as a subagent** with the Agent tool (never Skill),
-`subagent_type: "general-purpose"`.
+`subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`.
 
 **Foreground required:** pass `run_in_background: false` on the Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.) The dispatch happens ONLY via the Agent tool: invoking the target as a Skill, or executing its workflow inline in your own context, is WRONG even though the skill may appear in your available-skills list — inline execution forfeits the fresh-context isolation this dispatch exists for, and the explicit flag already makes the Agent call block. (Where a step defines an inline FALLBACK, it applies only after a dispatched subagent has failed.) Retain the child id.
 
@@ -3338,6 +3371,9 @@ theme, excluding VERSION/CHANGELOG bookkeeping. Do not paste the commit list.>
 "Regression proof — fails at HEAD · passes at base · passes after fix" line; Test value
 details for cards whose file type has no known comment syntax.>
 
+## Advisories (not fixed)
+<At most MAX_ADVISORIES (5) non-blocking findings, sorted by confidence; omit when empty.>
+
 ## Pre-Landing Review
 <findings from Step 9 code review, or "No issues found.">
 
@@ -3491,6 +3527,15 @@ Substitute from earlier steps:
 - **VERSION**: from the VERSION file
 
 The shell supplies the branch. Run this automatically, without confirmation.
+
+Finally print the review-budget report and, when outcome metadata is present,
+the outcome report. Both telemetry calls are best-effort:
+
+```bash
+$GSTACK_ROOT/bin/gstack-review-budget report "$RUN_ID" || true
+eval "$($GSTACK_ROOT/bin/gstack-outcome show 2>/dev/null)"
+[ -n "$OUTCOME_ID" ] && $GSTACK_ROOT/bin/gstack-outcome-report "$OUTCOME_ID" || true
+```
 
 ---
 

@@ -1,5 +1,13 @@
 ## Step 7: Test Coverage Audit
 
+Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" coverage-audit --cycle <n>`.
+On exit 2 print its line and do not dispatch.
+
 ### Shared subagent dispatch
 
 For Steps 7, 8 and 10, use the Agent tool with `run_in_background: false`.
@@ -8,7 +16,7 @@ for a result while keeping a fresh context. Do not invoke the target as a Skill
 or run it inline instead. Inline work is allowed only under that section's
 documented fallback, after a failed subagent has stopped.
 
-Dispatch the audit through Agent with `subagent_type: "general-purpose"` and
+Dispatch the audit through Agent with `subagent_type: "general-purpose"`, `model: "sonnet"` and
 `run_in_background: false`, using the shared foreground-dispatch rule above.
 Wait for its LAST-line JSON before applying the coverage gate.
 
@@ -72,7 +80,7 @@ After your analysis, output a single JSON object on the LAST LINE of your respon
    No `tests_rejected` path may remain on disk as a new file. If every test written in
    a pass is rejected, print {{TEST_VALUE_MESSAGE:allRejected}}
 4. **Rating dispatch.** When this run wrote tests that survived the machine checks,
-   dispatch one read-only Agent (`subagent_type: "general-purpose"`,
+   dispatch one read-only Agent (`subagent_type: "general-purpose"`, `model: "sonnet"`,
    `run_in_background: false`) with no generation permission; it uses no generation
    pass. Give it the diagram and the surviving test paths. It rates each against the
    ★ rubric and the test value bar and returns a LAST-line JSON

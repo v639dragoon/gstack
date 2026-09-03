@@ -34,8 +34,10 @@ describe('section TemplateContext parity (skillName pinned to parent)', () => {
 
   test('adversarial section rendered the ADVERSARIAL_STEP resolver (proves ship ctx)', () => {
     const content = readSection('adversarial.md');
-    // The codex filesystem-boundary line only appears when ADVERSARIAL_STEP resolves.
-    expect(content).toContain('Do NOT read or execute any files under');
+    // The ship-only Step 11 and routed dispatch appear only when the resolver
+    // receives the parent ship TemplateContext.
+    expect(content).toContain('## Step 11: Adversarial review — governor routed');
+    expect(content).toContain('gstack-review-budget dispatch "$RUN_ID" codex-structured');
     expect(content.length).toBeGreaterThan(500);
   });
 

@@ -48,11 +48,12 @@ or confirm termination; otherwise log incomplete through items 5–6 and STOP
 without edits. After terminal failure, independent evidence may support fixes,
 but missing dispatched output still blocks continuation, even with a QA exception.
 
-1. **Classify only unmatched or reopened findings as AUTO-FIX or ASK** after Step 9.3 matches all sources, including queued Steps 10–11 findings, per the Fix-First Heuristic in
-   checklist.md. Critical findings lean toward ASK; informational lean toward AUTO-FIX.
+1. **Classify unmatched/reopened findings:** BLOCKING means severity in
+   `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`. Everything else is
+   ADVISORY and NEVER fixed here: no AUTO-FIX and no ASK. Keep at most
+   `MAX_ADVISORIES` (5), sorted by confidence, under `## Advisories (not fixed)`.
 
-2. **Auto-fix all AUTO-FIX items.** Apply each fix. Output one line per fix:
-   `[AUTO-FIXED] [file:line] Problem → what you did`
+2. **BLOCKING findings require approval.** Never silently apply them.
 
 3. **If ASK items remain,** present them in ONE AskUserQuestion:
    - List each with number, severity, problem, recommended fix
@@ -73,7 +74,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    Then commit named fixed files, if any
    (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`).
 
-5. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
+5. Output summary: `Pre-Landing Review: N blocking issues — J fixed, L skipped`
 
    If coverage is incomplete: `Pre-Landing Review: INCOMPLETE — <missing reviewers>`.
    Otherwise, if no issues found: `Pre-Landing Review: No issues found.`
@@ -99,7 +100,8 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
   `{"dispatched":false,"reason":"scope|gated"}`.
 - `findings`: checklist, specialist, exploratory QA and queued Steps 10–11 records with
   `{"fingerprint":"path:line:category","severity":"CRITICAL|INFORMATIONAL","action":"ACTION"}`.
-  ACTION: `"auto-fixed"`, `"fixed"` (approved), or `"skipped"` (explicit Skip).
+  ACTION: `"fixed"` (approved), or `"skipped"` (explicit Skip or retained advisory).
+  Informational findings are never recorded as auto-fixed.
   Merge revalidated invocation decisions by identity and advisory/defect kind;
   preserve `advisory`, `evidence_paths` and `helper_target`.
 Save the review output — it goes into the PR body in Step 19.
@@ -113,11 +115,19 @@ the invocation record. Apply these decisions in order:
    Red Team. Retain queued fixes and restore coverage. If this pass made edits,
    resume at the next decision; otherwise run a fresh complete Step 9. A successful
    peer or a QA exception cannot replace missing dispatched coverage.
-2. **Third fixing cycle reached (`CYCLES >= 3`):** STOP and report recurring findings with
-   `converged:false`; do not run a fourth fixing cycle.
-3. **Fixes applied below the cap:** Insert Step 5, affected Steps 6–8 and all of
-   Step 9 before the pending Step 10 in the work list. Tests must pass or retain approval for the same verified pre-existing
-   failures and scope. Keep CYCLES and scoped approvals across this repeat.
+2. **Fixes applied:** stay in this invocation and loop. Re-run the test suite (Step 5),
+   then run `~/.claude/skills/gstack/bin/gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+   `FULL_RERUN=false`: re-dispatch ONLY the reviewer that raised each fixed finding,
+   first gating it with `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`.
+   Use `subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`;
+   confirm closure with quoted fixed lines and NO FINDINGS or the remaining finding.
+   `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log
+   `rerun_cause:"scope-expansion:{triggers}"`, refresh `gstack-diff-manifest <base> "$RUN_ID"`
+   and `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`. Carry the new tier
+   and REVIEWERS; dispatch, verdict and complete use cycle n+1.
+   Exit 3: STOP and report which findings keep reappearing. Never exceed `REPAIR_CYCLES_MAX`.
+   Continue only after zero remaining BLOCKING findings and complete required coverage.
+
 4. **No edits in this pass:** Resolve the required-probe gate below. Only after it
    clears may you continue to Step 10. Undispatched gated/unsupported specialists
    do not block independently, but never replace QA or required native review.

@@ -434,14 +434,16 @@ STOP blocks advancement until the stated repair/resume route clears; without one
 Answer each AskUserQuestion before continuing.
 Routine authorization never waives those gates or their required user decisions.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
 **Routine work needs no confirmation:** include uncommitted changes, choose MICRO/PATCH
-under Step 12, draft CHANGELOG and commits, mark completed TODOs and auto-fix findings.
+under Step 12, draft CHANGELOG and commits, mark completed TODOs and retain advisories without fixes.
 When Step 7 coverage meets its target, report remaining gaps and verify generated
 tests without another permission question. Step 15 commits those tests.
 
 **Route:** integrate (1–3) → test and review (4–11.5) → prepare the release
 (12–15) → verify frozen content (16) → push and publish (17–21).
-Every new invocation repeats Steps 1–16, including both reviews and the docs audit.
+Every new invocation repeats Steps 1–16, including deterministic checks, tier-budgeted reviews and the docs audit.
 Steps 12, 17 and 19 prevent duplicate bumps, pushes and PRs, never verification.
 
 ### Keep state between steps
@@ -1111,6 +1113,14 @@ satisfy coverage.
 
 ## Step 7: Test Coverage Audit
 
+Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" coverage-audit --cycle <n>`.
+On exit 2 print its line and do not dispatch.
+
 ### Shared subagent dispatch
 
 For Steps 7, 8 and 10, dispatch a subagent with `run_in_background: false`.
@@ -1119,7 +1129,7 @@ for a result while keeping a fresh context. Do not invoke the target as a Skill
 or run it inline instead. Inline work is allowed only under that section's
 documented fallback, after a failed subagent has stopped.
 
-Dispatch the audit through Agent with `subagent_type: "general-purpose"` and
+Dispatch the audit through Agent with `subagent_type: "general-purpose"`, `model: "sonnet"` and
 `run_in_background: false`, using the shared foreground-dispatch rule above.
 Wait for its LAST-line JSON before applying the coverage gate.
 
@@ -1459,7 +1469,7 @@ After your analysis, output a single JSON object on the LAST LINE of your respon
    No `tests_rejected` path may remain on disk as a new file. If every test written in
    a pass is rejected, print all <N> generated tests rejected by machine checks; see tests_rejected. The gate proceeds with the unchanged value-weighted coverage. (see $GSTACK_ROOT/docs/test-value-bar.md#all-generated-tests-rejected)
 4. **Rating dispatch.** When this run wrote tests that survived the machine checks,
-   dispatch one read-only Agent (`subagent_type: "general-purpose"`,
+   dispatch one read-only Agent (`subagent_type: "general-purpose"`, `model: "sonnet"`,
    `run_in_background: false`) with no generation permission; it uses no generation
    pass. Give it the diagram and the surviving test paths. It rates each against the
    ★ rubric and the test value bar and returns a LAST-line JSON
@@ -1527,13 +1537,21 @@ Y is `coverage_pct`; W is `weak_gaps.length`; N is `gaps`. Remaining slots = 2 �
 
 ## Step 8: Plan Completion Audit
 
+Run this step iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+On exit 2 print its line and do not dispatch.
+
 Complete this section in order:
 1. Dispatch the audit, validate its result and resolve its Gate Logic.
 2. Collect the plan's executable checks in Step 8.1; do not run them yet.
 3. Run Step 8.2 Scope Drift.
 4. Run Prior Learnings, including its setting question when offered, then proceed to Step 9 for review and QA.
 
-**Dispatch this step as a subagent** using Agent, `subagent_type: "general-purpose"`
+**Dispatch this step as a subagent** using Agent, `subagent_type: "general-purpose"`, `model: "sonnet"`
 and `run_in_background: false`. Use Step 7's shared foreground-dispatch rule.
 The child reads the plan and every referenced
 code file; the parent validates its report and applies the gates below.
@@ -2089,305 +2107,118 @@ Before final counting/Fix-First, merge the same evidenced design defect at the s
 into one item with both sources and stricter ASK. Retain actual specialist stats;
 distinct defects stay separate and neither pass substitutes for the other.
 
-## Step 9.1: Review Army — Specialist Dispatch
+## Step 9.1: Review governor — manifest, plan, packet
 
-### Detect stack and scope
-
-```bash
-source <($GSTACK_BIN/gstack-diff-scope <base> 2>/dev/null) || true
-# Detect stack for specialist context
-STACK=""
-[ -f Gemfile ] && STACK="${STACK}ruby "
-[ -f package.json ] && STACK="${STACK}node "
-[ -f requirements.txt ] || [ -f pyproject.toml ] && STACK="${STACK}python "
-[ -f go.mod ] && STACK="${STACK}go "
-[ -f Cargo.toml ] && STACK="${STACK}rust "
-echo "STACK: ${STACK:-unknown}"
-DIFF_BASE=$(git merge-base origin/<base> HEAD)
-DIFF_INS=$(git diff "$DIFF_BASE" --stat | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo "0")
-DIFF_DEL=$(git diff "$DIFF_BASE" --stat | tail -1 | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo "0")
-DIFF_LINES=$((DIFF_INS + DIFF_DEL))
-echo "DIFF_LINES: $DIFF_LINES"
-# Detect test framework for specialist test stub generation
-TEST_FW=""
-{ [ -f jest.config.ts ] || [ -f jest.config.js ]; } && TEST_FW="jest"
-[ -f vitest.config.ts ] && TEST_FW="vitest"
-{ [ -f spec/spec_helper.rb ] || [ -f .rspec ]; } && TEST_FW="rspec"
-{ [ -f pytest.ini ] || [ -f conftest.py ]; } && TEST_FW="pytest"
-[ -f go.mod ] && TEST_FW="go-test"
-echo "TEST_FW: ${TEST_FW:-unknown}"
-```
-
-### Shared diff/risk manifest (Phase 0)
+Create one manifest, deterministic reviewer plan, and shared packet:
 
 ```bash
-$GSTACK_BIN/gstack-diff-manifest <base> 2>/dev/null || true
-date -u +%Y-%m-%dT%H:%M:%SZ
+$GSTACK_BIN/gstack-diff-manifest <base>
+$GSTACK_BIN/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+$GSTACK_BIN/gstack-review-packet "$RUN_ID" <base>
 ```
 
-Carry the printed `RUN_ID`, `MANIFEST_PATH`, `MANIFEST_WTREE`, `DOC_FP`
-and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
-a fix cycle pass the earlier RUN_ID as arg 2 — one run, ONE run id. The
-manifest is an INDEX; it never replaces the raw diff.
+Carry these printed values as literals for the rest of the invocation:
+`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `REPAIR_CYCLES_MAX`,
+`COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
+`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, and `CI_GREEN`.
+Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
+`OUTCOME_MISSING`, `MAX_ADVISORIES`, `AUTOFIX_INFORMATIONAL`,
+`BLOCKING_SEVERITIES`, and `BLOCKING_CATEGORIES`.
 
-### Read specialist hit rates (adaptive gating)
+If `OUTCOME_MISSING=true`, print exactly:
+
+`Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: $GSTACK_ROOT/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]`.
+
+### Plan-owned reviewer selection
+
+The plan REPLACES LOC tables, scope selection, adaptive gating, and force flags.
+Dispatch ONLY the `specialist:*` and `red-team` entries present in
+`REVIEWERS`, in their listed order. A user `--<specialist>` request is not
+a routing input: request one extra dispatch with
+`--escalation user-request:<flag>`. Each planned gate dispatches once per
+cycle, except that an `error` or `timeout` verdict permits exactly one retry.
+Only ONE escalation of any kind may be used across the entire run; after it is
+consumed, no user-request or specialist-critical escalation remains.
+
+Before EACH specialist or red-team Agent call, run:
 
 ```bash
-$GSTACK_BIN/gstack-specialist-stats 2>/dev/null || true
+$GSTACK_BIN/gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>
 ```
 
-### Select specialists
+On exit 2, print the command's line and do NOT dispatch. Every allowed Agent
+call has `subagent_type: "general-purpose"`, `model: "sonnet"` (the
+`@sonnet` reviewer suffix), and `run_in_background: false`.
 
-Based on the scope signals above, select which specialists to dispatch.
+Each specialist prompt starts exactly with:
 
-**Always-on (dispatch on every review with 50+ changed lines):**
-1. **Testing** — read `$GSTACK_ROOT/review/specialists/testing.md`
-2. **Maintainability** — read `$GSTACK_ROOT/review/specialists/maintainability.md`
+> Read the review packet at {PACKET_PATH} and the diff at {DIFF_PATH} first. Do not re-derive the project. CI_GREEN={CI_GREEN}: when true, do not run the build or the full test suite.
 
-**If DIFF_LINES < 50:** Skip all specialists. Print: "Small diff ($DIFF_LINES lines) — specialists skipped." Continue to Step 9.2 with the core/design-lite findings and an empty specialist list, then the parent's Exploratory QA step and Step 9.3 (cross-review dedup). Small diffs skip fan-out, never the parent-owned smoke probes. Core shared-code checks also remain required.
+Then append the checklist from
+`$GSTACK_ROOT/review/specialists/<name>.md` (or
+`design-checklist.md` for design) and require newline-delimited JSON:
+`{"severity":"CRITICAL|P1|P2|INFORMATIONAL","confidence":N,"path":"file","line":N,"category":"security|reliability|data-safety|data-migration|sql-data-safety|llm-trust-boundary|auth|other-category","summary":"description","fix":"recommended fix","fingerprint":"path:line:category","specialist":"name"}`.
+Use the closed `BLOCKING_CATEGORIES` vocabulary whenever it applies; other
+specific category strings remain advisory unless the plan lists them.
+If clean, output `NO FINDINGS` only.
 
-**Conditional (dispatch if the matching scope signal is true):**
-3. **Security** — if SCOPE_AUTH=true, OR if SCOPE_BACKEND=true AND DIFF_LINES > 100. Read `$GSTACK_ROOT/review/specialists/security.md`
-4. **Performance** — if SCOPE_BACKEND=true OR SCOPE_FRONTEND=true. Read `$GSTACK_ROOT/review/specialists/performance.md`
-5. **Data Migration** — if SCOPE_MIGRATIONS=true. Read `$GSTACK_ROOT/review/specialists/data-migration.md`
-6. **API Contract** — if SCOPE_API=true. Read `$GSTACK_ROOT/review/specialists/api-contract.md`
-7. **Design** — if SCOPE_FRONTEND=true. Use the existing design review checklist at `$GSTACK_ROOT/review/design-checklist.md` and run the mechanical pass at the top of that checklist (the user-installed design detector, when present) before the LLM items
-8. **Simplification** — if DIFF_LINES > 100. Read `$GSTACK_ROOT/review/specialists/simplification.md`. Advisory-only lens: hunts unrequested structure (hand-rolled stdlib, one-implementation abstractions, dependencies duplicating platform features), never coverage.
+After every specialist or red-team reviewer returns, record its terminal
+result before doing anything else:
 
-### Adaptive gating
+```bash
+$GSTACK_BIN/gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
+```
 
-After scope-based selection, apply adaptive gating based on specialist hit rates:
+For `error` or `timeout`, retry the same planned gate at most once by running
+the cycle-scoped dispatch again, then record the retry verdict. A second
+failure remains incomplete; it is never converted to clean.
 
-For each conditional specialist that passed scope gating, check the `gstack-specialist-stats` output above:
-- If tagged `[GATE_CANDIDATE]` (0 findings in 10+ dispatches): skip it. Print: "[specialist] auto-gated (0 findings in N reviews)."
-- If tagged `[NEVER_GATE]`: always dispatch regardless of hit rate. Security and data-migration are insurance policy specialists — they should run even when silent.
-
-**Force flags:** If the user's prompt includes `--security`, `--performance`, `--testing`, `--maintainability`, `--data-migration`, `--api-contract`, `--design`, `--simplification`, or `--all-specialists`, force-include that specialist regardless of gating.
-
-Note which specialists were selected, gated, and skipped. Print the selection:
-"Dispatching N specialists: [names]. Skipped: [names] (scope not detected). Gated: [names] (0 findings in N+ reviews)."
+Red Team runs only when `red-team` occupies a plan slot, or as the ONE extra
+dispatch requested with
+`--escalation specialist-critical:<fingerprint> --cycle <n>` after an allowed specialist
+reports CRITICAL. Gate it before the Agent call exactly as above and use the
+same explicit Agent configuration. It is never triggered by line count.
 
 ---
 
-### Dispatch specialists in parallel
+### Step 9.2: Merge, classify, and record findings
 
-For each selected specialist, launch an independent subagent via the Agent tool.
-**Launch ALL selected specialists in a single message** (multiple Agent tool calls)
-so they run in parallel. Each subagent has fresh context — no prior review bias.
-
-**Each specialist subagent prompt:**
-
-Construct the prompt for each specialist. The prompt includes:
-
-1. The specialist's checklist path from the selection above (the subagent reads it; never paste its content)
-2. Stack context: "This is a {STACK} project."
-3. Past learnings for this domain (if any exist):
+Before finalizing this merge, after every planned reviewer (including the
+`codex-structured` slot routed in the adversarial step) has returned, run:
 
 ```bash
-$GSTACK_BIN/gstack-learnings-search --type pitfall --query "{specialist domain}" --limit 5 2>/dev/null || true
+$GSTACK_BIN/gstack-review-budget complete "$RUN_ID" --cycle <n>
 ```
 
-If learnings are found, include them: "Past learnings for this domain: {learnings}"
+On exit 2, print its `INCOMPLETE=` line and **STOP with a blocker report**.
+Do not log the review clean and do not continue shipping: a missing, failed,
+or timed-out required reviewer is never a clean pass.
 
-4. Instructions:
+Parse valid JSON lines, fingerprint as `path:line:category` when absent,
+deduplicate by fingerprint, and keep the highest-confidence copy. Confidence
+7+ is shown normally, 5-6 is marked medium confidence, 3-4 goes to an
+appendix, and 1-2 is suppressed.
 
-"You are a specialist code reviewer. A diff/risk manifest is at
-{MANIFEST_PATH} — read it FIRST as an index. It never replaces the diff:
-read the checklist at {checklist path}, then run
-`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"` to get the full diff. Apply the checklist against the diff.
+Classify a finding as **BLOCKING** when its severity is in the carried
+`BLOCKING_SEVERITIES` OR its category is in the carried
+`BLOCKING_CATEGORIES`. Everything else is **ADVISORY**. ADVISORY findings are NEVER fixed
+inside /ship: no AUTO-FIX and no ASK. Keep at most
+`MAX_ADVISORIES` (5), ordered by confidence, and render them under
+`## Advisories (not fixed)` in the review summary and PR body.
+`AUTOFIX_INFORMATIONAL=false` is invariant.
 
-For each finding, output a JSON object on its own line:
-{\"severity\":\"CRITICAL|INFORMATIONAL\",\"confidence\":N,\"path\":\"file\",\"line\":N,\"category\":\"category\",\"summary\":\"description\",\"fix\":\"recommended fix\",\"fingerprint\":\"path:line:category\",\"specialist\":\"name\"}
+BLOCKING findings alone enter the existing ASK/fix flow. Record every finding
+with `gstack-review-budget finding`; resolve approved fixes with
+`gstack-review-budget resolve`. Per-dispatch telemetry uses
+`gstack-gate-log`; for plan reviewers record the plan suffix, with
+`effort_source:"routed"` for Codex and `model:"sonnet"` for subagents.
 
-Required fields: severity, confidence, path, category, summary, specialist.
-Optional: line, fix, fingerprint, evidence, test_stub, advisory, evidence_paths, helper_target.
+Compute the quality score over blocking findings only. The summary is:
 
-Optional extraction advice belongs to the core shared-code check; do not duplicate its proposals. Report real defects in duplicated code independently. Preserve advisory metadata when returning structural advice, and never label a demonstrated defect advisory merely because sharing a helper could fix it.
+`SPECIALIST REVIEW: N blocking findings from Z planned reviewers`
 
-If you can write a test that would catch this issue, include it in the `test_stub` field.
-Use the detected test framework ({TEST_FW}). Write a minimal skeleton — describe/it/test
-blocks with clear intent. Skip test_stub for architectural or design-only findings.
-
-If no findings: output `NO FINDINGS` and nothing else.
-Do not output anything else — no preamble, no summary, no commentary.
-
-Stack context: {STACK}
-Past learnings: {learnings or 'none'}"
-
-**Subagent configuration:**
-- Use `subagent_type: "general-purpose"`
-- Pass `run_in_background: false` on every specialist Agent call — background is the default since Claude Code v2.1.198; omitting the flag is not foreground.
-
-**Wait for readers before editing:**
-- Confirm that each task has finished or is stopped. A timeout alone does not prove termination. If a reader or writer is still active, wait; if its state is unknown, inspect its task/process status. If you cannot confirm it stopped, use the parent's Fix-First stop path without edits.
-- A failed task may be stopped without having completed its review. Record the failure and retain usable partial findings.
-- Continue independent evidence collection after a terminal failure. Missing dispatched coverage remains incomplete, never completed or clean; successful peers cannot replace it.
-**Early Red Team (large diffs):** If DIFF_LINES > 200 the trigger is ALREADY
-known — include Red Team in this SAME parallel dispatch message, prompt per
-the "Red Team dispatch" section below (EARLY path); do not dispatch it again.
-
----
-
-### Step 9.2: Collect and merge findings
-
-Follow these stages in order. Validate core and specialist findings alike, but keep
-their source labels: specialist scoring is not the final review's defect count.
-
-#### 1. Parse outputs
-
-After specialist attempts settle, collect their outputs, tagged by actual source.
-Successful `NO FINDINGS` is a completed empty result. Otherwise parse each JSON line and
-skip invalid lines. Missing or unusable output is incomplete coverage, not an
-empty success. Retain each specialist's returned findings for activity stats.
-
-#### 2. Validate severity
-
-For core and specialist findings with `"severity":"CRITICAL"` and `"advisory":true`,
-remove `advisory` and retain its `CRITICAL` severity. Treat these as defects before
-identity, merging, counting, scoring or Fix-First. Never downgrade severity to make
-advisory metadata consistent. Valid INFORMATIONAL advisories remain advisory in
-every category, including simplification.
-
-#### 3. Identify and merge
-
-Partition defects and advisories BEFORE grouping by fingerprint. Never merge a
-defect with advice, even on a supplied-hash collision. Neither higher-confidence
-advice nor a prior skipped extraction may replace, downgrade or suppress a defect.
-
-Compute identities for both core and specialist findings:
-- Shared-code advice (category `shared-libs` or fingerprint prefix `shared-libs:`):
-  call installed `sharedLibsFingerprint` from `$GSTACK_ROOT/lib/review-evidence.ts`
-  with `evidence_paths` and `helper_target` as literal JSON on stdin, as in the core pass;
-  never trust a supplied hash or generate one yourself. Missing/malformed metadata
-  cannot deduplicate or reuse a saved decision.
-- Other findings: use supplied `fingerprint`, else `{path}:{line}:{category}`
-  or `{path}:{category}` when no line exists.
-
-Within the specialist list, merge matching identities in the same partition: keep
-the highest confidence and all source names. Confirmation by distinct specialists
-adds +1 (cap at 10) and `MULTI-SPECIALIST CONFIRMED ({specialist1} + {specialist2})`.
-Core findings never earn a specialist confidence boost. Preserve `advisory`,
-`evidence_paths` and `helper_target` through every merge.
-
-#### 4. Apply specialist confidence gates
-
-- Confidence 7+: show normally in the findings output
-- Confidence 5-6: show with caveat "Medium confidence — verify this is actually an issue"
-- Confidence 3-4: move to appendix (suppress from main findings)
-- Confidence 1-2: suppress entirely
-
-Core findings keep the core Confidence Calibration gates.
-
-#### 5. Score and present specialists
-
-Only specialist findings enter this header and `quality_score`; core findings do not.
-Use the merged NON-advisory specialist findings for both counts and score:
-`quality_score = max(0, 10 - (critical_count * 2 + informational_count * 0.5))`
-Cap at 10 and retain for the review-log persist. These are not final unresolved-defect totals.
-Print only this block: the stage 6 activity object and `test_stub` bodies are log and Fix-First data.
-Validated `"advisory": true` findings from any source are excluded from score,
-header, unresolved-defect totals and clean-status blockers. Show them separately;
-they remain ASK-only, never auto-applied. Real defects follow normal Fix-First.
-
-```
-SPECIALIST REVIEW: N findings (X critical, Y informational) from Z specialists
-
-[For each finding, in order: CRITICAL first, then INFORMATIONAL, sorted by confidence descending;
- advisory findings last, each rendered with an [ADVISORY] label in place of the severity]
-[SEVERITY] (confidence: N/10, specialist: name) path:line — summary
-  Fix: recommended fix
-  [If MULTI-SPECIALIST CONFIRMED: show confirmation note]
-
-PR Quality Score: X/10
-```
-
-**Simplification footer (after the score line):**
-- If the simplification specialist was dispatched and returned findings, sum
-  their `lines_removable` values and print: `net: -N lines possible` (omit
-  findings without the field from the sum).
-- If it was dispatched and returned NO FINDINGS, print:
-  `Simplification: lean already — nothing to cut.`
-- If it was not dispatched, print neither line.
-
-Do not add core shared-code savings to this specialist footer. Explain any overlap once in the core proposal instead of presenting duplicate savings.
-
-#### 6. Save specialist activity
-
-Compile a `specialists` object for the review-log persist.
-For each specialist (testing, maintainability, security, performance, data-migration, api-contract, design, simplification, red-team):
-- If dispatched: `{"dispatched": true, "findings": N, "critical": N, "informational": N}`
-- If skipped by scope: `{"dispatched": false, "reason": "scope"}`
-- If skipped by gating: `{"dispatched": false, "reason": "gated"}`
-- If not applicable (e.g., red-team not activated): omit from the object
-
-Count only findings that specialist actually returned, before deduplication.
-Advisory findings COUNT in the stats `findings` field, not its defect counts.
-Include Design despite its different checklist. Preserve dispatch/failure status:
-zero returned findings from a failed attempt is not a clean review.
-
-#### 7. Hand off to Fix-First
-
-Send these findings to Step 9.3 dedup, then Step 9.4 Fix-First alongside the checklist pass (Step 9).
-Consolidate equivalent shared-code advice under the core proposal, retaining all
-sources and counting overlapping savings once. Keep actual specialist stats;
-core-only advice must not create a specialist dispatch or finding.
-Normal AUTO-FIX/ASK rules apply, with advice ASK-only. Missing coverage still blocks
-completion. Advice never permits edits while readers are active or replaces a required review.
-**Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
-Red Team, either path), append one gate record, substituting {placeholder}s
-with carried literals:
-
-```bash
-$GSTACK_BIN/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-```
-
-Telemetry is best-effort: a failed gate-log call never blocks or changes the
-review, and the aggregate `specialists` object still goes into reviews.jsonl
-unchanged.
-
----
-
-### Red Team dispatch (conditional)
-
-**Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
-
-Two dispatch paths, ONE activation condition — they differ only in WHEN:
-
-**EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
-dispatch message as the specialists (see "Early Red Team" above); do not
-dispatch again. It receives the checklist from
-`$GSTACK_ROOT/review/specialists/red-team.md`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Early prompt:
-"You are a red team reviewer. N specialists are reviewing this diff
-CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
-{MANIFEST_PATH}; read it first as an index, then run
-`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"`.
-Hunt for cross-cutting concerns, integration boundary issues, and failure
-modes that specialist checklists don't cover. Output specialist-schema JSON
-findings."
-
-**LATE path (no early dispatch AND any specialist produced a CRITICAL
-finding):** dispatch one more subagent via the Agent tool now (pass `run_in_background: false` —
-foreground; subagents default to background since Claude Code v2.1.198). It receives:
-1. The red-team checklist path `$GSTACK_ROOT/review/specialists/red-team.md` (it reads the file)
-2. The merged specialist findings from Step 9.2, one line each (so it knows what was already caught)
-3. The git diff command
-
-Late prompt: "You are a red team reviewer. The code has already been reviewed by N specialists
-who found the following issues: {merged findings summary}. Your job is to find what they
-MISSED. Read the checklist at {red-team checklist path}, run `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"`, and look for gaps.
-Output findings as JSON objects (same schema as the specialists). Focus on cross-cutting
-concerns, integration boundary issues, and failure modes that specialist checklists
-don't cover."
-
-If the Red Team finds additional issues, tag them `"specialist":"red-team"`.
-Add them to the original specialist outputs and rerun stages 1–7 of Step 9.2
-before Step 9.3 dedup, then Step 9.4 Fix-First; do not boost or count the earlier findings twice.
-Gate record: `"gate":"red-team"`, trigger `"DIFF_LINES={N}>200 (early)"` or
-`"specialist-critical (late)"`.
-
-If the Red Team returns NO FINDINGS, note: "Red Team review: no additional issues found."
-If the Red Team fails or times out, confirm it stopped and record its review as incomplete, just as for other specialists. Return to the parent's Exploratory QA step, then dedup and persistence; Step 9.4 cannot certify missing dispatched coverage as completed or clean.
+followed by the blocking list, quality score, and the bounded advisories
+section. Failed or timed-out reviewers are missing coverage, not clean passes.
 
 ### Step 9.2.1: Exploratory QA (before Fix-First)
 
@@ -2508,11 +2339,12 @@ or confirm termination; otherwise log incomplete through items 5–6 and STOP
 without edits. After terminal failure, independent evidence may support fixes,
 but missing dispatched output still blocks continuation, even with a QA exception.
 
-1. **Classify only unmatched or reopened findings as AUTO-FIX or ASK** after Step 9.3 matches all sources, including queued Steps 10–11 findings, per the Fix-First Heuristic in
-   checklist.md. Critical findings lean toward ASK; informational lean toward AUTO-FIX.
+1. **Classify unmatched/reopened findings:** BLOCKING means severity in
+   `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`. Everything else is
+   ADVISORY and NEVER fixed here: no AUTO-FIX and no ASK. Keep at most
+   `MAX_ADVISORIES` (5), sorted by confidence, under `## Advisories (not fixed)`.
 
-2. **Auto-fix all AUTO-FIX items.** Apply each fix. Output one line per fix:
-   `[AUTO-FIXED] [file:line] Problem → what you did`
+2. **BLOCKING findings require approval.** Never silently apply them.
 
 3. **If ASK items remain,** present them in ONE AskUserQuestion:
    - List each with number, severity, problem, recommended fix
@@ -2533,7 +2365,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    Then commit named fixed files, if any
    (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`).
 
-5. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
+5. Output summary: `Pre-Landing Review: N blocking issues — J fixed, L skipped`
 
    If coverage is incomplete: `Pre-Landing Review: INCOMPLETE — <missing reviewers>`.
    Otherwise, if no issues found: `Pre-Landing Review: No issues found.`
@@ -2559,7 +2391,8 @@ $GSTACK_ROOT/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","s
   `{"dispatched":false,"reason":"scope|gated"}`.
 - `findings`: checklist, specialist, exploratory QA and queued Steps 10–11 records with
   `{"fingerprint":"path:line:category","severity":"CRITICAL|INFORMATIONAL","action":"ACTION"}`.
-  ACTION: `"auto-fixed"`, `"fixed"` (approved), or `"skipped"` (explicit Skip).
+  ACTION: `"fixed"` (approved), or `"skipped"` (explicit Skip or retained advisory).
+  Informational findings are never recorded as auto-fixed.
   Merge revalidated invocation decisions by identity and advisory/defect kind;
   preserve `advisory`, `evidence_paths` and `helper_target`.
 Save the review output — it goes into the PR body in Step 19.
@@ -2573,11 +2406,19 @@ the invocation record. Apply these decisions in order:
    Red Team. Retain queued fixes and restore coverage. If this pass made edits,
    resume at the next decision; otherwise run a fresh complete Step 9. A successful
    peer or a QA exception cannot replace missing dispatched coverage.
-2. **Third fixing cycle reached (`CYCLES >= 3`):** STOP and report recurring findings with
-   `converged:false`; do not run a fourth fixing cycle.
-3. **Fixes applied below the cap:** Insert Step 5, affected Steps 6–8 and all of
-   Step 9 before the pending Step 10 in the work list. Tests must pass or retain approval for the same verified pre-existing
-   failures and scope. Keep CYCLES and scoped approvals across this repeat.
+2. **Fixes applied:** stay in this invocation and loop. Re-run the test suite (Step 5),
+   then run `$GSTACK_ROOT/bin/gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+   `FULL_RERUN=false`: re-dispatch ONLY the reviewer that raised each fixed finding,
+   first gating it with `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`.
+   Use `subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`;
+   confirm closure with quoted fixed lines and NO FINDINGS or the remaining finding.
+   `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log
+   `rerun_cause:"scope-expansion:{triggers}"`, refresh `gstack-diff-manifest <base> "$RUN_ID"`
+   and `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`. Carry the new tier
+   and REVIEWERS; dispatch, verdict and complete use cycle n+1.
+   Exit 3: STOP and report which findings keep reappearing. Never exceed `REPAIR_CYCLES_MAX`.
+   Continue only after zero remaining BLOCKING findings and complete required coverage.
+
 4. **No edits in this pass:** Resolve the required-probe gate below. Only after it
    clears may you continue to Step 10. Undispatched gated/unsupported specialists
    do not block independently, but never replace QA or required native review.
@@ -2594,7 +2435,7 @@ or independent test/security gates.
 
 ## Step 10: Address Greptile review comments (if PR exists)
 
-Dispatch a subagent through Agent with `subagent_type: "general-purpose"` and
+Dispatch a subagent through Agent with `subagent_type: "general-purpose"` , `model: "sonnet"` and
 `run_in_background: false`, using Step 7's shared foreground-dispatch rule.
 It fetches and classifies all Greptile comments,
 including escalation tiers; the parent handles decisions and queues approved fixes.
@@ -3250,8 +3091,13 @@ Reentry never resets the count or authorizes a launch.
 
 ## Launch the audit
 
+Before dispatch, run `$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
+On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
+D1: the documentation audit remains required on every ship, independent of slice metadata.
+
+
 **Dispatch /document-release as a subagent** with the Agent tool (never Skill),
-`subagent_type: "general-purpose"`.
+`subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`.
 
 **Foreground required:** pass `run_in_background: false` on the Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.) The dispatch happens ONLY via the Agent tool: invoking the target as a Skill, or executing its workflow inline in your own context, is WRONG even though the skill may appear in your available-skills list — inline execution forfeits the fresh-context isolation this dispatch exists for, and the explicit flag already makes the Agent call block. (Where a step defines an inline FALLBACK, it applies only after a dispatched subagent has failed.) Retain the child id.
 
@@ -3647,6 +3493,9 @@ theme, excluding VERSION/CHANGELOG bookkeeping. Do not paste the commit list.>
 "Regression proof — fails at HEAD · passes at base · passes after fix" line; Test value
 details for cards whose file type has no known comment syntax.>
 
+## Advisories (not fixed)
+<At most MAX_ADVISORIES (5) non-blocking findings, sorted by confidence; omit when empty.>
+
 ## Pre-Landing Review
 <findings from Step 9 code review, or "No issues found.">
 
@@ -3800,6 +3649,15 @@ Substitute from earlier steps:
 - **VERSION**: from the VERSION file
 
 The shell supplies the branch. Run this automatically, without confirmation.
+
+Finally print the review-budget report and, when outcome metadata is present,
+the outcome report. Both telemetry calls are best-effort:
+
+```bash
+$GSTACK_ROOT/bin/gstack-review-budget report "$RUN_ID" || true
+eval "$($GSTACK_ROOT/bin/gstack-outcome show 2>/dev/null)"
+[ -n "$OUTCOME_ID" ] && $GSTACK_ROOT/bin/gstack-outcome-report "$OUTCOME_ID" || true
+```
 
 ---
 

@@ -422,6 +422,8 @@ Keep relevant docs accurate and user-forward. Standalone `/document-release` run
 commit, before merge; `/ship` runs a narrowed audit before final commit/verification,
 including selected uncommitted content.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
 Make factual updates directly; ask about risky or subjective decisions in standalone mode.
 
 ## Ship-owned documentation mode
@@ -563,6 +565,11 @@ When significant gaps are found, suggest running `/document-generate` to fill th
 
 > **STOP.** Before auditing each doc file and applying updates, polishing CHANGELOG voice, checking cross-doc consistency, cleaning up TODOS, the VERSION bump, and committing (Steps 2-9, after the coverage map in Step 1.5), Read `~/.claude/skills/gstack/document-release/sections/release-body.md` and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.
+
+The Codex documentation voice in that section is permitted only when
+`GSTACK_CODEX_DOC_VOICE=true`. Any fallback Agent dispatch must explicitly use
+`subagent_type: "general-purpose"`, `model: "sonnet"`, and
+`run_in_background: false`.
 
 ---
 
