@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# gstack-outcome-report — outcome-level review telemetry and recommendations
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}"
+eval "$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
+GSTACK_REPORT_PROJECT_DIR="$GSTACK_HOME/projects/$SLUG" \
+GSTACK_REPORT_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)" \
+GSTACK_CLAUDE_PROJECTS_DIR="${GSTACK_CLAUDE_PROJECTS_DIR:-$HOME/.claude/projects}" \
+bun "$SCRIPT_DIR/gstack-outcome-report.ts" "$@"

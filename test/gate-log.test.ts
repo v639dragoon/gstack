@@ -16,11 +16,12 @@ const BIN = path.join(ROOT, 'bin');
 
 let tmpDir: string;
 let slugDir: string;
+let repoDir: string;
 
-function run(input: string, opts: { expectFail?: boolean } = {}): { stdout: string; stderr: string; exitCode: number } {
+function run(input: string, opts: { expectFail?: boolean; env?: Record<string,string> } = {}): { stdout: string; stderr: string; exitCode: number } {
   const execOpts: ExecSyncOptionsWithStringEncoding = {
-    cwd: ROOT,
-    env: { ...process.env, GSTACK_HOME: tmpDir },
+    cwd: repoDir,
+    env: { ...process.env, GSTACK_HOME: tmpDir, ...opts.env },
     encoding: 'utf-8',
     timeout: 10000,
   };
@@ -61,6 +62,13 @@ const VALID = '{"record_type":"gate","gate":"specialist:security","run_id":"123-
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-gatelog-'));
+  repoDir = path.join(tmpDir, 'repo');
+  fs.mkdirSync(repoDir);
+  for (const command of ['git init -b fixture', 'git config user.email fixture@example.test', 'git config user.name Fixture'])
+    execSync(command, { cwd: repoDir, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } });
+  fs.writeFileSync(path.join(repoDir, 'seed.txt'), 'fixture\n');
+  execSync('git add seed.txt', { cwd: repoDir, timeout: 30_000 });
+  execSync('git commit -m seed', { cwd: repoDir, timeout: 30_000, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } });
   slugDir = path.join(tmpDir, 'projects');
   fs.mkdirSync(slugDir, { recursive: true });
 });
@@ -177,6 +185,24 @@ describe('gstack-gate-log', () => {
     expect(rec.critical_path).toBe(true);
   });
 
+  test('stamps outcome identity and manifest routing tier, ignoring caller values', () => {
+    const branch = execSync('git branch --show-current', { cwd: repoDir, encoding: 'utf8' }).trim();
+    const manifestDir = path.join(tmpDir, 'projects', 'governor-test', 'manifests');
+    fs.mkdirSync(manifestDir, { recursive: true });
+    fs.writeFileSync(path.join(manifestDir, 'abc123.json'), JSON.stringify({ routing: { risk_tier: 'C' } }));
+    const keys: Record<string,string> = {
+      GSTACK_PROJECT_SLUG: 'governor-test', GIT_CONFIG_COUNT: '5',
+      GIT_CONFIG_KEY_0: `branch.${branch}.gstackOutcomeId`, GIT_CONFIG_VALUE_0: 'launch-1',
+      GIT_CONFIG_KEY_1: `branch.${branch}.gstackOutcomeSlice`, GIT_CONFIG_VALUE_1: '2',
+      GIT_CONFIG_KEY_2: `branch.${branch}.gstackOutcomeFinal`, GIT_CONFIG_VALUE_2: 'false',
+      GIT_CONFIG_KEY_3: `branch.${branch}.gstackOutcomeFlagFlip`, GIT_CONFIG_VALUE_3: 'false',
+      GIT_CONFIG_KEY_4: `branch.${branch}.gstackOutcomeTier`, GIT_CONFIG_VALUE_4: 'C',
+    };
+    expect(run('{"record_type":"gate","gate":"codex-structured","run_id":"r","manifest_wtree":"abc123","outcome_id":"forged","outcome_slice":99,"risk_tier":"A"}', { env: keys }).exitCode).toBe(0);
+    const rec = readNewestRecord();
+    expect(rec.outcome_id).toBe('launch-1'); expect(rec.outcome_slice).toBe(2); expect(rec.risk_tier).toBe('C');
+  });
+
   // Derived/defaulted fields (the payload-compression change): the five call
   // sites stopped hand-substituting `commit`, `diff_scope` and `critical_path`
   // because the writer can supply all three. Each must be DERIVED when absent
@@ -235,7 +261,7 @@ describe('gstack-gate-log', () => {
     expect(gatesFiles().length).toBeGreaterThan(0);
 
     const execOpts: ExecSyncOptionsWithStringEncoding = {
-      cwd: ROOT,
+      cwd: repoDir,
       env: { ...process.env, GSTACK_HOME: tmpDir },
       encoding: 'utf-8',
       timeout: 10000,

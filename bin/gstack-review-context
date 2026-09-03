@@ -1,0 +1,25 @@
+#!/usr/bin/env -S bun --no-env-file --config=/dev/null
+// Governor context for the strict Codex reviewer; upstream briefs live in review-dispatch.
+import * as path from 'node:path';
+import { runBashSync } from '../lib/script-invocation';
+const args = process.argv.slice(2);
+function main(): number {
+  const binDir = path.dirname(Bun.fileURLToPath(import.meta.url));
+  const r = runBashSync(`set -uo pipefail
+SCRIPT_DIR='${binDir.replaceAll("'", "'\\''")}'
+eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1
+: "\${GSTACK_STATE_ROOT:?gstack-paths did not set GSTACK_STATE_ROOT}"
+eval "$("$SCRIPT_DIR/gstack-slug")" || exit 1
+export GSTACK_PACKET_PROJECT_DIR="$GSTACK_STATE_ROOT/projects/$SLUG"
+export GSTACK_PACKET_BRANCH="$(git branch --show-current 2>/dev/null || printf '%s' "$BRANCH")"
+export GSTACK_PACKET_STATE_BRANCH="$BRANCH"
+export GSTACK_PACKET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+export GSTACK_PLANS_DIR="\${GSTACK_PLANS_DIR:-$HOME/.claude/plans}"
+exec bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-review-packet.ts" ${args.map(a => "'" + a.replaceAll("'", "'\\''") + "'").join(" ")}`, {
+    encoding: 'utf8', timeout: 120_000,
+  });
+  if (r.stdout) process.stdout.write(r.stdout);
+  if (r.stderr) process.stderr.write(r.stderr);
+  return r.status ?? 1;
+}
+process.exitCode = main();

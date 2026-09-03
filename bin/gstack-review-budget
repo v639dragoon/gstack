@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# gstack-review-budget — deterministic semantic-review budgets and ledger
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}"
+eval "$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
+GSTACK_BUDGET_PROJECT_DIR="$GSTACK_HOME/projects/$SLUG" \
+GSTACK_BUDGET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)" \
+bun "$SCRIPT_DIR/gstack-review-budget.ts" "$@"
