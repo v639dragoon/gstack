@@ -417,15 +417,15 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
       mustPrecedeStop: ['## Step 0: Detect platform and base branch'],
       mustMoveToSection: [
         'Plan File Discovery',
-        'MULTI-SPECIALIST CONFIRMED',
-        'Cross-model synthesis',
+        'Before EACH specialist or red-team Agent call',
+        'specialist-critical:<fingerprint>',
         'codex review --base',
       ],
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 57_660, // ponytail-import wave: reuse ladder + bounded closer + shortcut trail (AUQ repetition cut netted -236B, gated); measured 57_053
-    minUnionBytes: 89_000, // Phase 4 wave 1; measured union 93,357
+    maxSkeletonBytes: 57_660, // ponytail-import wave: reuse ladder + bounded closer + shortcut trail (AUQ repetition cut netted -236B, gated); measured 57,053
+    minUnionBytes: 78_000, // old LOC/adversarial prose intentionally removed; measured 78,985
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
   },
   codex: {

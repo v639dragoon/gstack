@@ -36,10 +36,11 @@ describe('/ship review fix loop (#2391)', () => {
   test('rendered section instructs the bounded in-invocation loop', () => {
     const content = fs.readFileSync(RENDERED_SITES[0], 'utf-8');
     expect(content).toContain('stay in this invocation and loop');
-    expect(content).toContain('3 fix cycles');
+    expect(content).toContain('REPAIR_CYCLES_MAX');
     // The loop re-runs tests AND the review, and only a converged pass continues.
-    expect(content).toContain('re-run the test suite (Step 5)');
-    expect(content).toContain('re-run this review (Step 9 items 2-6)');
+    expect(content).toMatch(/re-run the test\s+suite \(Step 5\)/);
+    expect(content).toContain('rerun-check');
+    expect(content).toContain('--verify-of <fingerprint>');
   });
 
   test('the non-convergence stop is a blocker report, not a rerun request', () => {

@@ -898,10 +898,10 @@ describe('TEST_COVERAGE_AUDIT placeholders', () => {
     expect(shipSkill).toContain('Trace every codepath changed');
   });
 
-  test('review mode uses Review Army for specialist dispatch', () => {
-    expect(reviewSkill).toContain('Review Army');
-    expect(reviewSkill).toContain('Specialist Dispatch');
-    expect(reviewSkill).toContain('testing.md');
+  test('review mode uses the governor plan for specialist dispatch', () => {
+    expect(reviewSkill).toContain('Review governor');
+    expect(reviewSkill).toContain('Dispatch ONLY the `specialist:*`');
+    expect(reviewSkill).toContain('REVIEWERS');
   });
 
   test('plan and ship modes include E2E decision matrix', () => {
@@ -942,12 +942,11 @@ describe('TEST_COVERAGE_AUDIT placeholders', () => {
     expect(shipSkill).toContain('ship-test-plan');
   });
 
-  test('review mode uses Fix-First + Review Army for specialist coverage', () => {
+  test('review mode uses Fix-First + governor advisories for specialist coverage', () => {
     expect(reviewSkill).toContain('Fix-First');
-    expect(reviewSkill).toContain('INFORMATIONAL');
-    // Review Army handles test coverage via Testing specialist subagent
-    expect(reviewSkill).toContain('Review Army');
-    expect(reviewSkill).toContain('Testing');
+    expect(reviewSkill).toContain('ADVISORY findings are NEVER fixed');
+    expect(reviewSkill).toContain('MAX_ADVISORIES');
+    expect(reviewSkill).toContain('COVERAGE_AUDIT');
   });
 
   test('plan mode does NOT include ship-specific content', () => {
@@ -979,30 +978,17 @@ describe('TEST_COVERAGE_AUDIT placeholders', () => {
     }
   });
 
-  // Regression pins for the simplification specialist (advisory carve-out edits
-  // the pre-existing quality_score instruction, so the rendered contract is
-  // pinned statically — the carve-out and the early-out line must both survive
-  // regeneration verbatim).
-  test('simplification advisory carve-out and early-out render into review docs', () => {
+  // Simplification is no longer a routing input. Pin the governor's closed
+  // advisory handling contract instead of its removed specialist carve-out.
+  test('governor advisory rule renders into review docs', () => {
     const reviewArmySection = fs.readFileSync(
       path.join(ROOT, 'review', 'sections', 'review-army.md'),
       'utf-8',
     );
-    expect(reviewArmySection).toContain('"advisory": true');
-    expect(reviewArmySection).toContain('quality score over NON-advisory findings only');
-    expect(reviewArmySection).toContain('Simplification: lean already — nothing to cut.');
-    expect(reviewArmySection).toContain('net: -N lines possible');
-    expect(reviewArmySection).toContain('--simplification');
-    // The specialist itself must never carry a verdict-shaped zero-findings line.
-    const spec = fs.readFileSync(
-      path.join(ROOT, 'review', 'specialists', 'simplification.md'),
-      'utf-8',
-    );
-    expect(spec).toContain('NO FINDINGS');
-    expect(spec).not.toContain('Lean already. Ship.');
-    // Closed tag vocabulary: the disavowed yagni: frame must not appear.
-    expect(spec).toContain('speculative');
-    expect(spec.toLowerCase()).not.toContain('"yagni"');
+    expect(reviewArmySection).toContain('Everything else is **ADVISORY**');
+    expect(reviewArmySection).toContain('ADVISORY findings are NEVER fixed');
+    expect(reviewArmySection).toContain('no AUTO-FIX and no ASK');
+    expect(reviewArmySection).toContain('`MAX_ADVISORIES` (5)');
   });
 
   test('each specialist file has standard header with scope and output format', () => {
@@ -1038,8 +1024,9 @@ describe('TEST_COVERAGE_AUDIT placeholders', () => {
     }
   });
 
-  test('ship SKILL.md contains review army specialist dispatch', () => {
-    expect(shipSkill).toContain('Specialist Dispatch');
+  test('ship SKILL.md contains governor-planned specialist dispatch', () => {
+    expect(shipSkill).toContain('Review governor');
+    expect(shipSkill).toContain('Dispatch ONLY the `specialist:*`');
     expect(shipSkill).toContain('Step 9.1');
     expect(shipSkill).toContain('Step 9.2');
   });
@@ -1224,10 +1211,10 @@ describe('Coverage gate in ship', () => {
     expect(shipSkill).toContain('could not determine percentage — skipping');
   });
 
-  test('review SKILL.md delegates coverage to Testing specialist', () => {
-    // Coverage audit moved to Testing specialist subagent in Review Army
-    expect(reviewSkill).toContain('testing.md');
-    expect(reviewSkill).toContain('INFORMATIONAL');
+  test('review SKILL.md slice-gates coverage under the governor', () => {
+    expect(reviewSkill).toContain('COVERAGE_AUDIT');
+    expect(reviewSkill).toContain('Review governor — manifest, plan, packet');
+    expect(reviewSkill).toContain('ADVISORY findings are NEVER fixed');
   });
 });
 
@@ -1450,12 +1437,11 @@ describe('CODEX_SECOND_OPINION resolver', () => {
 // --- Codex filesystem boundary tests ---
 
 describe('Codex filesystem boundary', () => {
-  // Skills that call codex exec/review and should contain boundary text
+  // Skills whose prompted outside-voice paths call `codex exec` and therefore
+  // need a filesystem boundary. Routed `codex review --base` needs none.
   const CODEX_CALLING_SKILLS = [
     'codex',         // /codex skill — 3 modes
     'autoplan',      // /autoplan — CEO/design/eng voices
-    'review',        // /review — adversarial step resolver
-    'ship',          // /ship — adversarial step resolver
     'plan-eng-review',  // outside voice resolver
     'plan-ceo-review',  // outside voice resolver
     'office-hours',     // second opinion resolver
@@ -1463,7 +1449,7 @@ describe('Codex filesystem boundary', () => {
 
   const BOUNDARY_MARKER = 'Do NOT read or execute any';
 
-  test('boundary instruction appears in all skills that call codex', () => {
+  test('boundary instruction appears in prompted codex exec callers', () => {
     for (const skill of CODEX_CALLING_SKILLS) {
       // Union: ship's codex call lives in sections/adversarial.md after the carve.
       const content = readSkillUnion(skill);
@@ -1484,13 +1470,10 @@ describe('Codex filesystem boundary', () => {
     expect(content).toContain('Consider retrying');
   });
 
-  test('review.ts CODEX_BOUNDARY constant is interpolated into resolver output', () => {
-    // The adversarial step resolver should include boundary text in codex exec
-    // prompts. Carved: the adversarial step lives in sections/adversarial.md.
-    const reviewContent = readSkillUnion('review');
-    // Boundary should appear near codex exec invocations
-    const boundaryIdx = reviewContent.indexOf(BOUNDARY_MARKER);
-    const codexExecIdx = reviewContent.indexOf('codex exec');
+  test('review.ts CODEX_BOUNDARY constant is interpolated into plan voice output', () => {
+    const planContent = readSkillUnion('plan-ceo-review');
+    const boundaryIdx = planContent.indexOf(BOUNDARY_MARKER);
+    const codexExecIdx = planContent.indexOf('codex exec', boundaryIdx);
     // Both must exist and boundary must come before a codex exec call
     expect(boundaryIdx).toBeGreaterThan(-1);
     expect(codexExecIdx).toBeGreaterThan(-1);

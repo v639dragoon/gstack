@@ -1,6 +1,14 @@
 ## Step 8: Plan Completion Audit
 
-**Dispatch this step as a subagent** using the Agent tool with `subagent_type: "general-purpose"`. The subagent reads the plan file and every referenced code file in its own fresh context. Parent gets only the conclusion.
+Run this step iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+On exit 2 print its line and do not dispatch. **Dispatch this step as a
+subagent** using the Agent tool with `subagent_type: "general-purpose"`,
+`model: "sonnet"`, and `run_in_background: false`.
 
 **Subagent prompt:** Pass these instructions to the subagent:
 

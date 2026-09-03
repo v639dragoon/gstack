@@ -20,25 +20,43 @@ Review the diff for structural issues that tests don't catch.
 
 {{CROSS_REVIEW_DEDUP}}
 
-4. **Classify each finding from both the checklist pass and specialist review (Step 9.1-Step 9.2) as AUTO-FIX or ASK** per the Fix-First Heuristic in
-   checklist.md. Critical findings lean toward ASK; informational lean toward AUTO-FIX.
+4. **Classify every finding.** BLOCKING means its severity is in
+   `BLOCKING_SEVERITIES` OR its category is in `BLOCKING_CATEGORIES`.
+   Everything else is ADVISORY. ADVISORY findings are NEVER fixed inside
+   /ship: no AUTO-FIX and no ASK. Keep at most `MAX_ADVISORIES` (5), sorted by
+   confidence, under `## Advisories (not fixed)` in this summary and the PR body.
 
-5. **Auto-fix all AUTO-FIX items.** Apply each fix. Output one line per fix:
-   `[AUTO-FIXED] [file:line] Problem → what you did`
-
-6. **If ASK items remain,** present them in ONE AskUserQuestion:
+5. **BLOCKING findings use the existing ASK/fix flow.** Present them in ONE AskUserQuestion:
    - List each with number, severity, problem, recommended fix
    - Per-item options: A) Fix  B) Skip
    - Overall RECOMMENDATION
    - If 3 or fewer ASK items, you may use individual AskUserQuestion calls instead
 
-7. **After all fixes (auto + user-approved):**
-   - If ANY fixes were applied: commit fixed files by name (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`), then **stay in this invocation and loop**: re-run the test suite (Step 5) on the fixed code, then re-run this review (Step 9 items 2-6) against the updated diff. Repeat until one full pass applies ZERO fixes — tests green and review clean — then continue to Step 12. NEVER stop to tell the user to run `/ship` again; a fix-and-rerun cycle has no user decision in it, and stopping there breaks the fully-automated contract (#2391).
-   - **Bound: 3 fix cycles.** If the 3rd cycle still applies fixes, STOP and report which findings keep reappearing — a review that won't converge is a genuine blocker worth human eyes, not a re-run request.
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
-   - If no fixes applied (all ASK items skipped, or no issues found): continue to Step 12.
+6. Commit approved fixed files by name
+   (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`).
 
-8. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
+7. **After a fix commit, stay in this invocation and loop:** re-run the test
+   suite (Step 5), then run:
+   `~/.claude/skills/gstack/bin/gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+   - `FULL_RERUN=false`: re-dispatch ONLY the reviewer that raised each fixed
+     finding, first gating it with
+     `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`.
+     Its explicit `subagent_type: "general-purpose"`, `model: "sonnet"`,
+     `run_in_background: false` prompt is: "Confirm the fix at
+     {path}:{line} closes finding {fingerprint}; quote the fixed lines; output
+     NO FINDINGS or the remaining finding".
+   - `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log
+     `rerun_cause:"scope-expansion:{triggers}"`, then run
+     `gstack-diff-manifest <base> "$RUN_ID"` and
+     `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`. Carry the new
+     tier and `REVIEWERS` (they may rise/change), then re-run that plan with
+     every dispatch, verdict, and completion call using `--cycle <n+1>`.
+   - Exit 3: STOP and report which findings keep reappearing — the existing
+     non-convergence blocker wording applies.
+   The bound is the literal `REPAIR_CYCLES_MAX`; continue only when the loop
+   converges with zero remaining BLOCKING findings.
+
+8. Output summary: `Pre-Landing Review: N blocking issues — J fixed, L skipped`
 
    If no issues found: `Pre-Landing Review: No issues found.`
 
@@ -48,9 +66,10 @@ Review the diff for structural issues that tests don't catch.
 ```
 Substitute TIMESTAMP (ISO 8601), STATUS ("clean" if no issues, "issues_found" otherwise),
 and N values from the summary counts above. The `via:"ship"` distinguishes from standalone `/review` runs.
-- `quality_score` = the PR Quality Score computed in Step 9.2 (e.g., 7.5). If specialists were skipped (small diff), use `10.0`
-- `specialists` = the per-specialist stats object compiled in Step 9.2. Each specialist that was considered gets an entry: `{"dispatched":true/false,"findings":N,"critical":N,"informational":N}` if dispatched, or `{"dispatched":false,"reason":"scope|gated"}` if skipped. Example: `{"testing":{"dispatched":true,"findings":2,"critical":0,"informational":2},"security":{"dispatched":false,"reason":"scope"}}`
-- `findings` = array of per-finding records. For each finding (from checklist pass and specialists), include: `{"fingerprint":"path:line:category","severity":"CRITICAL|INFORMATIONAL","action":"ACTION"}`. ACTION is `"auto-fixed"`, `"fixed"` (user approved), or `"skipped"` (user chose Skip).
+- `quality_score` = the PR Quality Score computed in Step 9.2.
+- `specialists` = stats for only the reviewers dispatched by the plan.
+- `findings` = blocking findings (`fixed` or `skipped`) plus retained advisories
+  (`skipped`). Informational findings are never recorded as auto-fixed.
 
 Save the review output — it goes into the PR body in Step 19.
 

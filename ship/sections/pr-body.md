@@ -2,7 +2,19 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 18: Documentation sync (via subagent, before PR creation)
 
-**Dispatch /document-release as a subagent** using the Agent tool with `subagent_type: "general-purpose"`. The subagent gets a fresh context window — zero rot from the preceding 17 steps. It also runs the **full** `/document-release` workflow (with CHANGELOG clobber protection, doc exclusions, risky-change gates, named staging, race-safe PR body editing) rather than a weaker reimplementation.
+Dispatch iff `DOC_RELEASE=true`. Otherwise print `Doc release: no doc-impact
+match on intermediate slice — skipped`, append a gate record with
+`verdict:"skipped:no-doc-impact"`, and continue to Step 19.
+
+Before dispatch, run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
+On exit 2 print its line and do not dispatch. **Dispatch /document-release as a subagent**
+using the Agent tool with `subagent_type: "general-purpose"`,
+`model: "sonnet"`, and `run_in_background: false`. The subagent gets a fresh
+context window — zero rot from the preceding 17 steps. It also runs the
+**full** `/document-release` workflow (with CHANGELOG clobber protection, doc
+exclusions, risky-change gates, named staging, race-safe PR body editing)
+rather than a weaker reimplementation.
 
 **Sequencing:** This step runs AFTER Step 17 (Push) and BEFORE Step 19 (Create PR). The PR is created once from final HEAD with the `## Documentation` section baked into the initial body. No create-then-re-edit dance.
 
@@ -28,7 +40,7 @@ for widening the skip.
 
 **Subagent prompt:**
 
-> You are executing the /document-release workflow after a code push. Read the full skill file `${HOME}/.claude/skills/gstack/document-release/SKILL.md` and execute its complete workflow end-to-end, including CHANGELOG clobber protection, doc exclusions, risky-change gates, and named staging. Do NOT attempt to edit the PR body — no PR exists yet. Branch: `<branch>`, base: `<base>`.
+> `GSTACK_CODEX_DOC_VOICE={CODEX_DOC_VOICE}`. You are executing the /document-release workflow after a code push. Read the full skill file `${HOME}/.claude/skills/gstack/document-release/SKILL.md` and execute its complete workflow end-to-end, including CHANGELOG clobber protection, doc exclusions, risky-change gates, and named staging. Do NOT attempt to edit the PR body — no PR exists yet. Branch: `<branch>`, base: `<base>`.
 >
 > After completing the workflow, output a single JSON object on the LAST LINE of your response (no other text after it):
 > `{"files_updated":["README.md","CLAUDE.md",...],"commit_sha":"abc1234","pushed":true,"documentation_section":"<markdown block for PR body's ## Documentation section>"}`
@@ -105,6 +117,9 @@ you missed it.>
 
 ## Pre-Landing Review
 <findings from Step 9 code review, or "No issues found.">
+
+## Advisories (not fixed)
+<At most MAX_ADVISORIES (5) non-blocking findings, sorted by confidence. Omit when empty.>
 
 ## Design Review
 <If design review ran: "Design Review (lite): N findings — M auto-fixed, K skipped. AI Slop: clean/N issues.">
