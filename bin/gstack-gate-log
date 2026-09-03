@@ -43,11 +43,23 @@
 # signal that a manifest came from a different tree than the gate it logs.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
-GSTACK_HOME="${GSTACK_HOME:-$HOME/.gstack}"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}"
+eval "$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
 mkdir -p "$GSTACK_HOME/projects/$SLUG"
 
 INPUT="$1"
+
+# Governor identity stamps. These are authoritative just like commit/tree:
+# caller-supplied values are discarded. Missing metadata is stamped as null.
+OUTCOME_JSON=$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || printf '%s' '{"present":false}')
+MANIFEST_WTREE=$(printf '%s' "$INPUT" | bun -e 'try { const r=JSON.parse(await Bun.stdin.text()); if(typeof r.manifest_wtree==="string") process.stdout.write(r.manifest_wtree) } catch {}' 2>/dev/null || true)
+RISK_TIER=""
+if [ -n "$MANIFEST_WTREE" ]; then
+  MANIFEST_FILE="$GSTACK_HOME/projects/$SLUG/manifests/${MANIFEST_WTREE:0:12}.json"
+  if [ -f "$MANIFEST_FILE" ]; then
+    RISK_TIER=$(bun -e 'try { const r=JSON.parse(await Bun.file(process.argv[1]).text()); process.stdout.write(r.routing?.risk_tier || "") } catch {}' "$MANIFEST_FILE" 2>/dev/null || true)
+  fi
+fi
 
 # Compute binding fields (best-effort; empty outside a git repo).
 COMMIT_FULL=$(git rev-parse HEAD 2>/dev/null || true)
@@ -69,7 +81,7 @@ fi
 # Validate (reject malformed input, missing gate identity, or an unrecorded
 # effort override) AND stamp in one pass. Caller values for the binding keys
 # are dropped before stamping.
-STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" GSTACK_STAMP_COMMIT_SHORT="$COMMIT_SHORT" bun -e "
+STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" GSTACK_STAMP_COMMIT_SHORT="$COMMIT_SHORT" GSTACK_STAMP_OUTCOME_JSON="$OUTCOME_JSON" GSTACK_STAMP_RISK_TIER="$RISK_TIER" bun -e "
 const rec = JSON.parse(await Bun.stdin.text());
 const fail = (msg) => { console.error('gstack-gate-log: ' + msg); process.exit(1); };
 if (rec.record_type !== 'gate') fail('record_type must be \"gate\"');
@@ -78,7 +90,7 @@ if (typeof rec.run_id !== 'string' || rec.run_id.length === 0) fail('missing req
 if (rec.effort_source === 'user-override' && !(typeof rec.effort_reason === 'string' && rec.effort_reason.trim().length > 0)) {
   fail('effort_source \"user-override\" requires a non-empty effort_reason');
 }
-for (const k of ['commit_full', 'tree', 'wtree', 'dirty']) delete rec[k];
+for (const k of ['commit_full', 'tree', 'wtree', 'dirty', 'outcome_id', 'outcome_slice', 'risk_tier']) delete rec[k];
 const env = process.env;
 if (env.GSTACK_STAMP_COMMIT_FULL) rec.commit_full = env.GSTACK_STAMP_COMMIT_FULL;
 if (env.GSTACK_STAMP_TREE) rec.tree = env.GSTACK_STAMP_TREE;
@@ -87,6 +99,11 @@ if (env.GSTACK_STAMP_DIRTY) rec.dirty = env.GSTACK_STAMP_DIRTY === 'true';
 if (rec.commit === undefined && env.GSTACK_STAMP_COMMIT_SHORT) rec.commit = env.GSTACK_STAMP_COMMIT_SHORT;
 if (rec.diff_scope === undefined) rec.diff_scope = 'full';
 if (rec.critical_path === undefined) rec.critical_path = true;
+let outcome = { present: false };
+try { outcome = JSON.parse(env.GSTACK_STAMP_OUTCOME_JSON || ''); } catch {}
+rec.outcome_id = outcome.present ? outcome.outcome_id : null;
+rec.outcome_slice = outcome.present ? outcome.slice_number : null;
+rec.risk_tier = /^[ABCD]$/.test(env.GSTACK_STAMP_RISK_TIER || '') ? env.GSTACK_STAMP_RISK_TIER : null;
 console.log(JSON.stringify(rec));
 ") || {
   echo "gstack-gate-log: invalid or rejected record, skipping" >&2
