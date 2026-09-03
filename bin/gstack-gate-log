@@ -16,6 +16,8 @@
 #   - effort_source:"user-override" REQUIRES a non-empty effort_reason — an
 #     unrecorded xhigh override is the exact failure this writer exists to
 #     make impossible ("prohibit implicit xhigh")
+#   - effort "xhigh" or "ultra" REQUIRES effort_source:"user-override" (and so a
+#     reason): effort above high is never selected automatically
 # Everything else passes through untouched (schema-free like review-log), so
 # shadow-classifier fields ride along without writer changes.
 #
@@ -89,6 +91,11 @@ if (typeof rec.gate !== 'string' || rec.gate.length === 0) fail('missing require
 if (typeof rec.run_id !== 'string' || rec.run_id.length === 0) fail('missing required field: run_id');
 if (rec.effort_source === 'user-override' && !(typeof rec.effort_reason === 'string' && rec.effort_reason.trim().length > 0)) {
   fail('effort_source \"user-override\" requires a non-empty effort_reason');
+}
+// Effort above HIGH is never automatic (dohma ruling 2026-09-03): an xhigh or
+// ultra record must be an explicit, reasoned user override or it is refused.
+if ((rec.effort === 'xhigh' || rec.effort === 'ultra') && rec.effort_source !== 'user-override') {
+  fail('effort \"' + rec.effort + '\" requires effort_source \"user-override\" with a recorded effort_reason');
 }
 for (const k of ['commit_full', 'tree', 'wtree', 'dirty', 'outcome_id', 'outcome_slice', 'risk_tier']) delete rec[k];
 const env = process.env;

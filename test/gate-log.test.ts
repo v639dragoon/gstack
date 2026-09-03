@@ -87,6 +87,18 @@ describe('gstack-gate-log', () => {
     expect(reviewFiles.length).toBe(0);
   });
 
+  test('effort xhigh/ultra without a user-override source is refused (never automatic)', () => {
+    for (const effort of ['xhigh', 'ultra']) {
+      const r = run(JSON.stringify({ record_type: 'gate', gate: 'codex-structured', run_id: 'r-ultra', effort, effort_source: 'routed' }), { expectFail: true });
+      expect(r.exitCode).not.toBe(0);
+      expect(r.stderr + r.stdout).toContain('requires effort_source "user-override"');
+    }
+    expect(gatesFiles().length).toBe(0);
+    const ok = run(JSON.stringify({ record_type: 'gate', gate: 'codex-structured', run_id: 'r-ultra', effort: 'ultra', effort_source: 'user-override', effort_reason: 'founder escalation: final adversarial on a migration' }));
+    expect(ok.exitCode).toBe(0);
+    expect(gatesFiles().length).toBe(1);
+  });
+
   test('rejects non-JSON input with non-zero exit code and writes nothing', () => {
     const result = run('not json at all', { expectFail: true });
     expect(result.exitCode).not.toBe(0);
