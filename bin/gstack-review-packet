@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# gstack-review-packet — shared, revision-bound semantic review packet
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}"
+eval "$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
+GSTACK_PACKET_PROJECT_DIR="$GSTACK_HOME/projects/$SLUG" \
+GSTACK_PACKET_BRANCH="$(git branch --show-current 2>/dev/null || printf '%s' "$BRANCH")" GSTACK_PACKET_STATE_BRANCH="$BRANCH" \
+GSTACK_PACKET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)" \
+GSTACK_PLANS_DIR="${GSTACK_PLANS_DIR:-$HOME/.claude/plans}" bun "$SCRIPT_DIR/gstack-review-packet.ts" "$@"
