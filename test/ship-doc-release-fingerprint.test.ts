@@ -27,6 +27,6 @@ describe('document-release audit telemetry (D1)', () => {
     expect(reviewArmy).toContain('Track the fix-cycle index');
     expect(reviewArmy).toContain('"rerun_cause":"fix-loop"');
     expect(reviewArmy).toContain('Telemetry only — the loop is unchanged');
-    expect(reviewArmy).toContain('CYCLES >= 3');
+    expect(reviewArmy).toContain('REPAIR_CYCLES_MAX');
   });
 });

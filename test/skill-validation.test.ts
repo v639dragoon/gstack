@@ -945,17 +945,17 @@ describe('Enum & Value Completeness in review checklist', () => {
     expect(enumLine!.trimStart().startsWith('├─') || enumLine!.trimStart().startsWith('└─')).toBe(true);
   });
 
-  test('Fix-First Heuristic exists in checklist and is referenced by review + ship', () => {
+  test('Fix-First checklist remains, while review + ship never fix advisories', () => {
     expect(checklist).toContain('## Fix-First Heuristic');
     expect(checklist).toContain('AUTO-FIX');
     expect(checklist).toContain('ASK');
 
     const reviewSkill = fs.readFileSync(path.join(ROOT, 'review/SKILL.md'), 'utf-8');
     const shipSkill = readShipUnion();
-    expect(reviewSkill).toContain('AUTO-FIX');
-    expect(reviewSkill).toContain('[AUTO-FIXED]');
-    expect(shipSkill).toContain('AUTO-FIX');
-    expect(shipSkill).toContain('[AUTO-FIXED]');
+    expect(reviewSkill).toContain('ADVISORY findings are NEVER fixed');
+    expect(reviewSkill).toContain('MAX_ADVISORIES');
+    expect(shipSkill).toContain('ADVISORY findings are NEVER fixed');
+    expect(shipSkill).toContain('MAX_ADVISORIES');
   });
 });
 
@@ -1406,7 +1406,7 @@ describe('ship step numbering', () => {
     // If the ship-side renumber accidentally touched the review-side of resolver conditionals,
     // these would vanish. This test catches that.
     expect(skill).toContain('## Step 1.5: Scope Drift Detection');
-    expect(skill).toContain('## Step 4.5: Review Army');
+    expect(skill).toContain('## Step 4.5: Review governor');
     expect(skill).toContain('## Step 4.8: Adversarial review');
   });
 });
@@ -1577,29 +1577,18 @@ describe('Codex skill', () => {
     }
   });
 
-  test('adversarial review in /review always runs both passes', () => {
-    // Carved skill: the Step 4.8 adversarial body lives in sections/adversarial.md.
+  test('adversarial review in /review is routed to one structured Codex slot', () => {
+    // Carved skill: the Step 5.7 adversarial body lives in sections/adversarial.md.
     const content = readSkillUnion('review');
-    expect(content).toContain('Adversarial review (always-on)');
-    // Always-on: both Claude and Codex adversarial
-    expect(content).toContain('Claude adversarial subagent (always runs)');
-    expect(content).toContain('Codex adversarial challenge (runs whenever');
-    // Claude adversarial subagent dispatch
-    expect(content).toContain('Agent tool');
-    expect(content).toContain('FIXABLE');
-    expect(content).toContain('INVESTIGATE');
-    // Probe-based availability via the shared codexPreflight() (install + auth)
-    expect(content).toContain('CODEX_MODE');
-    expect(content).toContain('command -v codex'); // install check kept literal
-    // codex_reviews=disabled gates Codex passes only; Claude adversarial still runs
-    expectMentions(content, [['only', 'disabled', 'passes']], 'content');
-    // Review log
+    expect(content).toContain('Adversarial review — governor routed');
+    expect(content).toContain('gstack-review-budget dispatch "$RUN_ID" codex-structured');
+    expect(content).toContain('codex review --base <base>');
+    expect(content).toContain('model_reasoning_effort="{medium|high from REVIEWERS suffix}"');
+    expect(content).not.toContain('Claude adversarial subagent (always runs)');
+    expect(content).not.toContain('Codex adversarial challenge (runs whenever');
     expect(content).toContain('adversarial-review');
-    expect(content).toContain('run-with-timeout --effort high ');
-    expect(content).toContain('ADVERSARIAL REVIEW SYNTHESIS');
-    // Large diff structured review still gated
-    expectMentions(content, [['only', 'structured', 'review']], 'content');
-    expect(content).toContain('200');
+    expect(content).toContain('effort_source:"routed"');
+    expect(content).toContain('[P1]');
   });
 
   test('adversarial review in /ship runs the passes the review plan dispatches', () => {
@@ -1661,12 +1650,13 @@ describe('Codex skill', () => {
     }
   });
 
-  test('/document-release includes the default-on Codex documentation review', () => {
+  test('/document-release gates the Codex documentation voice on its environment flag', () => {
     // The doc-review renders into the carved release-body section (kept out of the
     // always-loaded skeleton to respect the skeleton-byte budget).
     const content = fs.readFileSync(
       path.join(ROOT, 'document-release', 'sections', 'release-body.md'), 'utf-8');
-    expect(content).toContain('Codex Documentation Review (default-on)');
+    expect(content).toContain('Codex Documentation Review (governor-gated)');
+    expect(content).toContain('GSTACK_CODEX_DOC_VOICE=true');
     expect(content).toContain('CODEX_MODE');
     expect(content).toContain('codex-doc-review');
   });

@@ -2,6 +2,10 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 7: Test Coverage Audit
 
+Before dispatch, run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" coverage-audit --cycle <n>`.
+On exit 2 print its line and do not dispatch.
+
 ### Shared subagent dispatch
 
 For Steps 7, 8 and 10, use the Agent tool with `run_in_background: false`.
@@ -12,7 +16,7 @@ documented fallback, after a failed subagent has stopped. The Step 7 and 8 audit
 cannot block, so they run at `light` effort on the same model family (the host
 default when `gstack-config get review_effort_tiers` prints `off`).
 
-Dispatch the audit through Agent with `subagent_type: "general-purpose"` and
+Dispatch the audit through Agent with `subagent_type: "general-purpose"`, `model: "sonnet"` and
 `run_in_background: false`, using the shared foreground-dispatch rule above.
 Wait for its LAST-line JSON before applying the coverage gate.
 
@@ -376,7 +380,7 @@ Write the text into each printed file with your file-write tool (Claude Code's W
    No `tests_rejected` path may remain on disk as a new file. If every test written in
    a pass is rejected, print all <N> generated tests rejected by machine checks; see tests_rejected. The gate proceeds with the unchanged value-weighted coverage. (see ~/.claude/skills/gstack/docs/test-value-bar.md#all-generated-tests-rejected)
 4. **Rating dispatch.** When this run wrote tests that survived the machine checks,
-   dispatch one read-only Agent (`subagent_type: "general-purpose"`,
+   dispatch one read-only Agent (`subagent_type: "general-purpose"`, `model: "sonnet"`,
    `run_in_background: false`) with no generation permission; it uses no generation
    pass. Give it the diagram and the surviving test paths. It rates each against the
    ★ rubric and the test value bar and returns a LAST-line JSON
