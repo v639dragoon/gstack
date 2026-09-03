@@ -424,12 +424,12 @@ If all coverage is complete and no diagrams drifted, output: "Coverage: all ship
 
 ---
 
-## Codex Documentation Review (default-on)
+## Codex Documentation Review (governor-gated)
 
-After the documentation updates above are written, run an independent cross-model pass that
-checks the docs against what actually shipped. This is a standard part of /document-release,
-not an opt-in. The user turns it off only by asking explicitly
-(`gstack-config set codex_reviews disabled`).
+Run this voice only when the environment contains exactly
+`GSTACK_CODEX_DOC_VOICE=true`. Otherwise print "Codex doc voice: skipped by
+review plan" and continue without preflight or any model dispatch. When true,
+run the independent cross-model pass after documentation updates are written.
 
 **Spawned-session skip** (per the spawned-dispatch contract at the top of this skill): in a
 spawned session, skip this entire section — the dispatching workflow owns its own review
@@ -534,7 +534,10 @@ On any error: continue — documentation review is informational, not a gate.
 
 **If `CODEX_MODE: not_installed` or `not_authed` (or Codex errored at runtime):**
 
-Dispatch via the Agent tool with the same prompt, passing `run_in_background: false` (subagents default to background since Claude Code v2.1.198). Bound it at a 5-minute timeout; if it never completes, treat the review as unavailable and continue.
+Dispatch via the Agent tool with the same prompt, `subagent_type:
+"general-purpose"`, `model: "sonnet"`, and `run_in_background: false`
+(subagents default to background since Claude Code v2.1.198). Bound it at a
+5-minute timeout; if it never completes, treat the review as unavailable and continue.
 Present findings under `DOCUMENTATION REVIEW (Claude subagent):`. If it fails: "Doc review unavailable. Continuing."
 
 **Apply decision (T3B — informational, never auto-edit, but findings don't evaporate).**

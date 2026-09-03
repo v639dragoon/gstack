@@ -487,16 +487,18 @@ branch name wherever the instructions say "the base branch" or `<default>`.
 
 You are running the `/ship` workflow. This is a **non-interactive, fully automated** workflow. Do NOT ask for confirmation at any step. The user said `/ship` which means DO IT. Run straight through and output the PR URL at the end.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
 **Only stop for:**
 - On the base branch (abort)
 - Merge conflicts that can't be auto-resolved (stop, show conflicts)
 - In-branch test failures (pre-existing failures are triaged, not auto-blocking)
-- Pre-landing review finds ASK items that need user judgment
+- Pre-landing review finds BLOCKING items that need user judgment
 - MINOR or MAJOR version bump needed (ask — see Step 12)
 - Greptile review comments that need user decision (complex fixes, false positives)
-- AI-assessed coverage below minimum threshold (hard gate with user override — see Step 7)
-- Plan items NOT DONE with no user override (see Step 8)
-- Plan verification failures (see Step 8.1)
+- AI-assessed coverage below minimum threshold when `COVERAGE_AUDIT=true` (see Step 7)
+- Plan items NOT DONE with no user override when `PLAN_COMPLETION=true` (see Step 8)
+- Plan verification gate failures (see Step 8.1)
 - TODOS.md missing and user wants to create one (ask — see Step 14)
 - TODOS.md disorganized and user wants to reorganize (ask — see Step 14)
 
@@ -507,13 +509,13 @@ You are running the `/ship` workflow. This is a **non-interactive, fully automat
 - Commit message approval (auto-commit)
 - Multi-file changesets (auto-split into bisectable commits)
 - TODOS.md completed-item detection (auto-mark)
-- Auto-fixable review findings (dead code, N+1, stale comments — fixed automatically)
+- ADVISORY or informational findings (never block and are never fixed in /ship)
 - Test coverage gaps within target threshold (auto-generate and commit, or flag in PR body)
 
 **Re-run behavior (idempotency):**
-Re-running `/ship` means "run the whole checklist again." Every verification step
-(tests, coverage audit, plan completion, pre-landing review, adversarial review,
-VERSION/CHANGELOG check, TODOS, document-release) runs on every invocation.
+Re-running `/ship` reruns deterministic tests/typecheck/build/gitleaks/redaction/
+verification/claim-check, tier-budgeted review, and plan-gated coverage,
+plan completion, and doc release.
 Only *actions* are idempotent:
 - Step 12: If VERSION already bumped, skip the bump but still read the version
 - Step 17: If already pushed, skip the push command
@@ -599,7 +601,7 @@ Display:
 - **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance. Can be disabled globally with \`gstack-config set skip_eng_review true\` (the "don't bother me" setting).
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
-- **Adversarial Review (automatic):** Always-on for every review. Every diff gets both Claude adversarial subagent and Codex adversarial challenge. Large diffs (200+ lines) additionally get Codex structured review with P1 gate. No configuration needed.
+- **Semantic Review (automatic):** The review governor routes a bounded reviewer plan by risk tier. Codex structured review runs only when listed in `REVIEWERS`; specialist and red-team slots are likewise plan-routed. Informational findings are advisory and never block or get fixed here.
 - **Outside Voice (optional):** Independent plan review from a different AI model when Codex is available (falls back to a same-family Claude subagent otherwise — fresh context, not cross-model). Offered after all review sections complete in /plan-ceo-review and /plan-eng-review. Never gates shipping.
 
 **Verdict logic:**
@@ -1019,13 +1021,13 @@ If `ALREADY_PUSHED`, skip the push but continue to Step 18. Otherwise push with 
 git push -u origin <branch-name>
 ```
 
-**You are NOT done.** The code is pushed but Step 18 (dispatch the /document-release subagent to sync docs) and Step 19 (create the PR/MR) are mandatory final steps. Continue to Step 18.
+**You are NOT done.** The code is pushed but Step 18 (dispatch the /document-release subagent to sync docs when `DOC_RELEASE=true`, otherwise record its slice skip) and Step 19 (create the PR/MR) remain. Continue to Step 18.
 
 ---
 
 **PR/MR title invariant (always applies — do not skip even if you don't open the section below):** Any PR or MR you create OR update in the next step MUST have a title that starts with `v$NEW_VERSION` (the version bumped in Step 12), in the format `v<NEW_VERSION> <type>: <summary>`. Never create or edit a PR/MR title without this prefix. Compute the correct title with the single source of truth helper: `~/.claude/skills/gstack/bin/gstack-pr-title-rewrite.sh "$NEW_VERSION" "<current title>"`. The full create/update procedure (idempotency, redaction scan, self-check) is in the section below.
 
-**Doc-sync invariant (always applies — do not skip even if you don't open the section below):** Step 18 dispatches the /document-release subagent BEFORE the PR/MR is created or updated in Step 19. Never skip the dispatch itself; only a failed subagent is non-blocking (proceed to Step 19 without a `## Documentation` section).
+**Doc-sync invariant (always applies — do not skip reading the section below):** Step 18 dispatches the /document-release subagent to sync docs BEFORE Step 19 only when `DOC_RELEASE=true`; otherwise it records `skipped:no-doc-impact`. A failed subagent is non-blocking.
 
 > **STOP.** Before dispatching the /document-release subagent to sync docs (Step 18) and then creating or updating the PR/MR (Step 19), Read `~/.claude/skills/gstack/ship/sections/pr-body.md` and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.
@@ -1058,6 +1060,15 @@ The branch name is filled in by the shell — there is no `BRANCH` placeholder t
 substitute.
 
 This step is automatic — never skip it, never ask for confirmation.
+
+Finally print the review-budget report and, when outcome metadata is present,
+the outcome report. Both telemetry calls are best-effort:
+
+```bash
+~/.claude/skills/gstack/bin/gstack-review-budget report "$RUN_ID" || true
+eval "$(~/.claude/skills/gstack/bin/gstack-outcome show 2>/dev/null)"
+[ -n "$OUTCOME_ID" ] && ~/.claude/skills/gstack/bin/gstack-outcome-report "$OUTCOME_ID" || true
+```
 
 ---
 
@@ -1099,7 +1110,7 @@ through `gstack-version-bump`; never hand-roll the VERSION/package.json write.
 - **Never skip tests.** If tests fail, stop.
 - **Never skip the pre-landing review.** If checklist.md is unreadable, stop.
 - **Never force push.** Use regular `git push` only.
-- **Never ask for trivial confirmations** (e.g., "ready to push?", "create PR?"). DO stop for: version bumps (MINOR/MAJOR), pre-landing review findings (ASK items), and Codex structured review [P1] findings (large diffs only).
+- **Never ask for trivial confirmations** (e.g., "ready to push?", "create PR?"). DO stop for: version bumps (MINOR/MAJOR), BLOCKING review findings, and Codex structured review [P1] findings when routed by the plan.
 - **Always use the 4-digit version format** from the VERSION file.
 - **Date format in CHANGELOG:** `YYYY-MM-DD`
 - **Split commits for bisectability** — each commit = one logical change.

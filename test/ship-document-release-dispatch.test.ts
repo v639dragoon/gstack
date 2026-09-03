@@ -100,11 +100,11 @@ describe('/ship Step 18 dispatches /document-release (carve visibility)', () => 
     expect(content.split(trigger).length - 1).toBeGreaterThanOrEqual(2);
     // Step 17 handoff.
     expect(content).toContain(
-      'Step 18 (dispatch the /document-release subagent to sync docs)'
+      'Step 18 (dispatch the /document-release subagent to sync docs when `DOC_RELEASE=true`'
     );
     // Hoisted doc-sync invariant (beside the PR-title invariant).
     expect(content).toContain('**Doc-sync invariant');
-    expect(content).toContain('dispatches the /document-release subagent');
+    expect(content).toContain('dispatches the /document-release subagent to sync docs');
     // The STOP-Read pointer still routes to the carved section.
     expect(content).toMatch(
       /> \*\*STOP\.\*\*[^\n]*Read `[^`]*ship\/sections\/pr-body\.md`/

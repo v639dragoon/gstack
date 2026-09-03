@@ -190,9 +190,9 @@ describe('real-skill pins: section lists used by E2E fixtures', () => {
 
     const army = fs.readFileSync(
       path.join(ROOT, 'review', 'sections', 'review-army.md'), 'utf-8');
-    expect(army).toContain('## Step 4.5: Review Army — Specialist Dispatch');
-    expect(army).toContain('quality_score');
-    expect(army).toContain('MULTI-SPECIALIST CONFIRMED');
+    expect(army).toContain('## Step 4.5: Review governor — manifest, plan, packet');
+    expect(army).toContain('gstack-review-budget plan');
+    expect(army).toContain('Dispatch ONLY the `specialist:*`');
   });
 
   test('RETRO_E2E_SECTIONS skeleton extracts from retro/SKILL.md + carved section', () => {

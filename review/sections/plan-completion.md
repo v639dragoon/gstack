@@ -1,6 +1,18 @@
 <!-- AUTO-GENERATED from plan-completion.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
-This is the deep pass behind Step 1.5's scope-drift check: discover the plan file, extract its actionable items, classify how each can be verified, and cross-reference them against the diff. Like Step 1.5 itself, the audit is INFORMATIONAL — it never blocks the review.
+Run this audit iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before the Agent call run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+On exit 2 print its line and do not dispatch. The Agent call carries
+`subagent_type: "general-purpose"`, `model: "sonnet"`, and
+`run_in_background: false`.
+
+This is the deep pass behind Step 1.5's scope-drift check: discover the plan
+file, extract its actionable items, classify how each can be verified, and
+cross-reference them against the diff. It is INFORMATIONAL and never blocks.
 
 ### Plan File Discovery
 

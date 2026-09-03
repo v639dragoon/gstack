@@ -57,7 +57,7 @@ Display:
 - **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance. Can be disabled globally with \\\`gstack-config set skip_eng_review true\\\` (the "don't bother me" setting).
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
-- **Adversarial Review (automatic):** Always-on for every review. Every diff gets both Claude adversarial subagent and Codex adversarial challenge. Large diffs (200+ lines) additionally get Codex structured review with P1 gate. No configuration needed.
+- **Semantic Review (automatic):** The review governor routes a bounded reviewer plan by risk tier. Codex structured review runs only when listed in \`REVIEWERS\`; specialist and red-team slots are likewise plan-routed. Informational findings are advisory and never block or get fixed here.
 - **Outside Voice (optional):** Independent plan review from a different AI model when Codex is available (falls back to a same-family Claude subagent otherwise — fresh context, not cross-model). Offered after all review sections complete in /plan-ceo-review and /plan-eng-review. Never gates shipping.
 
 **Verdict logic:**
@@ -476,6 +476,70 @@ export function generateAdversarialStep(ctx: TemplateContext): string {
   // Codex host: strip entirely — Codex should never invoke itself
   if (ctx.host === 'codex') return '';
 
+  const routedStep = ctx.skillName === 'ship' ? '11' : '5.7';
+  return `## Step ${routedStep}: Adversarial review — governor routed
+
+Print: \`Adversarial: routed to codex-structured per tier {TIER}\`.
+Do not run the Claude adversarial subagent or a free-form \`codex exec\`
+challenge. Semantic adversarial review exists only when
+\`codex-structured@medium\` or \`codex-structured@high\` is in \`REVIEWERS\`.
+
+Before the structured review, run the shared Codex preflight. Nested Codex
+sessions must refuse another Codex spawn unless the explicit override is set:
+
+${codexPreflight({ disabledBehavior: 'codex-only' })}
+
+Only when \`CODEX_MODE: ready\`, run the budget dispatch:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle <n>
+\`\`\`
+
+On exit 2, print its line and do not run Codex. Otherwise run exactly one
+structured review at the suffix supplied by the plan:
+
+\`\`\`bash
+TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
+_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
+cd "$_REPO_ROOT"
+source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
+_gstack_codex_timeout_wrapper 540 codex review --base <base> -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' \${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
+\`\`\`
+
+The effort is \`medium\` for tiers A/B/C and \`high\` for tier D. No prompt
+argument is allowed with \`--base\`. Read stderr before cleanup. Check for
+\`[P1]\` markers: found → \`GATE: FAIL\`, not found → \`GATE: PASS\`. FAIL →
+AskUserQuestion with A) investigate and fix now (recommended), B) continue.
+The [P1] gate semantics are unchanged.
+
+After Codex returns, record its terminal result immediately:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" codex-structured <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
+\`\`\`
+
+After an \`error\` or \`timeout\`, the same cycle-scoped dispatch may retry this
+planned slot ONCE; record the retry verdict too. A second failure stays
+incomplete and can never be logged as clean.
+
+A user request for "full review" permits ONE extra dispatch only:
+\`gstack-review-budget dispatch "$RUN_ID" codex-structured --escalation user-request:full-review --cycle <n>\`.
+This consumes the run's single escalation; no other escalation may dispatch
+afterward. It never enables the removed free-form challenge.
+
+Persist both logs. The review row and gate row must carry the plan's literal
+effort and \`effort_source:"routed"\`; gate telemetry retains tokens,
+\`fix_cycle\`, \`rerun_cause\`, and \`manifest_wtree\`:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"codex-structured","trigger":"review-plan","model":"codex","effort":"{PLAN_EFFORT}","effort_source":"routed","verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+\`\`\`
+
+Failures and timeouts are missing coverage, never a clean result. Remove
+\`$TMPERR\` after reading it, then return to the Step ${ctx.skillName === 'ship' ? '9.2' : '4.6'}
+completion gate; exit 2 with \`INCOMPLETE=\` means STOP with a blocker report.`;
+
   const isShip = ctx.skillName === 'ship';
   const stepNum = isShip ? '11' : '5.7';
 
@@ -772,12 +836,12 @@ export function generateCodexDocReview(ctx: TemplateContext): string {
   // Codex host: strip entirely — Codex should never invoke itself
   if (ctx.host === 'codex') return '';
 
-  return `## Codex Documentation Review (default-on)
+  return `## Codex Documentation Review (governor-gated)
 
-After the documentation updates above are written, run an independent cross-model pass that
-checks the docs against what actually shipped. This is a standard part of /document-release,
-not an opt-in. The user turns it off only by asking explicitly
-(\`gstack-config set codex_reviews disabled\`).
+Run this voice only when the environment contains exactly
+\`GSTACK_CODEX_DOC_VOICE=true\`. Otherwise print "Codex doc voice: skipped by
+review plan" and continue without preflight or any model dispatch. When true,
+run the independent cross-model pass after documentation updates are written.
 
 **Spawned-session skip** (per the spawned-dispatch contract at the top of this skill): in a
 spawned session, skip this entire section — the dispatching workflow owns its own review
@@ -837,7 +901,10 @@ ${codexErrorHandling('documentation review')}
 
 **If \`CODEX_MODE: not_installed\` or \`not_authed\` (or Codex errored at runtime):**
 
-Dispatch via the Agent tool with the same prompt, passing \`run_in_background: false\` (subagents default to background since ${CC_BACKGROUND_DEFAULT_SINCE}). Bound it at a 5-minute timeout; if it never completes, treat the review as unavailable and continue.
+Dispatch via the Agent tool with the same prompt, \`subagent_type:
+"general-purpose"\`, \`model: "sonnet"\`, and \`run_in_background: false\`
+(subagents default to background since ${CC_BACKGROUND_DEFAULT_SINCE}). Bound it at a
+5-minute timeout; if it never completes, treat the review as unavailable and continue.
 Present findings under \`DOCUMENTATION REVIEW (Claude subagent):\`. If it fails: "Doc review unavailable. Continuing."
 
 **Apply decision (T3B — informational, never auto-edit, but findings don't evaporate).**

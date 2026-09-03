@@ -445,6 +445,8 @@ You are running the `/document-release` workflow. This runs **after `/ship`** (c
 exists or about to exist) but **before the PR merges**. Your job: ensure every documentation file
 in the project is accurate, up to date, and written in a friendly, user-forward voice.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
 You are mostly automated. Make obvious factual updates directly. Stop and ask only for risky or
 subjective decisions.
 
@@ -578,6 +580,11 @@ When significant gaps are found, suggest running `/document-generate` to fill th
 
 > **STOP.** Before auditing each doc file and applying updates, polishing CHANGELOG voice, checking cross-doc consistency, cleaning up TODOS, the VERSION bump, and committing (Steps 2-9, after the coverage map in Step 1.5), Read `~/.claude/skills/gstack/document-release/sections/release-body.md` and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.
+
+The Codex documentation voice in that section is permitted only when
+`GSTACK_CODEX_DOC_VOICE=true`. Any fallback Agent dispatch must explicitly use
+`subagent_type: "general-purpose"`, `model: "sonnet"`, and
+`run_in_background: false`.
 
 ---
 

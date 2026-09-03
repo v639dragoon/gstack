@@ -495,16 +495,18 @@ branch name wherever the instructions say "the base branch" or `<default>`.
 
 You are running the `/ship` workflow. This is a **non-interactive, fully automated** workflow. Do NOT ask for confirmation at any step. The user said `/ship` which means DO IT. Run straight through and output the PR URL at the end.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
 **Only stop for:**
 - On the base branch (abort)
 - Merge conflicts that can't be auto-resolved (stop, show conflicts)
 - In-branch test failures (pre-existing failures are triaged, not auto-blocking)
-- Pre-landing review finds ASK items that need user judgment
+- Pre-landing review finds BLOCKING items that need user judgment
 - MINOR or MAJOR version bump needed (ask — see Step 12)
 - Greptile review comments that need user decision (complex fixes, false positives)
-- AI-assessed coverage below minimum threshold (hard gate with user override — see Step 7)
-- Plan items NOT DONE with no user override (see Step 8)
-- Plan verification failures (see Step 8.1)
+- AI-assessed coverage below minimum threshold when `COVERAGE_AUDIT=true` (see Step 7)
+- Plan items NOT DONE with no user override when `PLAN_COMPLETION=true` (see Step 8)
+- Plan verification gate failures (see Step 8.1)
 - TODOS.md missing and user wants to create one (ask — see Step 14)
 - TODOS.md disorganized and user wants to reorganize (ask — see Step 14)
 
@@ -515,13 +517,13 @@ You are running the `/ship` workflow. This is a **non-interactive, fully automat
 - Commit message approval (auto-commit)
 - Multi-file changesets (auto-split into bisectable commits)
 - TODOS.md completed-item detection (auto-mark)
-- Auto-fixable review findings (dead code, N+1, stale comments — fixed automatically)
+- ADVISORY or informational findings (never block and are never fixed in /ship)
 - Test coverage gaps within target threshold (auto-generate and commit, or flag in PR body)
 
 **Re-run behavior (idempotency):**
-Re-running `/ship` means "run the whole checklist again." Every verification step
-(tests, coverage audit, plan completion, pre-landing review, adversarial review,
-VERSION/CHANGELOG check, TODOS, document-release) runs on every invocation.
+Re-running `/ship` reruns deterministic tests/typecheck/build/gitleaks/redaction/
+verification/claim-check, tier-budgeted review, and plan-gated coverage,
+plan completion, and doc release.
 Only *actions* are idempotent:
 - Step 12: If VERSION already bumped, skip the bump but still read the version
 - Step 17: If already pushed, skip the push command
@@ -592,7 +594,7 @@ Display:
 - **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance. Can be disabled globally with \`gstack-config set skip_eng_review true\` (the "don't bother me" setting).
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
-- **Adversarial Review (automatic):** Always-on for every review. Every diff gets both Claude adversarial subagent and Codex adversarial challenge. Large diffs (200+ lines) additionally get Codex structured review with P1 gate. No configuration needed.
+- **Semantic Review (automatic):** The review governor routes a bounded reviewer plan by risk tier. Codex structured review runs only when listed in `REVIEWERS`; specialist and red-team slots are likewise plan-routed. Informational findings are advisory and never block or get fixed here.
 - **Outside Voice (optional):** Independent plan review from a different AI model when Codex is available (falls back to a same-family Claude subagent otherwise — fresh context, not cross-model). Offered after all review sections complete in /plan-ceo-review and /plan-eng-review. Never gates shipping.
 
 **Verdict logic:**
@@ -1068,7 +1070,15 @@ poller is reaped.
 
 ## Step 7: Test Coverage Audit
 
-**Dispatch this step as a subagent** using the Agent tool with `subagent_type: "general-purpose"`. The subagent runs the coverage audit in a fresh context window — the parent only sees the conclusion, not intermediate file reads. This is context-rot defense.
+Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" coverage-audit --cycle <n>`.
+On exit 2 print its line and do not dispatch. **Dispatch this step as a
+subagent** using the Agent tool with `subagent_type: "general-purpose"`,
+`model: "sonnet"`, and `run_in_background: false`.
 
 **Foreground required:** pass `run_in_background: false` on the Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.) The dispatch happens ONLY via the Agent tool: invoking the target as a Skill, or executing its workflow inline in your own context, is WRONG even though the skill may appear in your available-skills list — inline execution forfeits the fresh-context isolation this dispatch exists for, and the explicit flag already makes the Agent call block. (Where a step defines an inline FALLBACK, it applies only after a dispatched subagent has failed.) The parent needs this audit's LAST-line JSON before continuing.
 
@@ -1333,7 +1343,15 @@ Repo: {owner/repo}
 
 ## Step 8: Plan Completion Audit
 
-**Dispatch this step as a subagent** using the Agent tool with `subagent_type: "general-purpose"`. The subagent reads the plan file and every referenced code file in its own fresh context. Parent gets only the conclusion.
+Run this step iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+On exit 2 print its line and do not dispatch. **Dispatch this step as a
+subagent** using the Agent tool with `subagent_type: "general-purpose"`,
+`model: "sonnet"`, and `run_in_background: false`.
 
 **Foreground required:** pass `run_in_background: false` on the Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.) The dispatch happens ONLY via the Agent tool: invoking the target as a Skill, or executing its workflow inline in your own context, is WRONG even though the skill may appear in your available-skills list — inline execution forfeits the fresh-context isolation this dispatch exists for, and the explicit flag already makes the Agent call block. (Where a step defines an inline FALLBACK, it applies only after a dispatched subagent has failed.) The Gate Logic below consumes this audit's LAST-line JSON before /ship can proceed.
 
@@ -1779,25 +1797,43 @@ If no prior reviews exist or none have a `findings` array, skip this step silent
 
 Output a summary header: `Pre-Landing Review: N issues (X critical, Y informational)`
 
-4. **Classify each finding from both the checklist pass and specialist review (Step 9.1-Step 9.2) as AUTO-FIX or ASK** per the Fix-First Heuristic in
-   checklist.md. Critical findings lean toward ASK; informational lean toward AUTO-FIX.
+4. **Classify every finding.** BLOCKING means its severity is in
+   `BLOCKING_SEVERITIES` OR its category is in `BLOCKING_CATEGORIES`.
+   Everything else is ADVISORY. ADVISORY findings are NEVER fixed inside
+   /ship: no AUTO-FIX and no ASK. Keep at most `MAX_ADVISORIES` (5), sorted by
+   confidence, under `## Advisories (not fixed)` in this summary and the PR body.
 
-5. **Auto-fix all AUTO-FIX items.** Apply each fix. Output one line per fix:
-   `[AUTO-FIXED] [file:line] Problem → what you did`
-
-6. **If ASK items remain,** present them in ONE AskUserQuestion:
+5. **BLOCKING findings use the existing ASK/fix flow.** Present them in ONE AskUserQuestion:
    - List each with number, severity, problem, recommended fix
    - Per-item options: A) Fix  B) Skip
    - Overall RECOMMENDATION
    - If 3 or fewer ASK items, you may use individual AskUserQuestion calls instead
 
-7. **After all fixes (auto + user-approved):**
-   - If ANY fixes were applied: commit fixed files by name (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`), then **stay in this invocation and loop**: re-run the test suite (Step 5) on the fixed code, then re-run this review (Step 9 items 2-6) against the updated diff. Repeat until one full pass applies ZERO fixes — tests green and review clean — then continue to Step 12. NEVER stop to tell the user to run `/ship` again; a fix-and-rerun cycle has no user decision in it, and stopping there breaks the fully-automated contract (#2391).
-   - **Bound: 3 fix cycles.** If the 3rd cycle still applies fixes, STOP and report which findings keep reappearing — a review that won't converge is a genuine blocker worth human eyes, not a re-run request.
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
-   - If no fixes applied (all ASK items skipped, or no issues found): continue to Step 12.
+6. Commit approved fixed files by name
+   (`git add <fixed-files> && git commit -m "fix: pre-landing review fixes"`).
 
-8. Output summary: `Pre-Landing Review: N issues — M auto-fixed, K asked (J fixed, L skipped)`
+7. **After a fix commit, stay in this invocation and loop:** re-run the test
+   suite (Step 5), then run:
+   `$GSTACK_ROOT/bin/gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+   - `FULL_RERUN=false`: re-dispatch ONLY the reviewer that raised each fixed
+     finding, first gating it with
+     `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`.
+     Its explicit `subagent_type: "general-purpose"`, `model: "sonnet"`,
+     `run_in_background: false` prompt is: "Confirm the fix at
+     {path}:{line} closes finding {fingerprint}; quote the fixed lines; output
+     NO FINDINGS or the remaining finding".
+   - `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log
+     `rerun_cause:"scope-expansion:{triggers}"`, then run
+     `gstack-diff-manifest <base> "$RUN_ID"` and
+     `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`. Carry the new
+     tier and `REVIEWERS` (they may rise/change), then re-run that plan with
+     every dispatch, verdict, and completion call using `--cycle <n+1>`.
+   - Exit 3: STOP and report which findings keep reappearing — the existing
+     non-convergence blocker wording applies.
+   The bound is the literal `REPAIR_CYCLES_MAX`; continue only when the loop
+   converges with zero remaining BLOCKING findings.
+
+8. Output summary: `Pre-Landing Review: N blocking issues — J fixed, L skipped`
 
    If no issues found: `Pre-Landing Review: No issues found.`
 
@@ -1807,9 +1843,10 @@ $GSTACK_ROOT/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","s
 ```
 Substitute TIMESTAMP (ISO 8601), STATUS ("clean" if no issues, "issues_found" otherwise),
 and N values from the summary counts above. The `via:"ship"` distinguishes from standalone `/review` runs.
-- `quality_score` = the PR Quality Score computed in Step 9.2 (e.g., 7.5). If specialists were skipped (small diff), use `10.0`
-- `specialists` = the per-specialist stats object compiled in Step 9.2. Each specialist that was considered gets an entry: `{"dispatched":true/false,"findings":N,"critical":N,"informational":N}` if dispatched, or `{"dispatched":false,"reason":"scope|gated"}` if skipped. Example: `{"testing":{"dispatched":true,"findings":2,"critical":0,"informational":2},"security":{"dispatched":false,"reason":"scope"}}`
-- `findings` = array of per-finding records. For each finding (from checklist pass and specialists), include: `{"fingerprint":"path:line:category","severity":"CRITICAL|INFORMATIONAL","action":"ACTION"}`. ACTION is `"auto-fixed"`, `"fixed"` (user approved), or `"skipped"` (user chose Skip).
+- `quality_score` = the PR Quality Score computed in Step 9.2.
+- `specialists` = stats for only the reviewers dispatched by the plan.
+- `findings` = blocking findings (`fixed` or `skipped`) plus retained advisories
+  (`skipped`). Informational findings are never recorded as auto-fixed.
 
 Save the review output — it goes into the PR body in Step 19.
 
@@ -1817,7 +1854,7 @@ Save the review output — it goes into the PR body in Step 19.
 
 ## Step 10: Address Greptile review comments (if PR exists)
 
-**Dispatch the fetch + classification as a subagent** using the Agent tool with `subagent_type: "general-purpose"`. The subagent pulls every Greptile comment, runs the escalation detection algorithm, and classifies each comment. Parent receives a structured list and handles user interaction + file edits.
+**Dispatch the fetch + classification as a subagent** using the Agent tool with `subagent_type: "general-purpose"`, `model: "sonnet"`, and `run_in_background: false`. The subagent pulls every Greptile comment, runs the escalation detection algorithm, and classifies each comment. Parent receives a structured list and handles user interaction + file edits.
 
 **Foreground required:** pass `run_in_background: false` on the Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.) The dispatch happens ONLY via the Agent tool: invoking the target as a Skill, or executing its workflow inline in your own context, is WRONG even though the skill may appear in your available-skills list — inline execution forfeits the fresh-context isolation this dispatch exists for, and the explicit flag already makes the Agent call block. (Where a step defines an inline FALLBACK, it applies only after a dispatched subagent has failed.)
 
@@ -2283,17 +2320,24 @@ If `ALREADY_PUSHED`, skip the push but continue to Step 18. Otherwise push with 
 git push -u origin <branch-name>
 ```
 
-**You are NOT done.** The code is pushed but Step 18 (dispatch the /document-release subagent to sync docs) and Step 19 (create the PR/MR) are mandatory final steps. Continue to Step 18.
+**You are NOT done.** The code is pushed but Step 18 (dispatch the /document-release subagent to sync docs when `DOC_RELEASE=true`, otherwise record its slice skip) and Step 19 (create the PR/MR) remain. Continue to Step 18.
 
 ---
 
 **PR/MR title invariant (always applies — do not skip even if you don't open the section below):** Any PR or MR you create OR update in the next step MUST have a title that starts with `v$NEW_VERSION` (the version bumped in Step 12), in the format `v<NEW_VERSION> <type>: <summary>`. Never create or edit a PR/MR title without this prefix. Compute the correct title with the single source of truth helper: `$GSTACK_ROOT/bin/gstack-pr-title-rewrite.sh "$NEW_VERSION" "<current title>"`. The full create/update procedure (idempotency, redaction scan, self-check) is in the section below.
 
-**Doc-sync invariant (always applies — do not skip even if you don't open the section below):** Step 18 dispatches the /document-release subagent BEFORE the PR/MR is created or updated in Step 19. Never skip the dispatch itself; only a failed subagent is non-blocking (proceed to Step 19 without a `## Documentation` section).
+**Doc-sync invariant (always applies — do not skip reading the section below):** Step 18 dispatches the /document-release subagent to sync docs BEFORE Step 19 only when `DOC_RELEASE=true`; otherwise it records `skipped:no-doc-impact`. A failed subagent is non-blocking.
 
 ## Step 18: Documentation sync (via subagent, before PR creation)
 
-**Dispatch /document-release as a subagent** using the Agent tool — never the Skill tool, even though document-release appears in your skills list — with `subagent_type: "general-purpose"`. The subagent gets a fresh context window — zero rot from the preceding 17 steps. It also runs the **full** `/document-release` workflow (with CHANGELOG clobber protection, doc exclusions, risky-change gates, named staging, race-safe PR body editing) rather than a weaker reimplementation. The dispatch prompt marks the subagent session as spawned (`GSTACK_SESSION_KIND=spawned`) so document-release's interactive gates auto-choose their recommended options instead of prose-stopping — a prose-STOP inside the subagent breaks the parent's LAST-line JSON parse and drops the Documentation section (#2733).
+Dispatch iff `DOC_RELEASE=true`. Otherwise print `Doc release: no doc-impact
+match on intermediate slice — skipped`, append a gate record with
+`verdict:"skipped:no-doc-impact"`, and continue to Step 19.
+
+Before dispatch, run
+`$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
+On exit 2 print its line and do not dispatch. **Dispatch /document-release as a subagent** using the Agent tool — never the Skill tool, even though document-release appears in your skills list — with `subagent_type: "general-purpose"`,
+`model: "sonnet"`, and `run_in_background: false`. The subagent gets a fresh context window — zero rot from the preceding 17 steps. It also runs the **full** `/document-release` workflow (with CHANGELOG clobber protection, doc exclusions, risky-change gates, named staging, race-safe PR body editing) rather than a weaker reimplementation. The dispatch prompt marks the subagent session as spawned (`GSTACK_SESSION_KIND=spawned`) so document-release's interactive gates auto-choose their recommended options instead of prose-stopping — a prose-STOP inside the subagent breaks the parent's LAST-line JSON parse and drops the Documentation section (#2733).
 
 **Foreground required:** pass `run_in_background: false` on the Agent call — subagents run in the BACKGROUND by default since Claude Code v2.1.198. (Merely omitting the flag no longer produces a foreground run; it must be explicitly false.) The dispatch happens ONLY via the Agent tool: invoking the target as a Skill, or executing its workflow inline in your own context, is WRONG even though the skill may appear in your available-skills list — inline execution forfeits the fresh-context isolation this dispatch exists for, and the explicit flag already makes the Agent call block. (Where a step defines an inline FALLBACK, it applies only after a dispatched subagent has failed.) Step 19 consumes this subagent's LAST-line JSON, so the dispatch must block — a backgrounded dispatch strands the entire ship run (#497, #2440: third recurrence of this class). Record `git rev-parse HEAD` immediately before dispatching; the recovery branch below reconciles against it.
 
@@ -2321,7 +2365,7 @@ for widening the skip.
 
 **Subagent prompt:**
 
-> You are executing the /document-release workflow after a code push, as a SPAWNED subagent: no human reads your output mid-run, and only the LAST line of your response is machine-parsed by the parent /ship session. Read the full skill file `${HOME}/.agents/skills/gstack/document-release/SKILL.md` and execute its complete workflow end-to-end as narrowed by the Scope guard below, including CHANGELOG clobber protection, doc exclusions, risky-change gates, and named staging. Do NOT attempt to edit the PR body — no PR exists yet. Branch: `<branch>`, base: `<base>`.
+> `GSTACK_CODEX_DOC_VOICE={CODEX_DOC_VOICE}`. You are executing the /document-release workflow after a code push, as a SPAWNED subagent: no human reads your output mid-run, and only the LAST line of your response is machine-parsed by the parent /ship session. Read the full skill file `${HOME}/.agents/skills/gstack/document-release/SKILL.md` and execute its complete workflow end-to-end as narrowed by the Scope guard below, including CHANGELOG clobber protection, doc exclusions, risky-change gates, and named staging. Do NOT attempt to edit the PR body — no PR exists yet. Branch: `<branch>`, base: `<base>`.
 >
 > Session marking: when the skill's Preamble has you run `gstack-skill-start`, prefix that exact command with `GSTACK_SESSION_KIND=spawned ` on the same command line (e.g. `GSTACK_SESSION_KIND=spawned "$_SS" --skill "document-release" ...`) — bash blocks run in separate shells, so an exported variable from an earlier block does NOT persist; the prefix must ride the invocation itself. The preamble will then echo `SESSION_KIND: spawned` and `SPAWNED_SESSION: true`.
 >
@@ -2411,6 +2455,9 @@ you missed it.>
 
 ## Pre-Landing Review
 <findings from Step 9 code review, or "No issues found.">
+
+## Advisories (not fixed)
+<At most MAX_ADVISORIES (5) non-blocking findings, sorted by confidence. Omit when empty.>
 
 ## Design Review
 <If design review ran: "Design Review (lite): N findings — M auto-fixed, K skipped. AI Slop: clean/N issues.">
@@ -2578,6 +2625,15 @@ substitute.
 
 This step is automatic — never skip it, never ask for confirmation.
 
+Finally print the review-budget report and, when outcome metadata is present,
+the outcome report. Both telemetry calls are best-effort:
+
+```bash
+$GSTACK_ROOT/bin/gstack-review-budget report "$RUN_ID" || true
+eval "$($GSTACK_ROOT/bin/gstack-outcome show 2>/dev/null)"
+[ -n "$OUTCOME_ID" ] && $GSTACK_ROOT/bin/gstack-outcome-report "$OUTCOME_ID" || true
+```
+
 ---
 
 ## Step 21: Plan-tune discoverability nudge (first-successful-ship only)
@@ -2618,7 +2674,7 @@ through `gstack-version-bump`; never hand-roll the VERSION/package.json write.
 - **Never skip tests.** If tests fail, stop.
 - **Never skip the pre-landing review.** If checklist.md is unreadable, stop.
 - **Never force push.** Use regular `git push` only.
-- **Never ask for trivial confirmations** (e.g., "ready to push?", "create PR?"). DO stop for: version bumps (MINOR/MAJOR), pre-landing review findings (ASK items), and Codex structured review [P1] findings (large diffs only).
+- **Never ask for trivial confirmations** (e.g., "ready to push?", "create PR?"). DO stop for: version bumps (MINOR/MAJOR), BLOCKING review findings, and Codex structured review [P1] findings when routed by the plan.
 - **Always use the 4-digit version format** from the VERSION file.
 - **Date format in CHANGELOG:** `YYYY-MM-DD`
 - **Split commits for bisectability** — each commit = one logical change.

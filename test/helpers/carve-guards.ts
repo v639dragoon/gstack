@@ -417,8 +417,8 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
       mustPrecedeStop: ['## Step 0: Detect platform and base branch'],
       mustMoveToSection: [
         'Plan File Discovery',
-        'MULTI-SPECIALIST CONFIRMED',
-        'Cross-model synthesis',
+        'Before EACH specialist or red-team Agent call',
+        'specialist-critical:<fingerprint>',
         'codex review --base',
       ],
       gateAfterStop: undefined, // operational multi-STOP skill, like ship

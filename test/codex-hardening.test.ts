@@ -477,11 +477,18 @@ describe('codex timeout wrapper: /review + /ship diff passes', () => {
   for (const relPath of WRAPPED_SITES) {
     const read = () => fs.readFileSync(path.join(ROOT, relPath), 'utf8');
 
-    test(`${relPath}: both diff-review Codex calls run under the wrapper`, () => {
+    test(`${relPath}: the routed diff-review Codex call runs under the wrapper`, () => {
       const wrapped =
         read().match(/_gstack_codex_timeout_wrapper\s+\d+\s+codex\s+(exec|review)\b/g) ?? [];
-      // Adversarial pass + structured review pass.
-      expect(wrapped.length).toBeGreaterThanOrEqual(2);
+      if (relPath.endsWith('/adversarial.md')) {
+        expect(wrapped).toEqual([
+          expect.stringMatching(/codex\s+review\b/),
+        ]);
+      } else {
+        // The resolver still contains other Codex-backed generators; pin the
+        // routed review call without pretending the removed dual pass remains.
+        expect(wrapped).toContainEqual(expect.stringMatching(/codex\s+review\b/));
+      }
     });
 
     test(`${relPath}: does not claim \`timeout\` is unavailable on macOS`, () => {
