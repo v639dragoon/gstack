@@ -431,6 +431,12 @@ branch name wherever the instructions say "the base branch" or `<default>`.
 
 Review the branch diff against the base for structural issues tests miss.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
+Only BLOCKING findings stop for judgment. Informational and ADVISORY findings
+never block or get fixed. Deterministic checks always run; semantic review is
+tier-budgeted and coverage, plan-completion, and doc release are slice-gated.
+
 ---
 
 ## Section index — Read each section when its situation applies
@@ -915,8 +921,10 @@ Combine core, specialist, Step 4.7 QA, Step 4.8 adversarial and VALID & ACTIONAB
 For QA findings, assign confidence (1–10) from replay/code evidence using Confidence
 Calibration; retain Step 4.7's severity, not a severity inferred from confidence.
 Run Step 5.0 severity/prior-skip dedup on all
-findings before Step 5a classification. Then action every remaining finding.
-Structured approval does not waive advisory/test_stub ASK gates.
+findings before Step 5a classification. Then act only on remaining BLOCKING findings.
+Structured approval does not waive blocking test_stub ASK gates.
+
+Only BLOCKING findings enter the fix flow. Advisories remain visible but untouched.
 
 ### Step 5.0: Cross-review finding dedup
 
@@ -984,9 +992,11 @@ or missing-reviewer rules.
 
 ### Step 5a: Classify each finding
 
-For each finding, classify as AUTO-FIX or ASK per the Fix-First Heuristic in
-checklist.md. Critical findings lean toward ASK; informational findings lean
-toward AUTO-FIX.
+BLOCKING means its severity is in `BLOCKING_SEVERITIES` OR its category is in
+`BLOCKING_CATEGORIES`. Everything else is ADVISORY.
+ADVISORY findings are NEVER fixed inside /review: no AUTO-FIX and no ASK.
+Keep at most `MAX_ADVISORIES` (5), sorted by confidence, and emit them under
+`## Advisories (not fixed)` in the review summary. `AUTOFIX_INFORMATIONAL=false`.
 
 **Advisory override:** After severity validation, `advisory:true` is ASK-only. Never auto-apply an optional extraction, even when mechanical. Show `[ADVISORY]`, helper, caller migration, tests and estimated total savings for approval or Skip. Handle real defects independently.
 
@@ -1063,7 +1073,7 @@ After outputting your own findings, if Greptile comments were classified in Step
 
 Before replying to any comment, run greptile-triage.md's **Escalation Detection** to choose Tier 1 (friendly) or Tier 2 (firm) reply templates.
 
-1. **VALID & ACTIONABLE comments:** Use their Step 5a–5d disposition; do not ask a second fix question. Step 5c alone supplies A) Fix / B) Skip for ASK items. After a completed fix, use the **Fix reply template** with diff and explanation; cite the current diff if uncommitted, never invent a commit SHA. A Skip leaves the defect unresolved and grants no new fix permission. If evidence disproves the finding, reclassify it below.
+1. **VALID & ACTIONABLE comments:** Only BLOCKING comments enter the fix flow. Use their Step 5a–5d disposition; do not ask a second fix question. Step 5c alone supplies A) Fix / B) Skip for ASK items. After a completed fix, use the **Fix reply template** with diff and explanation; cite the current diff if uncommitted, never invent a commit SHA. A Skip leaves the defect unresolved and grants no new fix permission. If evidence disproves the finding, reclassify it below.
 
 2. **FALSE POSITIVE comments:** These are reply decisions, not code approval. Show file:line (or [top-level]), summary, permalink and evidence, then ask:
    - A) Reply explaining why this is incorrect (recommended if clearly wrong)
@@ -1075,6 +1085,26 @@ Before replying to any comment, run greptile-triage.md's **Escalation Detection*
 3. **VALID BUT ALREADY FIXED comments:** Reply with greptile-triage.md's **Already Fixed reply template**, no AskUserQuestion: what was done and the fixing commit SHA; save to both per-project and global greptile-history.
 
 4. **SUPPRESSED comments:** Skip silently (known false positives from previous triage).
+
+### Step 5e: Bounded repair verification
+
+After fixes, re-run tests, then run
+`~/.claude/skills/gstack/bin/gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+
+- `FULL_RERUN=false`: re-dispatch ONLY each finding's reviewer after running
+  `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`.
+  Use `subagent_type: "general-purpose"`, `model: "sonnet"`,
+  `run_in_background: false`; prompt: "Confirm the fix at {path}:{line} closes
+  finding {fingerprint}; quote the fixed lines; output NO FINDINGS or the
+  remaining finding".
+- `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log
+  `rerun_cause:"scope-expansion:{triggers}"`, run `gstack-diff-manifest <base>
+  "$RUN_ID"`, then `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`.
+  Carry the possibly raised tier/new `REVIEWERS`; all dispatch, verdict, and
+  completion calls use `--cycle <n+1>`.
+- Exit 3: STOP and report reappearing findings with the existing wording.
+
+Never exceed `REPAIR_CYCLES_MAX`.
 
 ---
 
@@ -1174,6 +1204,10 @@ Emit one final report, merging all reviewers rather than concatenating them:
    - `Gate edits: partial (K of M eligible read)` followed by the findings counts for the hunks that were read
    - `Gate edits: UNAVAILABLE — <GATE_ERROR line or helper exit>` (missing coverage, never `none detected`)
    List each kept finding's `gate`, path and `reason` under it.
+
+- `specialists` = stats for only reviewers dispatched by the plan.
+- `findings` = blocking findings (`fixed` or `skipped`) plus retained advisories
+  (`skipped`). Informational findings are never recorded as auto-fixed.
 
 ## Capture Learnings
 

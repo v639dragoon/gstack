@@ -41,6 +41,28 @@ and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
 a fix cycle pass the earlier RUN_ID as arg 2 — one run, ONE run id. The
 manifest is an INDEX; it never replaces the raw diff.
 
+### Governor plan and packet
+
+Create one manifest, deterministic reviewer plan, and shared packet:
+
+```bash
+~/.claude/skills/gstack/bin/gstack-diff-manifest <base>
+~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+~/.claude/skills/gstack/bin/gstack-review-packet "$RUN_ID" <base>
+```
+
+Carry these printed values as literals for the rest of the invocation:
+`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `REPAIR_CYCLES_MAX`,
+`COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
+`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, and `CI_GREEN`.
+Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
+`OUTCOME_MISSING`, `MAX_ADVISORIES`, `AUTOFIX_INFORMATIONAL`,
+`BLOCKING_SEVERITIES`, and `BLOCKING_CATEGORIES`.
+
+If `OUTCOME_MISSING=true`, print exactly:
+
+`Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: ~/.claude/skills/gstack/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]`.
+
 ### Read specialist hit rates (adaptive gating)
 
 ```bash

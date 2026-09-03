@@ -1,5 +1,15 @@
 <!-- AUTO-GENERATED from plan-completion.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
+Run this audit iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before the Agent call run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+On exit 2 print its line and do not dispatch. The Agent call carries
+`subagent_type: "general-purpose"`, `model: "sonnet"`, and
+`run_in_background: false`.
+
 This is Step 1.5's plan-completion audit: discover the plan, extract actionable items, classify their verification and compare with the diff. It is INFORMATIONAL except for the HIGH-impact discrepancy question below; resolve that gate before the final Scope Check.
 
 ### Plan File Discovery

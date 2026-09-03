@@ -1,12 +1,20 @@
 ## Step 8: Plan Completion Audit
 
+Run this step iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+On exit 2 print its line and do not dispatch.
+
 Complete this section in order:
 1. Dispatch the audit, validate its result and resolve its Gate Logic.
 2. Collect the plan's executable checks in Step 8.1; do not run them yet.
 3. Run Step 8.2 Scope Drift.
 4. Run Prior Learnings, including its setting question when offered, then proceed to Step 9 for review and QA.
 
-**Dispatch this step as a subagent** using Agent, `subagent_type: "general-purpose"`
+**Dispatch this step as a subagent** using Agent, `subagent_type: "general-purpose"`, `model: "sonnet"`
 and `run_in_background: false`. Use Step 7's shared foreground-dispatch rule.
 The child reads the plan and every referenced
 code file; the parent validates its report and applies the gates below.
