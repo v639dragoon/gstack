@@ -350,7 +350,7 @@ outranks `GSTACK_CODEX_EFFORT`, then `codex_effort`, then the per-mode defaults:
 - Challenge (2B): `high` — adversarial but bounded by diff
 - Consult (2C): `medium` — large context, interactive, needs speed
 
-**xhigh must be RECORDED (Phase 0 effort control):** an xhigh run exists only
+**xhigh must be RECORDED (Phase 0 effort control; ultra is never selected automatically):** an xhigh run exists only
 through this explicit flag, and the record is part of the contract. Whenever
 `--xhigh` was applied, the review-log/gate-log record MUST include
 `"effort":"xhigh","effort_source":"user-override","effort_reason":"<the
