@@ -1,6 +1,14 @@
 ## Step 7: Test Coverage Audit
 
-**Dispatch this step as a subagent** using the Agent tool with `subagent_type: "general-purpose"`. The subagent runs the coverage audit in a fresh context window — the parent only sees the conclusion, not intermediate file reads. This is context-rot defense.
+Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
+intermediate slice {SLICE_KIND}` and append a gate record with
+`verdict:"skipped:intermediate-slice"`.
+
+Before dispatch, run
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" coverage-audit --cycle <n>`.
+On exit 2 print its line and do not dispatch. **Dispatch this step as a
+subagent** using the Agent tool with `subagent_type: "general-purpose"`,
+`model: "sonnet"`, and `run_in_background: false`.
 
 {{FOREGROUND_DISPATCH_NOTE}} The parent needs this audit's LAST-line JSON before continuing.
 

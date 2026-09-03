@@ -77,12 +77,11 @@ describe('document-release dispatch control (Phase 0)', () => {
     expect(carriers.length).toBeGreaterThanOrEqual(3);
   });
 
-  test('the fix-cycle telemetry clause is present and telemetry-only', () => {
+  test('the governor bounds repair cycles and records rerun cause', () => {
     const reviewArmy = fs.readFileSync(path.join(ROOT, 'ship/sections/review-army.md'), 'utf-8');
-    expect(reviewArmy).toContain('Track the fix-cycle index');
-    expect(reviewArmy).toContain('"rerun_cause":"fix-loop"');
-    expect(reviewArmy).toContain('Telemetry only — the loop is unchanged');
-    // The loop's own contract is untouched (also pinned by ship-review-loop).
-    expect(reviewArmy).toContain('Bound: 3 fix cycles.');
+    expect(reviewArmy).toContain('REPAIR_CYCLES_MAX');
+    expect(reviewArmy).toContain('rerun-check');
+    expect(reviewArmy).toContain('rerun_cause:"scope-expansion:{triggers}"');
+    expect(reviewArmy).toContain('report which findings keep reappearing');
   });
 });

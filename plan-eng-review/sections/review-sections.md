@@ -821,7 +821,7 @@ Display:
 - **Eng Review (required by default):** The only review that gates shipping. Covers architecture, code quality, tests, performance. Can be disabled globally with \`gstack-config set skip_eng_review true\` (the "don't bother me" setting).
 - **CEO Review (optional):** Use your judgment. Recommend it for big product/business changes, new user-facing features, or scope decisions. Skip for bug fixes, refactors, infra, and cleanup.
 - **Design Review (optional):** Use your judgment. Recommend it for UI/UX changes. Skip for backend-only, infra, or prompt-only changes.
-- **Adversarial Review (automatic):** Always-on for every review. Every diff gets a native adversarial pass and, when enabled and available, a host-selected outside challenge. Large diffs (200+ lines) additionally get a structured outside review with P1 gate.
+- **Semantic Review (automatic):** The review governor routes a bounded reviewer plan by risk tier. Codex structured review runs only when listed in `REVIEWERS`; specialist and red-team slots are likewise plan-routed. Informational findings are advisory and never block or get fixed here.
 - **Outside Voice (default-on):** Independent plan review through the host-selected provider after /plan-ceo-review and /plan-eng-review. The codex_reviews switch disables the entire extra step. Provider failure uses the existing native fallback and reports missing outside coverage. Never gates shipping.
 
 **Verdict logic:**
