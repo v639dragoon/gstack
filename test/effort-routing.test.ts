@@ -2,9 +2,8 @@
  * Phase 0 effort routing — rendered-prose pins over every codex call site.
  *
  * The routing contract (audit §10 "stop using xhigh implicitly; route effort"):
- *  - ADVERSARIAL arms stay at HIGH: the codex adversarial challenge and the
- *    codex structured review (the P1 gate). Demoting either is a coverage
- *    change and must fail here.
+ *  - Free-form adversarial challenge is gone. codex-structured is plan-routed
+ *    at MEDIUM for A/B/C and HIGH for D.
  *  - Plan-stage voices (plan-{ceo,eng,devex,design}-review outside voice) and
  *    the doc-review voice inside /document-release route to MEDIUM.
  *  - xhigh exists ONLY as the /codex --xhigh user override, and an applied
@@ -45,20 +44,23 @@ function rowLine(content: string, skill: string): string {
 }
 
 describe('effort routing (Phase 0)', () => {
-  const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', 'test/fixtures/golden/factory-ship-SKILL.md'];
+  const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/SKILL.md'];
   for (const site of ADVERSARIAL_SITES) {
-    test(`${site}: codex adversarial AND structured review both stay at high`, () => {
+    test(`${site}: only plan-routed codex-structured remains`, () => {
       const content = read(site);
-      expect(codexLineWith(content, 'TMPERR_ADV')).toContain('model_reasoning_effort="high"');
-      expect(codexLineWith(content, 'codex review --base')).toContain('model_reasoning_effort="high"');
+      expect(content).not.toContain('TMPERR_ADV');
+      expect(content).not.toContain('codex adversarial challenge');
+      const line = codexLineWith(content, 'codex review --base');
+      expect(line).toContain('model_reasoning_effort=');
+      expect(line).toContain('medium|high from REVIEWERS suffix');
     });
 
     test(`${site}: the adversarial-review row records its effort`, () => {
       const content = read(site);
       expect(content).toContain('"skill":"adversarial-review"');
       const row = rowLine(content, 'adversarial-review');
-      expect(row).toContain('"effort":"high"');
-      expect(row).toContain('"effort_source":"default"');
+      expect(row).toContain('"effort":"{PLAN_EFFORT}"');
+      expect(row).toContain('"effort_source":"routed"');
     });
   }
 
@@ -112,5 +114,32 @@ describe('effort routing (Phase 0)', () => {
     const row = rowLine(codexSkill, 'codex-review');
     expect(row).toContain('"effort":"EFFORT"');
     expect(row).toContain('"effort_source":"EFFORT_SOURCE"');
+  });
+
+  test('every rendered codex exec/review line pins model_reasoning_effort', () => {
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name === '.git') continue;
+        const p = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(p);
+        else if (entry.name === 'SKILL.md' || (p.includes(`${path.sep}sections${path.sep}`) && entry.name.endsWith('.md'))) files.push(p);
+      }
+    };
+    walk(ROOT);
+    const calls = files.flatMap((file) => {
+      const lines = fs.readFileSync(file, 'utf8').split('\n');
+      let fenced = false;
+      return lines.flatMap((line, i) => {
+        if (line.trim().startsWith('```')) { fenced = !fenced; return []; }
+        return fenced && /^\s*(?:_gstack_codex_timeout_wrapper\s+\d+\s+)?codex (exec|review)\b/.test(line)
+          ? [{ file, line: lines.slice(i, i + 40).join('\n').split('\n```')[0] }]
+          : [];
+      });
+    });
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      expect(call.line, `${path.relative(ROOT, call.file)}: ${call.line}`).toContain('model_reasoning_effort');
+    }
   });
 });

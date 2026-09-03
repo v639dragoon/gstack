@@ -10,16 +10,9 @@
  * factory golden inlines it; the codex host strips Review Army entirely, so
  * the codex golden is deliberately NOT a site here.
  *
- * What these pins protect, in both directions:
- *  - The activation condition is UNCHANGED — early launch moves WHEN Red Team
- *    runs on the >200-line path, never WHETHER. Deleting or editing the
- *    activation sentence fails here.
- *  - The late (specialist-CRITICAL) path still hands Red Team the merged
- *    findings — the input contract the early path deliberately lacks.
- *  - The narrower "security specialist" trigger wording (a real
- *    resolver/checklist inconsistency fixed in Phase 0) can never return:
- *    resolver prose said "any specialist" while red-team.md:3 said "security
- *    specialist" — the checklist is pinned to the WIDER form.
+ * These pins protect the governor contract: Red Team is a plan slot or one
+ * recorded specialist-critical escalation, never a line-count trigger, and
+ * every dispatch is budget-gated and packet-first.
  */
 import { describe, test, expect } from 'bun:test';
 import * as fs from 'fs';
@@ -30,37 +23,35 @@ const ROOT = path.resolve(import.meta.dir, '..');
 const RENDERED_SITES = [
   'ship/sections/review-army.md',
   'review/sections/review-army.md',
-  'test/fixtures/golden/factory-ship-SKILL.md',
+  '.factory/skills/gstack-ship/SKILL.md',
 ];
-
-const ACTIVATION = 'Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.';
 
 describe('Red Team scheduling (Phase 0)', () => {
   for (const site of RENDERED_SITES) {
     const content = fs.readFileSync(path.join(ROOT, site), 'utf-8');
 
-    test(`${site}: the activation condition survives verbatim`, () => {
-      expect(content).toContain(ACTIVATION);
+    test(`${site}: Red Team is plan-routed or a specialist-critical escalation`, () => {
+      expect(content).toContain('Red Team runs only when `red-team` occupies a plan slot');
+      expect(content).toContain('specialist-critical:<fingerprint>');
     });
 
-    test(`${site}: early path launches in the same parallel dispatch as the specialists`, () => {
-      // \s+ because the rendered prose hard-wraps mid-phrase.
-      expect(content).toMatch(/SAME parallel dispatch\s+message/);
-      expect(content).toContain('EARLY path (DIFF_LINES > 200)');
+    test(`${site}: LOC and Early Red Team routing are absent`, () => {
+      expect(content).not.toContain('DIFF_LINES > 200');
+      expect(content).not.toContain('Early Red Team');
     });
 
-    test(`${site}: late path still receives the merged specialist findings`, () => {
-      expect(content).toContain('The merged specialist findings from Step');
-      expect(content).toContain('who found the following issues');
+    test(`${site}: dispatch is budget-gated before the Agent call`, () => {
+      const gate = content.indexOf('gstack-review-budget dispatch "$RUN_ID" <gate>');
+      const agent = content.indexOf('Every allowed Agent');
+      expect(gate).toBeGreaterThanOrEqual(0);
+      expect(agent).toBeGreaterThan(gate);
     });
 
-    test(`${site}: per-gate telemetry and the manifest index are wired in`, () => {
+    test(`${site}: telemetry and the shared packet are wired in`, () => {
       expect(content).toContain('gstack-gate-log');
       expect(content).toContain('gstack-diff-manifest');
-      // The manifest is an index, never a diff replacement — the raw diff
-      // command must still be in the specialist prompt.
-      expect(content).toContain('git diff "$DIFF_BASE"');
-      expect(content).toMatch(/never\s+replaces the (raw )?diff/);
+      expect(content).toContain('gstack-review-packet "$RUN_ID" <base>');
+      expect(content).toContain('Read the review packet at {PACKET_PATH} and the diff at {DIFF_PATH} first.');
     });
 
     test(`${site}: the narrower security-specialist trigger wording never returns`, () => {
