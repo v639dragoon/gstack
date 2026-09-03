@@ -172,8 +172,10 @@ STOP blocks advancement until the stated repair/resume route clears; without one
 Answer each AskUserQuestion before continuing.
 Routine authorization never waives those gates or their required user decisions.
 
+Governor-only Agent calls use the routed model; upstream packet reviewers retain the plan's model family and effort.
+
 **Routine work needs no confirmation:** include uncommitted changes, choose MICRO/PATCH
-under Step 12, draft CHANGELOG and commits, mark completed TODOs and auto-fix findings.
+under Step 12, draft CHANGELOG and commits, mark completed TODOs and retain advisories without fixes.
 When Step 7 coverage meets its target, report remaining gaps and verify generated
 tests without asking again. Step 15 commits those tests.
 
@@ -936,6 +938,16 @@ Substitute from earlier steps:
 - **VERSION**: `NEW_VERSION` from Step 12; `null` (unquoted) under NO_VERSION
 
 The shell supplies the branch. Run it without confirmation.
+
+Finally print the review-budget report and, when outcome metadata is present,
+the outcome report. Both telemetry calls are best-effort:
+
+```bash
+[ -d "${GSTACK_ROOT:-/-}/bin" ]&&[ -d "$GSTACK_ROOT/lib" ]||{ _r=$(git rev-parse --show-toplevel 2>/dev/null)/.factory/skills/gstack;[ -d "$_r/bin" ]||_r=~/.factory/skills/gstack;[ -d "$_r/bin" ]||{ echo "gstack: no install found (tried $_r). Fix: ./setup --host factory from your gstack checkout; ./setup --status shows it.">&2;exit 1;};GSTACK_ROOT=$_r;}
+$GSTACK_ROOT/bin/gstack-review-budget report "$RUN_ID" || true
+eval "$($GSTACK_ROOT/bin/gstack-outcome show 2>/dev/null)"
+[ -n "$OUTCOME_ID" ] && $GSTACK_ROOT/bin/gstack-outcome-report "$OUTCOME_ID" || true
+```
 
 ---
 

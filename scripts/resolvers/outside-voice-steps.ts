@@ -243,8 +243,79 @@ Telemetry is best-effort: failures never block.
 ---`;
 }
 
-export function generateAdversarialStep(ctx: TemplateContext): string {
+function generateGovernorAdversarial(ctx: TemplateContext): string {
 
+  const routedStep = ctx.skillName === 'ship' ? '11' : '4.8';
+  return `## Step ${routedStep}: Adversarial review — governor routed
+
+Print: \`Adversarial: routed to codex-structured per tier {TIER}\`.
+Do not run the Claude adversarial subagent or a free-form \`codex exec\`
+challenge. Semantic adversarial review exists only when
+\`codex-structured@medium\` or \`codex-structured@high\` is in \`REVIEWERS\`.
+
+Before the structured review, run the shared Codex preflight. Nested Codex
+sessions must refuse another Codex spawn unless the explicit override is set:
+
+${outsideVoicePreflight(ctx, { disabledBehavior: 'codex-only' })}
+
+Only when \`CODEX_MODE: ready\`, run the budget dispatch:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle <n>
+\`\`\`
+
+On exit 2, print its line and do not run Codex. Otherwise run exactly one
+structured review at the suffix supplied by the plan:
+
+\`\`\`bash
+TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
+_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
+cd "$_REPO_ROOT"
+${outsideVoiceInvocation(ctx, { timeoutMs: 540000, structuredBase: '<base>', gate: 'structured', reasoningEffort: 'medium', nativeAlreadyRequired: true }).replace('--effort medium', '--effort "{PLAN_EFFORT}"')}
+\`\`\`
+
+The effort is \`medium\` for tiers A/B/C and \`high\` for tier D. No prompt
+argument is allowed with \`--base\`. Read stderr before cleanup. Check for
+\`[P1]\` markers: found → \`GATE: FAIL\`, not found → \`GATE: PASS\`. FAIL →
+AskUserQuestion with A) investigate and fix now (recommended), B) continue.
+The [P1] gate semantics are unchanged.
+
+After Codex returns, record its terminal result immediately:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" codex-structured <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
+\`\`\`
+
+After an \`error\` or \`timeout\`, the same cycle-scoped dispatch may retry this
+planned slot ONCE; record the retry verdict too. A second failure stays
+incomplete and can never be logged as clean.
+
+A user request for "full review" permits ONE extra dispatch only:
+\`gstack-review-budget dispatch "$RUN_ID" codex-structured --escalation user-request:full-review --cycle <n>\`.
+This consumes the run's single escalation; no other escalation may dispatch
+afterward. It never enables the removed free-form challenge.
+
+Persist both logs. The review row and gate row must carry the plan's literal
+effort and \`effort_source:"routed"\`; gate telemetry retains tokens,
+\`fix_cycle\`, \`rerun_cause\`, and \`manifest_wtree\`:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"codex-structured","trigger":"review-plan","model":"codex","effort":"{PLAN_EFFORT}","effort_source":"routed","verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+\`\`\`
+
+Failures and timeouts are missing coverage, never a clean result. Remove
+\`$TMPERR\` after reading it, then return to the Step ${ctx.skillName === 'ship' ? '9.2' : '4.6'}
+completion gate; exit 2 with \`INCOMPLETE=\` means STOP with a blocker report.`;
+
+
+}
+
+export function generateAdversarialStep(ctx: TemplateContext): string {
+  return generateUpstreamAdversarial(ctx) + '\n\n' + generateGovernorAdversarial(ctx);
+}
+
+function generateUpstreamAdversarial(ctx: TemplateContext): string {
   const isShip = ctx.skillName === 'ship';
   const stepNum = isShip ? '11' : '4.8';
 
@@ -750,7 +821,7 @@ On \`CODEX_MODE: ${outsideVoiceFor(ctx).id === 'codex' ? 'under_codex' : 'under_
 \`outside_status: unavailable\`, run no outside CLI, and use the native subagent below.
 A native result never supplies outside coverage.
 
-Dispatch via the Agent tool with the same prompt, passing ${FOREGROUND_IF_AVAILABLE} (subagents default to background since ${CC_BACKGROUND_DEFAULT_SINCE}). ${BACKGROUND_RECOVERY} Bound it at a 5-minute timeout; if it never completes, treat the review as unavailable and continue.
+Dispatch via the Agent tool with the same prompt, \`subagent_type: "general-purpose"\`, \`model: "sonnet"\`, passing ${FOREGROUND_IF_AVAILABLE} (subagents default to background since ${CC_BACKGROUND_DEFAULT_SINCE}). ${BACKGROUND_RECOVERY} Bound it at a 5-minute timeout; if it never completes, treat the review as unavailable and continue.
 Present findings under \`DOCUMENTATION REVIEW (${outsideVoiceFor(ctx).nativeLabel} subagent):\`. If it fails: "Doc review unavailable. Continuing to Step 9." Skip the apply gate, persist \`status: unavailable\`, \`outside_status: unavailable\`, and \`source: none\` below, then continue; unavailable is not a clean review.
 
 **Apply decision (informational, never auto-edit, but findings don't evaporate).**

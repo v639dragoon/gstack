@@ -483,8 +483,8 @@ do not launch the downstream skill or open a browser.`,
       mustPrecedeStop: ['## Step 0: Detect platform and base branch'],
       mustMoveToSection: [
         'Plan File Discovery',
-        'MULTI-SPECIALIST CONFIRMED',
-        'Cross-model synthesis',
+        'Before EACH specialist or red-team Agent call',
+        'specialist-critical:<fingerprint>',
         'structured review (large diffs only, 200+ lines)',
       ],
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
