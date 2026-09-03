@@ -2107,7 +2107,26 @@ $GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" codex-structured --cycl
 ```
 
 On exit 2, print its line and do not run Codex. Otherwise run exactly one
-structured review at the suffix supplied by the plan:
+structured review at the suffix supplied by the plan. Branch on the packet's
+`CI_GREEN` (true only when the EXACT reviewed SHA is on a remote branch with
+every CI run completed and successful):
+
+**`CI_GREEN=true`: the read-only packet reviewer.** `codex review --base`
+re-runs the project's build and test suite inside its sandbox before it
+reviews; on a large tier-D diff that alone consumed the 540s cap (observed
+2026-09-03: three timeouts of four, zero findings returned). Fresh exact-SHA
+CI evidence makes that execution redundant, so skip it deliberately:
+
+```bash
+TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
+_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
+cd "$_REPO_ROOT"
+source $GSTACK_ROOT/bin/gstack-codex-probe 2>/dev/null || true
+_gstack_codex_timeout_wrapper 540 codex exec -C "$_REPO_ROOT" -s read-only --add-dir "$(dirname "{PACKET_PATH}")" -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} "You are the codex-structured reviewer for the gstack review governor, in READ-ONLY mode. CI_GREEN=true for the exact head SHA $(git rev-parse HEAD) (see the packet's CI evidence): do NOT run the build, the test suite, typecheck or any install; this is a SEMANTIC review of the diff only. Read the review packet at {PACKET_PATH} first, then read the diff at {DIFF_PATH} in ONE pass (cat the whole file once; never page it in chunks, paging a large diff is what runs past the cap), then open other worktree files only to answer a specific question, with read-only git. Do not re-derive the project. Findings already fixed and listed in the packet as resolved are not to be re-reported. Review for ways this code fails in production: SQL and data safety, race conditions, LLM trust boundary, enum completeness, security, reliability, data-migration ordering and rollback. Output one line per finding: [P1] or [P2] or [INFO] path:line — problem — fix — evidence: quoted line(s); a finding you cannot anchor to a quoted line is [INFO] at most; if nothing, exactly NO FINDINGS. End with ONE line: Recommendation: <action> because <one-line reason naming the most exploitable finding, or no exploitable finding>." < /dev/null 2>"$TMPERR"
+```
+
+**`CI_GREEN=false` or `unknown`: the CLI diff review.** Nothing has
+proven the tree green, so codex may run what it needs:
 
 ```bash
 TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
@@ -2117,8 +2136,10 @@ source $GSTACK_ROOT/bin/gstack-codex-probe 2>/dev/null || true
 _gstack_codex_timeout_wrapper 540 codex review --base <base> -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
 ```
 
-The effort is `medium` for tiers A/B/C and `high` for tier D. No prompt
-argument is allowed with `--base`. Read stderr before cleanup. Check for
+Either way the cap stays 540s. The effort is `medium` for tiers A/B/C and
+`high` for tier D. No prompt argument is allowed with `--base` (the
+read-only form takes the prompt because it uses `codex exec`). Read stderr
+before cleanup. Check for
 `[P1]` markers: found → `GATE: FAIL`, not found → `GATE: PASS`. FAIL →
 AskUserQuestion with A) investigate and fix now (recommended), B) continue.
 The [P1] gate semantics are unchanged.
