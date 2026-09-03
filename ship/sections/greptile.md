@@ -17,7 +17,7 @@ fi
 Only `PR: exists` dispatches. `PR: skip (<reason>)` → do not dispatch; record
 "Greptile: not run (<reason>); runs on the PR once it exists" and continue to Step 11.
 
-Dispatch a subagent through Agent with `subagent_type: "general-purpose"` and
+Dispatch a subagent through Agent with `subagent_type: "general-purpose"`, `model: "sonnet"` and
 `run_in_background: false`, using Step 7's shared foreground-dispatch rule.
 It fetches and classifies all Greptile comments,
 including escalation tiers; the parent handles decisions and queues approved fixes.

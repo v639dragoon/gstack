@@ -31,8 +31,13 @@ Reentry never resets the count or authorizes a launch.
 
 ## Launch the audit
 
+Before dispatch, run `~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
+On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
+D1: the documentation audit remains required on every ship, independent of slice metadata.
+
+
 **Dispatch /document-release as a subagent** with the Agent tool (never Skill),
-`subagent_type: "general-purpose"`.
+`subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`.
 
 {{FOREGROUND_DISPATCH_NOTE}} Retain the child id.
 

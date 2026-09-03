@@ -437,14 +437,16 @@ STOP blocks advancement until the stated repair/resume route clears; without one
 Answer each AskUserQuestion before continuing.
 Routine authorization never waives those gates or their required user decisions.
 
+Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
+
 **Routine work needs no confirmation:** include uncommitted changes, choose MICRO/PATCH
-under Step 12, draft CHANGELOG and commits, mark completed TODOs and auto-fix findings.
+under Step 12, draft CHANGELOG and commits, mark completed TODOs and retain advisories without fixes.
 When Step 7 coverage meets its target, report remaining gaps and verify generated
 tests without another permission question. Step 15 commits those tests.
 
 **Route:** integrate (1–3) → test and review (4–11.5) → prepare the release
 (12–15) → verify frozen content (16) → push and publish (17–21).
-Every new invocation repeats Steps 1–16, including both reviews and the docs audit.
+Every new invocation repeats Steps 1–16, including deterministic checks, tier-budgeted reviews and the docs audit.
 Steps 12, 17 and 19 prevent duplicate bumps, pushes and PRs, never verification.
 
 ### Keep state between steps
@@ -1184,6 +1186,16 @@ Substitute from earlier steps:
 - **VERSION**: `NEW_VERSION` from Step 12; `null` (unquoted) under NO_VERSION
 
 The shell supplies the branch. Run this automatically, without confirmation.
+
+Finally print the review-budget report and, when outcome metadata is present,
+the outcome report. Both telemetry calls are best-effort:
+
+```bash
+[ -d "${GSTACK_ROOT:-/-}/bin" ]&&[ -d "$GSTACK_ROOT/lib" ]||{ _r=$(git rev-parse --show-toplevel 2>/dev/null)/.agents/skills/gstack;[ -d "$_r/bin" ]||_r=${CODEX_HOME:-~/.codex}/skills/gstack;[ -d "$_r/bin" ]||{ echo "gstack: no install found (tried $_r). Fix: ./setup --host codex from your gstack checkout; ./setup --status shows it.">&2;exit 1;};GSTACK_ROOT=$_r;}
+$GSTACK_ROOT/bin/gstack-review-budget report "$RUN_ID" || true
+eval "$($GSTACK_ROOT/bin/gstack-outcome show 2>/dev/null)"
+[ -n "$OUTCOME_ID" ] && $GSTACK_ROOT/bin/gstack-outcome-report "$OUTCOME_ID" || true
+```
 
 ---
 

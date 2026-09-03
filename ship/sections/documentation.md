@@ -33,8 +33,13 @@ Reentry never resets the count or authorizes a launch.
 
 ## Launch the audit
 
+Before dispatch, run `~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
+On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
+D1: the documentation audit remains required on every ship, independent of slice metadata.
+
+
 **Dispatch /document-release as a subagent** with the Agent tool (never Skill),
-`subagent_type: "general-purpose"`.
+`subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`.
 
 **Foreground required:** pass `run_in_background: false` on the Agent call — subagents run in the background by default since Claude Code v2.1.198, so omitting the flag gives a background run. Dispatch through the Agent tool only: invoking the target as a Skill, or executing its workflow inline in your own context, forfeits the fresh-context isolation this dispatch exists for, even though the skill may appear in your available-skills list; the explicit flag already makes the Agent call block. (Where a step defines an inline fallback, it applies only after a dispatched subagent has failed.) Retain the child id.
 
