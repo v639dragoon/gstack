@@ -104,6 +104,28 @@ describe('effort routing (Phase 0)', () => {
       'ship/sections/review-army.md',
     ]) {
       expect(read(site)).not.toContain('model_reasoning_effort="xhigh"');
+      expect(read(site)).not.toContain('model_reasoning_effort="ultra"');
+    }
+  });
+
+  test('ultra is never selected automatically anywhere: no rendered template spells it as an effort', () => {
+    // dohma ruling 2026-09-03: effort above high is an explicit escalation
+    // with a recorded reason (gstack-gate-log refuses it otherwise). The
+    // /codex skill documents the rule; no template may pass ultra.
+    const codexSkill = read('codex/SKILL.md');
+    expect(codexSkill).toContain('ultra');
+    expect(codexSkill).toContain('never selected automatically');
+    const walk = (dir: string): string[] =>
+      fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true }).flatMap((e) => {
+        const rel = path.join(dir, e.name);
+        if (e.isDirectory()) return e.name === 'node_modules' || e.name.startsWith('.') ? [] : walk(rel);
+        return /\.md$/.test(e.name) ? [rel] : [];
+      });
+    const skillDirs = fs.readdirSync(ROOT, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && fs.existsSync(path.join(ROOT, e.name, 'SKILL.md')))
+      .map((e) => e.name);
+    for (const rel of skillDirs.flatMap(walk)) {
+      expect(read(rel), rel).not.toContain('model_reasoning_effort="ultra"');
     }
   });
 
