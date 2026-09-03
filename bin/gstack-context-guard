@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# gstack-context-guard — fast Claude Code PostToolUse context threshold hook
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}" bun "$SCRIPT_DIR/gstack-context-guard.ts"
+exit 0
