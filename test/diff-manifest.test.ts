@@ -40,13 +40,21 @@ const TEST_POLICY = {
   ],
 };
 
-function createRepo(files: string[], opts: { policy?: object | null } = {}): { dir: string; home: string } {
+function createRepo(
+  files: string[],
+  opts: { policy?: object | null; baseFiles?: Record<string, string> } = {},
+): { dir: string; home: string } {
   const dir = mkdtempSync(join(tmpdir(), 'diff-manifest-test-'));
   const home = mkdtempSync(join(tmpdir(), 'diff-manifest-home-'));
   dirs.push(dir, home);
 
   const run = (cmd: string, args: string[]) =>
-    spawnSync(cmd, args, { cwd: dir, stdio: 'pipe', timeout: 5000, env: { ...process.env, ...GIT_ENV } });
+    spawnSync(cmd, args, {
+      cwd: dir,
+      stdio: 'pipe',
+      timeout: 5000,
+      env: { ...process.env, ...GIT_ENV },
+    });
 
   run('git', ['init', '-b', 'main']);
   run('git', ['config', 'user.email', 'test@test.com']);
@@ -56,7 +64,15 @@ function createRepo(files: string[], opts: { policy?: object | null } = {}): { d
   // appear in the changed-file set and pollute tier classification.
   writeFileSync(join(dir, 'README.md'), '# test\n');
   if (opts.policy !== null) {
-    writeFileSync(join(dir, '.gstack-policy.json'), JSON.stringify(opts.policy ?? TEST_POLICY, null, 2));
+    writeFileSync(
+      join(dir, '.gstack-policy.json'),
+      JSON.stringify(opts.policy ?? TEST_POLICY, null, 2),
+    );
+  }
+  for (const [name, contents] of Object.entries(opts.baseFiles ?? {})) {
+    const target = join(dir, name);
+    mkdirSync(join(target, '..'), { recursive: true });
+    writeFileSync(target, contents);
   }
   run('git', ['add', '.']);
   run('git', ['commit', '-m', 'initial']);
@@ -74,14 +90,24 @@ function createRepo(files: string[], opts: { policy?: object | null } = {}): { d
   return { dir, home };
 }
 
-type ManifestRun = { vars: Record<string, string>; status: number; manifest: any | null; stdout: string };
+type ManifestRun = {
+  vars: Record<string, string>;
+  status: number;
+  manifest: any | null;
+  stdout: string;
+};
 
-function runManifest(dir: string, home: string, args: string[] = ['main']): ManifestRun {
+function runManifest(
+  dir: string,
+  home: string,
+  args: string[] = ['main'],
+  extraEnv: Record<string, string> = {},
+): ManifestRun {
   const result = spawnSync('bash', [SCRIPT, ...args], {
     cwd: dir,
     stdio: 'pipe',
     timeout: 15000,
-    env: { ...process.env, ...GIT_ENV, GSTACK_HOME: home },
+    env: { ...process.env, ...GIT_ENV, GSTACK_HOME: home, ...extraEnv },
   });
   const stdout = result.stdout.toString().trim();
   const vars: Record<string, string> = {};
@@ -228,10 +254,110 @@ describe('gstack-diff-manifest', () => {
     const home = mkdtempSync(join(tmpdir(), 'diff-manifest-home-'));
     dirs.push(nonGit, home);
     const result = spawnSync('bash', [SCRIPT, 'main'], {
-      cwd: nonGit, stdio: 'pipe', timeout: 15000,
+      cwd: nonGit,
+      stdio: 'pipe',
+      timeout: 15000,
       env: { ...process.env, ...GIT_ENV, GSTACK_HOME: home },
     });
     expect(result.status).toBe(2);
     expect(result.stdout.toString()).toContain('MANIFEST_ERROR=no_git');
+  });
+
+  test('routing is never null and fails upward to D without usable inputs', () => {
+    const noPolicy = createRepo(['lib/util.ts'], { policy: null });
+    const np = runManifest(noPolicy.dir, noPolicy.home);
+    expect(np.manifest.routing.risk_tier).toBe('D');
+    expect(np.manifest.routing.tier_source).toBe('fail-up:no-policy');
+
+    const bad = createRepo(['lib/util.ts']);
+    writeFileSync(join(bad.dir, '.gstack-policy.json'), '{bad json');
+    const bp = runManifest(bad.dir, bad.home);
+    expect(bp.manifest.routing.risk_tier).toBe('D');
+    expect(bp.manifest.routing.tier_source).toBe('fail-up:policy-error');
+
+    const scope = createRepo(['strangefile.xyz']);
+    const sp = runManifest(scope.dir, scope.home);
+    expect(sp.manifest.routing.risk_tier).toBe('D');
+    expect(sp.manifest.routing.tier_source).toBe('fail-up:scope-error');
+
+    const empty = createRepo([]);
+    const ep = runManifest(empty.dir, empty.home);
+    expect(ep.manifest.routing.risk_tier).toBe('D');
+    expect(ep.manifest.routing.tier_source).toBe('fail-up:empty');
+  });
+
+  test('routing mirrors policy tiers and outcome overrides only raise', () => {
+    const a = createRepo(['docs/notes.md']);
+    expect(runManifest(a.dir, a.home).manifest.routing.risk_tier).toBe('A');
+    const b = createRepo(['app/page.tsx']);
+    expect(runManifest(b.dir, b.home).manifest.routing.risk_tier).toBe('B');
+    const c = createRepo(['lib/server.ts']);
+    expect(runManifest(c.dir, c.home).manifest.routing.risk_tier).toBe('C');
+    const d = createRepo(['supabase/migrations/x.sql']);
+    expect(runManifest(d.dir, d.home).manifest.routing.risk_tier).toBe('D');
+
+    const raised = createRepo(['docs/notes.md']);
+    const outcome = JSON.stringify({
+      present: true,
+      outcome_id: 'launch-1',
+      slice_number: 1,
+      is_final_slice: false,
+      is_flag_flip: false,
+      risk_tier_override: 'C',
+    });
+    expect(
+      runManifest(raised.dir, raised.home, ['main'], { GDM_OUTCOME_JSON: outcome }).manifest.routing
+        .risk_tier,
+    ).toBe('C');
+    const lowered = runManifest(d.dir, d.home, ['main'], { GDM_OUTCOME_JSON: outcome });
+    expect(lowered.manifest.routing.risk_tier).toBe('D');
+    expect(lowered.manifest.routing.tier_rule).toContain('override-ignored:C');
+  });
+
+  test('an auth_surface match ROUTES as D even without a d_surface hit (shadow keeps the audit rule)', () => {
+    const auth = createRepo(['lib/auth/session.ts']);
+    const m = runManifest(auth.dir, auth.home).manifest;
+    expect(m.routing.risk_tier).toBe('D');
+    expect(m.routing.tier_rule).toBe('auth_surface:lib/auth/session.ts');
+    expect(m.routing.tier_source).toBe('policy');
+    expect(m.shadow.risk_tier).toBe('C'); // shadow unchanged: lib/ is backend scope, not a d_surface
+  });
+
+  test('a rename into a d_surface uses canonical paths and routes D', () => {
+    const { dir, home } = createRepo([], { baseFiles: { 'ci/deploy.yml': 'deploy: true\n' } });
+    mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
+    spawnSync('git', ['mv', 'ci/deploy.yml', '.github/workflows/deploy.yml'], {
+      cwd: dir,
+      env: { ...process.env, ...GIT_ENV },
+    });
+    const r = runManifest(dir, home);
+    expect(r.manifest.files.map((f: any) => f.path)).toContain('.github/workflows/deploy.yml');
+    expect(r.manifest.files.map((f: any) => f.path).join(',')).not.toContain('{ci =>');
+    expect(r.manifest.routing.risk_tier).toBe('D');
+  });
+
+  test('migration scope is always routing tier D without a policy-glob match', () => {
+    const policy = { ...TEST_POLICY, d_surfaces: [] };
+    const repo = createRepo(['supabase/migrations/x.sql'], { policy });
+    const r = runManifest(repo.dir, repo.home);
+    expect(r.manifest.routing.risk_tier).toBe('D');
+    expect(r.manifest.routing.tier_rule).toBe('scope:migrations (critical surface)');
+    expect(r.manifest.shadow.risk_tier).toBe('C');
+  });
+
+  test('root .env* policy glob matches .env.staging', () => {
+    const policy = { ...TEST_POLICY, d_surfaces: ['.env*'] };
+    const repo = createRepo(['.env.staging'], { policy });
+    const m = runManifest(repo.dir, repo.home).manifest;
+    expect(m.routing.d_surface_matches).toEqual(['.env.staging']);
+    expect(m.routing.risk_tier).toBe('D');
+  });
+
+  test('manifest reuse refreshes run identity on an unchanged tree', () => {
+    const repo = createRepo(['docs/notes.md']);
+    const first = runManifest(repo.dir, repo.home, ['main', 'run-one']);
+    const second = runManifest(repo.dir, repo.home, ['main', 'run-two']);
+    expect(second.vars.MANIFEST_PATH).toBe(first.vars.MANIFEST_PATH);
+    expect(JSON.parse(readFileSync(second.vars.MANIFEST_PATH, 'utf8')).run_id).toBe('run-two');
   });
 });
