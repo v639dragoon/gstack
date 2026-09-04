@@ -48,7 +48,7 @@ describe('document-release dispatch control (Phase 0)', () => {
     });
 
     test(`${site}: the pre-existing contract survives verbatim`, () => {
-      expect(content).toContain('Do not block /ship on subagent failure.');
+      expect(content).toContain('Do not block /ship on subagent failure or slowness');
       expect(content).toContain('AFTER Step 17 (Push) and BEFORE Step 19 (Create PR)');
     });
 

@@ -481,7 +481,12 @@ describe('codex timeout wrapper: /review + /ship diff passes', () => {
       const wrapped =
         read().match(/_gstack_codex_timeout_wrapper\s+\d+\s+codex\s+(exec|review)\b/g) ?? [];
       if (relPath.endsWith('/adversarial.md')) {
+        // Review governor (phase0-pr-gating): the routed codex-structured slot has two
+        // branches on the packet's CI_GREEN -- the read-only packet reviewer (`codex exec
+        // -s read-only`, CI_GREEN=true) and the CLI diff review (`codex review --base`).
+        // Both run under the wrapper at the same 540s cap; nothing else is wrapped here.
         expect(wrapped).toEqual([
+          expect.stringMatching(/codex\s+exec\b/),
           expect.stringMatching(/codex\s+review\b/),
         ]);
       } else {

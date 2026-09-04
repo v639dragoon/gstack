@@ -51,8 +51,10 @@ const GENERATED_WITH_GUIDANCE = [
   'plan-design-review/SKILL.md',
   'plan-devex-review/sections/review-sections.md',
   'plan-eng-review/sections/review-sections.md',
-  'review/sections/adversarial.md',
-  'ship/sections/adversarial.md',
+  // NOT review/sections/adversarial.md or ship/sections/adversarial.md: under the
+  // review governor (phase0-pr-gating) Step 5.7 dispatches no Agent at all -- the
+  // Claude adversarial subagent is gone and the slot is a codex call, so the flag
+  // has no dispatch to attach to there.
 ];
 
 // The inverted, post-2.1.198-inert phrasings. Checked across every generated
