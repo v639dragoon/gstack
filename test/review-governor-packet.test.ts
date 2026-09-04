@@ -16,7 +16,7 @@ describe('review packet', () => {
         ['config', 'user.email', 't@t'],
         ['config', 'user.name', 'T'],
       ])
-        spawnSync('git', a, { cwd: d });
+        spawnSync('git', a, { cwd: d, timeout: 30_000 });
       mkdirSync(join(d, '.claude', 'rules'), { recursive: true });
       writeFileSync(join(d, 'x.ts'), 'old\n');
       writeFileSync(join(d, '.gstack-policy.json'), '{}');
@@ -24,9 +24,9 @@ describe('review packet', () => {
         join(d, '.claude', 'rules', 'x.md'),
         '---\npaths:\n  - "x.ts"\n---\n\nKeep the X contract stable.\n',
       );
-      spawnSync('git', ['add', '.'], { cwd: d });
-      spawnSync('git', ['commit', '-m', 'base'], { cwd: d });
-      spawnSync('git', ['checkout', '-b', 'feature/packet'], { cwd: d });
+      spawnSync('git', ['add', '.'], { cwd: d, timeout: 30_000 });
+      spawnSync('git', ['commit', '-m', 'base'], { cwd: d, timeout: 30_000 });
+      spawnSync('git', ['checkout', '-b', 'feature/packet'], { cwd: d, timeout: 30_000 });
       writeFileSync(join(d, 'x.ts'), 'new\n');
       const mp = join(state, 'manifest.json');
       writeFileSync(
@@ -62,10 +62,11 @@ describe('review packet', () => {
         GSTACK_PROJECT_SLUG: 'packet-test',
         GIT_CONFIG_GLOBAL: '/dev/null',
       };
-      expect(spawnSync(budget, ['plan', mp], { cwd: d, env }).status).toBe(0);
+      expect(spawnSync(budget, ['plan', mp], { cwd: d, env, timeout: 30_000 }).status).toBe(0);
       const acc = join(state, 'acceptance.md');
       writeFileSync(acc, 'Ship the packet safely.\n');
       const r = spawnSync(packet, ['packet-run', 'main', '--acceptance', acc], {
+        timeout: 30_000,
         cwd: d,
         env,
         encoding: 'utf8',

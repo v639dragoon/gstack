@@ -10,7 +10,7 @@ describe('outcome report', () => {
       state = mkdtempSync(join(tmpdir(), 'report-state-')),
       transcripts = mkdtempSync(join(tmpdir(), 'report-transcripts-'));
     try {
-      spawnSync('git', ['init', '-b', 'main'], { cwd: repo });
+      spawnSync('git', ['init', '-b', 'main'], { cwd: repo, timeout: 30_000 });
       const project = join(state, 'projects', 'report-test'),
         budgets = join(project, 'budgets');
       mkdirSync(join(project, 'outcomes'), { recursive: true });
@@ -154,7 +154,7 @@ describe('outcome report', () => {
         GSTACK_CLAUDE_PROJECTS_DIR: transcripts,
         GIT_CONFIG_GLOBAL: '/dev/null',
       };
-      const r = spawnSync(bin, ['launch-1', '--json'], { cwd: repo, env, encoding: 'utf8' });
+      const r = spawnSync(bin, ['launch-1', '--json'], { cwd: repo, env, encoding: 'utf8', timeout: 30_000 });
       expect(r.status).toBe(0);
       const out = JSON.parse(r.stdout);
       expect(out.lead).toEqual({
@@ -188,7 +188,7 @@ describe('outcome report', () => {
         );
       }
       const before = readdirSync(budgets).sort().join(',');
-      const rec = spawnSync(bin, ['launch-1', '--recommend'], { cwd: repo, env, encoding: 'utf8' });
+      const rec = spawnSync(bin, ['launch-1', '--recommend'], { cwd: repo, env, encoding: 'utf8', timeout: 30_000 });
       expect(rec.stdout).not.toContain('PROPOSE: red-team on tier D');
       expect(readdirSync(budgets).sort().join(',')).toBe(before);
     } finally {
