@@ -12,8 +12,9 @@
  *    access check (client catalog, then a round trip) and falls back to the
  *    default route with the substitution LOGGED; inconclusive is never cached
  *    and never routes; xhigh/max/ultra are refused.
- *  - gstack-gate-log refuses `max` without a user override and refuses a
- *    Lead-assigned Astra record (effort_source != routed) without model_reason.
+ *  - gstack-gate-log refuses `max` without a user override and refuses an
+ *    Astra record outside the routed codex-structured slot (gate codex-structured
+ *    AND effort_source routed) without model_reason.
  *  - gstack-outcome-report reads model/effort/elapsed/tokens/substitutions
  *    from the gate rows it already aggregates (no new telemetry stream).
  *  - The rendered routed step carries the model flags on BOTH codex calls and
@@ -395,6 +396,17 @@ describe('gstack-gate-log model rules', () => {
     expect(accepted.status).toBe(0);
   });
 
+  test('the exemption is the routed codex-structured slot, not the effort_source label (red-team 2026-09-04)', () => {
+    // A worker gate that merely says effort_source "routed" still owes its reason.
+    const mislabelled = { ...base, gate: 'worker:implement', model: 'gpt-6-astra', effort: 'medium', effort_source: 'routed' };
+    const refused = gateLog(JSON.stringify(mislabelled));
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain('requires a non-empty model_reason');
+    expect(gateLog(JSON.stringify({ ...mislabelled, model_reason: 'interacting contracts' })).status).toBe(0);
+    // And a codex-structured gate that is NOT routed (a Lead-commissioned review) owes it too.
+    expect(gateLog(JSON.stringify({ ...base, model: 'gpt-6-astra', effort: 'medium', effort_source: 'lead-assigned' })).status).toBe(1);
+  });
+
   test('a substituted record (Astra requested, default used) is an ordinary routed record', () => {
     const r = gateLog(
       JSON.stringify({ ...base, model: 'gpt-5.6-sol', model_requested: 'gpt-6-astra', model_source: 'fallback', model_substituted: true, effort: 'high', effort_source: 'routed' }),
@@ -479,6 +491,7 @@ describe('rendered routed step carries the model', () => {
       expect(gateRow).toContain('"model":"{CODEX_MODEL}"');
       expect(gateRow).toContain('"model_requested":"{CODEX_MODEL_REQUESTED}"');
       expect(gateRow).toContain('"model_substituted":{true|false}');
+      expect(gateRow).toContain('"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}"');
       expect(gateRow).toContain('"effort":"{PLAN_EFFORT}","effort_source":"routed"');
       expect(gateRow).toContain('"elapsed_s":{CODEX_ELAPSED_S}');
       expect(text.replace(/\n/g, ' ')).toContain('never triggers an automatic second-model review');
