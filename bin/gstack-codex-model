@@ -46,10 +46,15 @@ case "$EFFORT" in
   xhigh|max|ultra) echo "gstack-codex-model: effort '$EFFORT' is never selected automatically; pass it only through an explicit, recorded user override" >&2; exit 1 ;;
   *) echo "gstack-codex-model: --effort must be low|medium|high (got '${EFFORT}')" >&2; exit 1 ;;
 esac
+# Same anchored shape as gstack-review-budget.ts: first character alphanumeric,
+# so a leading-dash value can never reach `codex` as a flag even when this bin
+# is called directly rather than from a validated plan (ship security review,
+# 2026-09-04); at most 64 characters.
 case "$MODEL" in
   ''|default) MODEL="" ;;
-  *[!A-Za-z0-9._-]*) echo "gstack-codex-model: malformed model slug '$MODEL'" >&2; exit 1 ;;
+  *[!A-Za-z0-9._-]*|[!A-Za-z0-9]*) echo "gstack-codex-model: malformed model slug '$MODEL'" >&2; exit 1 ;;
 esac
+if [ -n "$MODEL" ] && [ "${#MODEL}" -gt 64 ]; then echo "gstack-codex-model: model slug too long" >&2; exit 1; fi
 
 # The default route's NAME, for the record only: the flags stay empty so the
 # client's own config layering (project .codex/config.toml over the user file)
