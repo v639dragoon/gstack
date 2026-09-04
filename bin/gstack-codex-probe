@@ -141,6 +141,115 @@ _gstack_codex_model_probe() {
   return 0
 }
 
+# --- Named-model availability probe (model routing) ---------------------------
+
+_gstack_codex_model_available() {
+  # A review plan may route a Codex slot to a NAMED model (`--model <slug>`,
+  # e.g. gpt-6-astra on dohma's C/D tiers) that differs from the client
+  # default. Availability is a property of the installed CLI AND the account:
+  # a too-old CLI answers HTTP 400 "requires a newer version of Codex", an
+  # unentitled account answers 400 "not supported". This is the ONE minimal
+  # access check the dispatcher makes before pinning the model:
+  #   1. client metadata: `codex debug models` must list the slug (a local
+  #      catalog read, no tokens); a slug the client does not know is
+  #      unavailable on this CLI without a round trip;
+  #   2. one short `codex exec --model <slug> "reply OK"` round trip confirms
+  #      the account can run it.
+  # Cached per slug under a signature of config.toml + auth.json mtimes + the
+  # CLI version (1h available / 15 min unavailable), so a CLI upgrade or a
+  # re-login re-probes at once. Inconclusive (timeout/transient) is NEVER
+  # cached and is reported distinctly: the caller keeps its default route for
+  # THIS run, because a routed review that 400s mid-flight burns its single
+  # retry, and a review must never be re-run on a second model automatically.
+  #
+  # Contract (first stdout line, exit code):
+  #   MODEL_AVAILABLE (0)                 — round trip succeeded (or cached)
+  #   MODEL_UNAVAILABLE (1)               — deterministic 400 / not in catalog;
+  #                                         HINT lines follow
+  #   MODEL_AVAILABILITY_INCONCLUSIVE (3) — timeout or transient; not cached
+  # Only call this AFTER _gstack_codex_auth_probe passes.
+  local _slug="$1"
+  case "$_slug" in
+    ''|*[!A-Za-z0-9._-]*) echo "MODEL_UNAVAILABLE"; echo "HINT: model slug missing or malformed."; return 1 ;;
+  esac
+  local _codex_home="${CODEX_HOME:-$HOME/.codex}"
+  local _gstack_home="${GSTACK_HOME:-$HOME/.gstack}"
+  local _cache="$_gstack_home/.codex-model-available-$_slug"
+  local _cfg_m _auth_m _ver _sig
+  _cfg_m=$(stat -c %Y "$_codex_home/config.toml" 2>/dev/null || stat -f %m "$_codex_home/config.toml" 2>/dev/null || echo 0)
+  _auth_m=$(stat -c %Y "$_codex_home/auth.json" 2>/dev/null || stat -f %m "$_codex_home/auth.json" 2>/dev/null || echo 0)
+  case "$_cfg_m" in ''|*[!0-9]*) _cfg_m=0 ;; esac
+  case "$_auth_m" in ''|*[!0-9]*) _auth_m=0 ;; esac
+  _ver=$(codex --version 2>/dev/null | head -1 | tr -c 'A-Za-z0-9.' '_')
+  _sig="${_cfg_m}-${_auth_m}-${_ver:-unknown}"
+  local _now
+  _now=$(date +%s 2>/dev/null || echo 0)
+  if [ -f "$_cache" ]; then
+    local _c_line _c_status _c_ts _c_sig
+    _c_line=$(head -1 "$_cache" 2>/dev/null)
+    _c_status=$(printf '%s' "$_c_line" | cut -d' ' -f1)
+    _c_ts=$(printf '%s' "$_c_line" | cut -d' ' -f2)
+    _c_sig=$(printf '%s' "$_c_line" | cut -d' ' -f3)
+    case "$_c_ts" in ''|*[!0-9]*) _c_ts=0 ;; esac
+    if [ "$_c_status" = "MODEL_AVAILABLE" ] && [ "$_c_sig" = "$_sig" ] && [ $((_now - _c_ts)) -lt 3600 ]; then
+      echo "MODEL_AVAILABLE (cached)"
+      return 0
+    fi
+    if [ "$_c_status" = "MODEL_UNAVAILABLE" ] && [ "$_c_sig" = "$_sig" ] && [ $((_now - _c_ts)) -lt 900 ]; then
+      echo "MODEL_UNAVAILABLE (cached)"
+      sed -n '2,4p' "$_cache" 2>/dev/null
+      return 1
+    fi
+  fi
+  # Step 1: client metadata. Only a SUCCESSFUL catalog read that omits the
+  # slug is evidence; a CLI whose debug command fails falls through to the
+  # round trip, which is the authoritative answer either way.
+  local _catalog _catalog_rc
+  _catalog=$(_gstack_codex_timeout_wrapper 20 codex debug models </dev/null 2>/dev/null)
+  _catalog_rc=$?
+  if [ "$_catalog_rc" -eq 0 ] && printf '%s' "$_catalog" | grep -q '"slug"' \
+     && ! printf '%s' "$_catalog" | grep -q "\"slug\":[[:space:]]*\"$_slug\""; then
+    mkdir -p "$_gstack_home" 2>/dev/null || true
+    {
+      printf 'MODEL_UNAVAILABLE %s %s\n' "$_now" "$_sig"
+      echo "HINT: '$_slug' is not in this Codex CLI's model catalog (codex debug models, $(codex --version 2>/dev/null | head -1))."
+      echo "HINT: a newer CLI may carry it: npm install -g @openai/codex@latest, then re-run; the cache re-probes on a version change."
+    } > "$_cache" 2>/dev/null || true
+    echo "MODEL_UNAVAILABLE"
+    sed -n '2,4p' "$_cache" 2>/dev/null
+    _gstack_codex_log_event "codex_model_unavailable" 2>/dev/null || true
+    return 1
+  fi
+  # Step 2: one short round trip on the named model.
+  local _out _code
+  _out=$(_gstack_codex_timeout_wrapper 45 codex exec --skip-git-repo-check -s read-only --model "$_slug" "reply OK" </dev/null 2>&1)
+  _code=$?
+  if [ "$_code" -eq 0 ]; then
+    mkdir -p "$_gstack_home" 2>/dev/null || true
+    printf 'MODEL_AVAILABLE %s %s\n' "$_now" "$_sig" > "$_cache" 2>/dev/null || true
+    echo "MODEL_AVAILABLE"
+    return 0
+  fi
+  if printf '%s' "$_out" | grep -qiE 'requires a newer version of Codex|model.{0,40}is not supported|\\?"status\\?":[[:space:]]*400'; then
+    mkdir -p "$_gstack_home" 2>/dev/null || true
+    {
+      printf 'MODEL_UNAVAILABLE %s %s\n' "$_now" "$_sig"
+      printf '%s\n' "$_out" | grep -iE 'requires a newer version|not supported|status' | head -1 | sed 's/^/HINT: /'
+      if printf '%s' "$_out" | grep -qi 'requires a newer version of Codex'; then
+        echo "HINT: the installed CLI ($(codex --version 2>/dev/null | head -1)) is too old for '$_slug': npm install -g @openai/codex@latest, then re-run."
+      else
+        echo "HINT: this account cannot run '$_slug'; the default route stays in force."
+      fi
+    } > "$_cache" 2>/dev/null || true
+    echo "MODEL_UNAVAILABLE"
+    sed -n '2,4p' "$_cache" 2>/dev/null
+    _gstack_codex_log_event "codex_model_unavailable" 2>/dev/null || true
+    return 1
+  fi
+  echo "MODEL_AVAILABILITY_INCONCLUSIVE (exit $_code)"
+  return 3
+}
+
 # --- Version check ----------------------------------------------------------
 
 _gstack_codex_version_check() {
