@@ -261,6 +261,9 @@ describe('gstack-codex-model resolve', () => {
     expect(execCalls).toHaveLength(1);
     expect(execCalls[0]).toContain('--model gpt-6-astra');
     expect(execCalls[0]).toContain('-s read-only');
+    // The reachability round trip pins its own effort LOW so it can never
+    // inherit an ambient user-level xhigh/max/ultra (ship red-team 2026-09-04).
+    expect(execCalls[0]).toContain('model_reasoning_effort="low"');
     // Cached: the second resolution makes NO further round trip.
     const again = resolve(env, cwd, ['--model', 'gpt-6-astra', '--effort', 'high', '--source', 'policy']);
     expect(parseQuoted(again.stdout).CODEX_MODEL).toBe('gpt-6-astra');
