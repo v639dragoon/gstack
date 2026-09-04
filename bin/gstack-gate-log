@@ -18,8 +18,8 @@
 #     make impossible ("prohibit implicit xhigh")
 #   - effort "xhigh", "max" or "ultra" REQUIRES effort_source:"user-override"
 #     (and so a reason): effort above high is never selected automatically
-#   - a Lead-ASSIGNED gpt-6-astra record (any effort_source other than
-#     "routed") REQUIRES a non-empty model_reason: Astra replaces an existing
+#   - a Lead-ASSIGNED gpt-6-astra record (anything but gate codex-structured
+#     with effort_source "routed") REQUIRES a non-empty model_reason: Astra replaces an existing
 #     worker or reviewer only for complex state transitions, interacting
 #     contracts or a demonstrated reasoning failure, and the reason is part of
 #     the record (dohma ruling 2026-09-04). Routed C/D reviews carry their
@@ -107,9 +107,13 @@ if ((rec.effort === 'xhigh' || rec.effort === 'max' || rec.effort === 'ultra') &
 // replaces an existing worker or reviewer; the reason travels with the record
 // (dohma ruling 2026-09-04). HIGH on Astra needs a specific complexity
 // justification, which is the same field with more in it.
-if (typeof rec.model === 'string' && /astra/i.test(rec.model) && rec.effort_source !== 'routed'
+// The exemption is the ROUTED REVIEW SLOT itself (gate codex-structured with
+// effort_source routed), never the label alone: a worker record that merely
+// says effort_source \"routed\" still owes its reason (ship red-team, 2026-09-04).
+const routedReviewSlot = rec.gate === 'codex-structured' && rec.effort_source === 'routed';
+if (typeof rec.model === 'string' && /astra/i.test(rec.model) && !routedReviewSlot
     && !(typeof rec.model_reason === 'string' && rec.model_reason.trim().length > 0)) {
-  fail('model \"' + rec.model + '\" outside a routed review slot requires a non-empty model_reason');
+  fail('model \"' + rec.model + '\" outside the routed codex-structured slot requires a non-empty model_reason');
 }
 for (const k of ['commit_full', 'tree', 'wtree', 'dirty', 'outcome_id', 'outcome_slice', 'risk_tier']) delete rec[k];
 const env = process.env;
