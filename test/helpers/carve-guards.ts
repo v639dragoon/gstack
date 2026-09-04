@@ -426,7 +426,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     },
     behavioral: 'plan',
     maxSkeletonBytes: 61_500, // + v2.0 {{ASIDE_RESEARCH}} (Aside first, WebSearch fallback); measured 60_309
-    minUnionBytes: 89_000, // Phase 4 wave 1; measured union 93,357
+    minUnionBytes: 88_000, // review governor removed the LOC/adversarial prose (phase0-pr-gating); measured union 88,719 over v1.79
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
   },
   codex: {
