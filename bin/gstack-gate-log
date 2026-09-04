@@ -16,8 +16,14 @@
 #   - effort_source:"user-override" REQUIRES a non-empty effort_reason — an
 #     unrecorded xhigh override is the exact failure this writer exists to
 #     make impossible ("prohibit implicit xhigh")
-#   - effort "xhigh" or "ultra" REQUIRES effort_source:"user-override" (and so a
-#     reason): effort above high is never selected automatically
+#   - effort "xhigh", "max" or "ultra" REQUIRES effort_source:"user-override"
+#     (and so a reason): effort above high is never selected automatically
+#   - a Lead-ASSIGNED gpt-6-astra record (anything but gate codex-structured
+#     with effort_source "routed") REQUIRES a non-empty model_reason: Astra replaces an existing
+#     worker or reviewer only for complex state transitions, interacting
+#     contracts or a demonstrated reasoning failure, and the reason is part of
+#     the record (dohma ruling 2026-09-04). Routed C/D reviews carry their
+#     reason in the tier and are exempt.
 # Everything else passes through untouched (schema-free like review-log), so
 # shadow-classifier fields ride along without writer changes.
 #
@@ -94,8 +100,20 @@ if (rec.effort_source === 'user-override' && !(typeof rec.effort_reason === 'str
 }
 // Effort above HIGH is never automatic (dohma ruling 2026-09-03): an xhigh or
 // ultra record must be an explicit, reasoned user override or it is refused.
-if ((rec.effort === 'xhigh' || rec.effort === 'ultra') && rec.effort_source !== 'user-override') {
+if ((rec.effort === 'xhigh' || rec.effort === 'max' || rec.effort === 'ultra') && rec.effort_source !== 'user-override') {
   fail('effort \"' + rec.effort + '\" requires effort_source \"user-override\" with a recorded effort_reason');
+}
+// gpt-6-astra outside the routed C/D review slots is a Lead assignment that
+// replaces an existing worker or reviewer; the reason travels with the record
+// (dohma ruling 2026-09-04). HIGH on Astra needs a specific complexity
+// justification, which is the same field with more in it.
+// The exemption is the ROUTED REVIEW SLOT itself (gate codex-structured with
+// effort_source routed), never the label alone: a worker record that merely
+// says effort_source \"routed\" still owes its reason (ship red-team, 2026-09-04).
+const routedReviewSlot = rec.gate === 'codex-structured' && rec.effort_source === 'routed';
+if (typeof rec.model === 'string' && /astra/i.test(rec.model) && !routedReviewSlot
+    && !(typeof rec.model_reason === 'string' && rec.model_reason.trim().length > 0)) {
+  fail('model \"' + rec.model + '\" outside the routed codex-structured slot requires a non-empty model_reason');
 }
 for (const k of ['commit_full', 'tree', 'wtree', 'dirty', 'outcome_id', 'outcome_slice', 'risk_tier']) delete rec[k];
 const env = process.env;

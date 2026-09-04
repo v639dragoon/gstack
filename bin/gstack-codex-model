@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# gstack-codex-model — resolve the MODEL a routed Codex call runs on.
+#
+#   gstack-codex-model resolve --model <slug|""> --effort <medium|high> [--source policy|default]
+#
+# The review plan (gstack-review-budget plan, policy `routing.models`) may name
+# a model for the codex-structured slot; the client default (the project's
+# .codex/config.toml, then ~/.codex/config.toml) applies otherwise. This
+# command decides, ONCE per dispatch, whether the named model actually runs on
+# the installed CLI and the signed-in account (one minimal access check via
+# _gstack_codex_model_available), and prints shell-assignable KEY=VALUE lines
+# the caller carries into the codex invocation:
+#
+#   CODEX_MODEL_REQUESTED=<slug or default>
+#   CODEX_MODEL=<slug actually used, or the resolved default's name>
+#   CODEX_MODEL_SOURCE=policy|default|fallback
+#   CODEX_MODEL_SUBSTITUTED=true|false
+#   CODEX_MODEL_SUBSTITUTION_REASON=none|model-unavailable:<hint>|probe-inconclusive:<detail>|no-auth
+#   CODEX_MODEL_EXEC_FLAGS=--model <slug>          (empty on the default route; `codex exec` form)
+#   CODEX_MODEL_REVIEW_FLAGS=-c model="<slug>"     (empty on the default route; `codex review` rejects -m)
+#   CODEX_EFFORT=<medium|high>
+#
+# Contract:
+#   - The model is the ONLY thing this resolves. Effort is echoed back verbatim
+#     and validated: xhigh, max and ultra are refused (exit 1) because effort
+#     above high is never selected automatically.
+#   - Unavailable or inconclusive → the default route with the substitution
+#     logged (exit 0). A substitution never adds a reviewer, never changes the
+#     budget, the cap or the retry rule.
+#   - Never fails on network trouble; a missing CLI is reported as no-auth.
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cmd="${1:-}"; shift || true
+[ "$cmd" = "resolve" ] || { echo "usage: gstack-codex-model resolve --model <slug|\"\"> --effort <medium|high> [--source policy|default]" >&2; exit 1; }
+MODEL=""; EFFORT=""; SOURCE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --model) MODEL="${2:-}"; shift 2 ;;
+    --effort) EFFORT="${2:-}"; shift 2 ;;
+    --source) SOURCE="${2:-}"; shift 2 ;;
+    *) echo "gstack-codex-model: unknown argument $1" >&2; exit 1 ;;
+  esac
+done
+case "$EFFORT" in
+  low|medium|high) ;;
+  xhigh|max|ultra) echo "gstack-codex-model: effort '$EFFORT' is never selected automatically; pass it only through an explicit, recorded user override" >&2; exit 1 ;;
+  *) echo "gstack-codex-model: --effort must be low|medium|high (got '${EFFORT}')" >&2; exit 1 ;;
+esac
+# Same anchored shape as gstack-review-budget.ts: first character alphanumeric,
+# so a leading-dash value can never reach `codex` as a flag even when this bin
+# is called directly rather than from a validated plan (ship security review,
+# 2026-09-04); at most 64 characters.
+case "$MODEL" in
+  ''|default) MODEL="" ;;
+  *[!A-Za-z0-9._-]*|[!A-Za-z0-9]*) echo "gstack-codex-model: malformed model slug '$MODEL'" >&2; exit 1 ;;
+esac
+if [ -n "$MODEL" ] && [ "${#MODEL}" -gt 64 ]; then echo "gstack-codex-model: model slug too long" >&2; exit 1; fi
+
+# The default route's NAME, for the record only: the flags stay empty so the
+# client's own config layering (project .codex/config.toml over the user file)
+# decides, exactly as before this resolver existed.
+default_model_name() {
+  local root f m
+  root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  for f in "$root/.codex/config.toml" "${CODEX_HOME:-$HOME/.codex}/config.toml"; do
+    [ -f "$f" ] || continue
+    m=$(grep -E '^[[:space:]]*model[[:space:]]*=' "$f" 2>/dev/null | head -1 | sed -E 's/^[^=]*=[[:space:]]*"([^"]*)".*$/\1/')
+    if [ -n "$m" ]; then printf '%s' "$m"; return 0; fi
+  done
+  printf '%s' "client-default"
+}
+
+emit() {
+  # $1 requested $2 used $3 source $4 substituted $5 reason $6 exec_flags $7 review_flags
+  # Every value is single-quoted (single quotes stripped from free text) so
+  # the caller can `eval` the output verbatim.
+  local q
+  q() { printf "%s" "$1" | tr -d "'"; }
+  printf "CODEX_MODEL_REQUESTED='%s'\n" "$(q "$1")"
+  printf "CODEX_MODEL='%s'\n" "$(q "$2")"
+  printf "CODEX_MODEL_SOURCE='%s'\n" "$(q "$3")"
+  printf "CODEX_MODEL_SUBSTITUTED='%s'\n" "$(q "$4")"
+  printf "CODEX_MODEL_SUBSTITUTION_REASON='%s'\n" "$(q "$5")"
+  printf "CODEX_MODEL_EXEC_FLAGS='%s'\n" "$(q "$6")"
+  printf "CODEX_MODEL_REVIEW_FLAGS='%s'\n" "$(q "$7")"
+  printf "CODEX_EFFORT='%s'\n" "$(q "$EFFORT")"
+}
+
+DEFAULT_NAME=$(default_model_name)
+if [ -z "$MODEL" ]; then
+  emit "default" "$DEFAULT_NAME" "${SOURCE:-default}" "false" "none" "" ""
+  exit 0
+fi
+
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/gstack-codex-probe" 2>/dev/null || true
+_TEL=$("$SCRIPT_DIR/gstack-config" get telemetry 2>/dev/null || echo off)
+if ! command -v codex >/dev/null 2>&1 || ! _gstack_codex_auth_probe >/dev/null 2>&1; then
+  emit "$MODEL" "$DEFAULT_NAME" "fallback" "true" "no-auth" "" ""
+  echo "Codex model: $MODEL requested but no runnable, authenticated Codex CLI was found; keeping the default route ($DEFAULT_NAME)." >&2
+  exit 0
+fi
+AVAIL_OUT=$(_gstack_codex_model_available "$MODEL" 2>/dev/null)
+AVAIL_RC=$?
+if [ "$AVAIL_RC" -eq 0 ]; then
+  emit "$MODEL" "$MODEL" "${SOURCE:-policy}" "false" "none" "--model $MODEL" "-c model=\"$MODEL\""
+  exit 0
+fi
+HINT=$(printf '%s\n' "$AVAIL_OUT" | grep '^HINT: ' | head -1 | sed 's/^HINT: //' | tr -d '\n' | tr '"$`\\' '    ' | cut -c1-200)
+if [ "$AVAIL_RC" -eq 1 ]; then
+  REASON="model-unavailable:${HINT:-deterministic model rejection}"
+else
+  REASON="probe-inconclusive:$(printf '%s' "$AVAIL_OUT" | head -1 | tr -d '\n' | tr '"$`\\' '    ' | cut -c1-120)"
+fi
+emit "$MODEL" "$DEFAULT_NAME" "fallback" "true" "$REASON" "" ""
+echo "Codex model: $MODEL unavailable ($REASON); keeping the default route ($DEFAULT_NAME). Logged as a substitution; budgets, cap and retry rule unchanged." >&2
+_gstack_codex_log_event "codex_model_substituted" 2>/dev/null || true
+exit 0
