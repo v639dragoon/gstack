@@ -100,7 +100,9 @@ _gstack_codex_model_probe() {
     fi
   fi
   local _out _code
-  _out=$(_gstack_codex_timeout_wrapper 30 codex exec --skip-git-repo-check -s read-only "reply OK" </dev/null 2>&1)
+  # Effort pinned LOW for the same reason as the named-model probe below: a
+  # reachability check must never inherit an ambient xhigh/max/ultra.
+  _out=$(_gstack_codex_timeout_wrapper 30 codex exec --skip-git-repo-check -s read-only -c 'model_reasoning_effort="low"' "reply OK" </dev/null 2>&1)
   _code=$?
   if [ "$_code" -eq 0 ]; then
     mkdir -p "$_gstack_home" 2>/dev/null || true
@@ -222,7 +224,10 @@ _gstack_codex_model_available() {
   fi
   # Step 2: one short round trip on the named model.
   local _out _code
-  _out=$(_gstack_codex_timeout_wrapper 45 codex exec --skip-git-repo-check -s read-only --model "$_slug" "reply OK" </dev/null 2>&1)
+  # Effort is pinned LOW: this is a reachability check, and an unpinned call
+  # would inherit whatever the ambient config resolves to (a user-level
+  # xhigh/max/ultra would be billed here, unlogged; ship red-team 2026-09-04).
+  _out=$(_gstack_codex_timeout_wrapper 45 codex exec --skip-git-repo-check -s read-only --model "$_slug" -c 'model_reasoning_effort="low"' "reply OK" </dev/null 2>&1)
   _code=$?
   if [ "$_code" -eq 0 ]; then
     mkdir -p "$_gstack_home" 2>/dev/null || true
