@@ -331,6 +331,14 @@ describe('gstack-codex-model resolve', () => {
       expect(r.stderr).toContain('never selected automatically');
     }
     expect(resolve(env, cwd, ['--model', 'gpt-6;astra', '--effort', 'medium']).status).toBe(1);
+    // A leading dash is argument injection into `codex --model`, not a slug
+    // (ship security review 2026-09-04): refused here even though the planner
+    // already anchors, because this bin is callable directly.
+    for (const bad of ['-c', '--dangerously-bypass-approvals-and-sandbox', '.hidden', 'a'.repeat(65)]) {
+      const r = resolve(env, cwd, ['--model', bad, '--effort', 'medium']);
+      expect(r.status, bad).toBe(1);
+      expect(r.stdout, bad).not.toContain('CODEX_MODEL_EXEC_FLAGS=\'--model');
+    }
   });
 
   test('output is eval-safe shell, including the quoted review flag', () => {
