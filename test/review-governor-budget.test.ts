@@ -16,11 +16,11 @@ function setup(
     ['config', 'user.email', 't@t'],
     ['config', 'user.name', 'T'],
   ])
-    spawnSync('git', a, { cwd: d });
+    spawnSync('git', a, { cwd: d, timeout: 30_000 });
   writeFileSync(join(d, '.gstack-policy.json'), JSON.stringify(policy));
   writeFileSync(join(d, 'x.ts'), 'x\n');
-  spawnSync('git', ['add', '.'], { cwd: d });
-  spawnSync('git', ['commit', '-m', 'base'], { cwd: d });
+  spawnSync('git', ['add', '.'], { cwd: d, timeout: 30_000 });
+  spawnSync('git', ['commit', '-m', 'base'], { cwd: d, timeout: 30_000 });
   return { d, s };
 }
 function manifest(
@@ -59,6 +59,7 @@ function manifest(
 }
 function run(d: string, s: string, a: string[]) {
   return spawnSync(bin, a, {
+    timeout: 30_000,
     cwd: d,
     encoding: 'utf8',
     env: { ...process.env, GSTACK_STATE_DIR: s, GIT_CONFIG_GLOBAL: '/dev/null' },
@@ -161,7 +162,7 @@ describe('review budgets', () => {
     for (const g of ['codex-structured', 'specialist:security', 'red-team'])
       expect(run(d, s, ['dispatch', 'dd', g]).status).toBe(0);
     expect(run(d, s, ['dispatch', 'dd', 'red-team']).status).toBe(2);
-  });
+  }, 30_000); // ~30 bin spawns at ~100-170ms each sit at the 5s default; bounded per upstream idiom
   test('policy can only lower safe knobs and cannot alter deterministic gates', () => {
     const policy = {
       version: 1,
@@ -190,7 +191,7 @@ describe('review budgets', () => {
     const mp = manifest(d, 'C', 'rr');
     run(d, s, ['plan', mp]);
     rmSync(mp);
-    const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8' }).stdout.trim();
+    const sha = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: d, encoding: 'utf8', timeout: 30_000 }).stdout.trim();
     expect(run(d, s, ['rerun-check', 'rr', '--since', sha]).stdout).toContain(
       'RERUN_TRIGGERS=none',
     );
@@ -214,8 +215,8 @@ describe('review budgets', () => {
     rmSync(p0);
     expect(first.stdout).toMatch(/CYCLE=0\nHEAD_SHA=[0-9a-f]{40}/);
     writeFileSync(join(d, 'x.ts'), 'cycle one\n');
-    spawnSync('git', ['add', 'x.ts'], { cwd: d });
-    spawnSync('git', ['commit', '-m', 'cycle one'], { cwd: d });
+    spawnSync('git', ['add', 'x.ts'], { cwd: d, timeout: 30_000 });
+    spawnSync('git', ['commit', '-m', 'cycle one'], { cwd: d, timeout: 30_000 });
     const p1 = manifest(d, 'A', 'cycles');
     const second = run(d, s, ['plan', p1, '--cycle', '1']);
     rmSync(p1);
