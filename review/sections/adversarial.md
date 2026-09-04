@@ -73,7 +73,27 @@ Only when `CODEX_MODE: ready`, run the budget dispatch:
 ~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle <n>
 ```
 
-On exit 2, print its line and do not run Codex. Otherwise run exactly one
+On exit 2, print its line and do not run Codex. Otherwise resolve the slot's
+MODEL once, before the review starts. The plan carries `CODEX_MODEL` (empty
+= the client default; a policy `routing.models` entry names another, e.g.
+dohma routes `gpt-6-astra` on tiers C and D) and `CODEX_MODEL_SOURCE`. A
+named model runs only when the installed CLI and the signed-in account can
+run it (one minimal access check, cached); otherwise the slot keeps the
+default route and the substitution is logged. The model never changes the
+budget, the effort, the 540s cap, the retry rule or the completion rule, and
+a timed-out review stays incomplete: it never triggers an automatic
+second-model review.
+
+```bash
+~/.claude/skills/gstack/bin/gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}"
+```
+
+Carry its printed `CODEX_MODEL`, `CODEX_MODEL_REQUESTED`,
+`CODEX_MODEL_SOURCE`, `CODEX_MODEL_SUBSTITUTED`,
+`CODEX_MODEL_SUBSTITUTION_REASON`, `CODEX_MODEL_EXEC_FLAGS` and
+`CODEX_MODEL_REVIEW_FLAGS` as literals. Print
+`Codex model: {CODEX_MODEL} ({CODEX_MODEL_SOURCE}; requested {CODEX_MODEL_REQUESTED})`
+and, when substituted, one more line with the reason. Then run exactly one
 structured review at the suffix supplied by the plan. Branch on the packet's
 `CI_GREEN` (true only when the EXACT reviewed SHA is on a remote branch with
 every CI run completed and successful):
@@ -88,8 +108,9 @@ CI evidence makes that execution redundant, so skip it deliberately:
 TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 cd "$_REPO_ROOT"
-source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
-_gstack_codex_timeout_wrapper 540 codex exec -C "$_REPO_ROOT" -s read-only --add-dir "$(dirname "{PACKET_PATH}")" -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} "You are the codex-structured reviewer for the gstack review governor, in READ-ONLY mode. CI_GREEN=true for the exact head SHA $(git rev-parse HEAD) (see the packet's CI evidence): do NOT run the build, the test suite, typecheck or any install; this is a SEMANTIC review of the diff only. Read the review packet at {PACKET_PATH} first, then read the diff at {DIFF_PATH} in ONE pass (cat the whole file once; never page it in chunks, paging a large diff is what runs past the cap), then open other worktree files only to answer a specific question, with read-only git. Do not re-derive the project. Findings already fixed and listed in the packet as resolved are not to be re-reported. Review for ways this code fails in production: SQL and data safety, race conditions, LLM trust boundary, enum completeness, security, reliability, data-migration ordering and rollback. Output one line per finding: [P1] or [P2] or [INFO] path:line — problem — fix — evidence: quoted line(s); a finding you cannot anchor to a quoted line is [INFO] at most; if nothing, exactly NO FINDINGS. End with ONE line: Recommendation: <action> because <one-line reason naming the most exploitable finding, or no exploitable finding>." < /dev/null 2>"$TMPERR"
+_CODEX_T0=$(date +%s)
+~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex exec {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s read-only --add-dir "$(dirname "{PACKET_PATH}")" ${CODEX_WEB_SEARCH_FLAG} "You are the codex-structured reviewer for the gstack review governor, in READ-ONLY mode. CI_GREEN=true for the exact head SHA $(git rev-parse HEAD) (see the packet's CI evidence): do NOT run the build, the test suite, typecheck or any install; this is a SEMANTIC review of the diff only. Read the review packet at {PACKET_PATH} first, then read the diff at {DIFF_PATH} in ONE pass (cat the whole file once; never page it in chunks, paging a large diff is what runs past the cap), then open other worktree files only to answer a specific question, with read-only git. Do not re-derive the project. Findings already fixed and listed in the packet as resolved are not to be re-reported. Review for ways this code fails in production: SQL and data safety, race conditions, LLM trust boundary, enum completeness, security, reliability, data-migration ordering and rollback. Output one line per finding: [P1] or [P2] or [INFO] path:line — problem — fix — evidence: quoted line(s); a finding you cannot anchor to a quoted line is [INFO] at most; if nothing, exactly NO FINDINGS. End with ONE line: Recommendation: <action> because <one-line reason naming the most exploitable finding, or no exploitable finding>." < /dev/null 2>"$TMPERR"
+_CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 ```
 
 **`CI_GREEN=false` or `unknown`: the CLI diff review.** Nothing has
@@ -99,54 +120,19 @@ proven the tree green, so codex may run what it needs:
 TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 cd "$_REPO_ROOT"
-Run Codex’s built-in structured review with the selected base. It supplies its own prompt and accepts no custom prompt file with --base. Require severity-tagged findings (including native P1:/P2: labels) or an explicit no-findings conclusion; arbitrary prose or a refusal is missing coverage.
-
-```bash
-# GSTACK_ACTIVE_HOST names the harness, never the model.
-if { [ -n "${CODEX_THREAD_ID:-}" ] || [ -n "${CODEX_SANDBOX:-}" ] || [ "${GSTACK_ACTIVE_HOST:-}" = codex ]; }; then
-  echo 'Codex outside review unavailable: harness mismatch; no outside process started. Missing coverage.' >&2
-  if { [ -n "${CLAUDECODE:-}" ] || [ "${GSTACK_ACTIVE_HOST:-}" = claude ]; } && { [ -n "${CODEX_THREAD_ID:-}" ] || [ -n "${CODEX_SANDBOX:-}" ] || [ "${GSTACK_ACTIVE_HOST:-}" = codex ]; }; then
-    echo 'Inherited harness markers conflict. Run setup --host <actual-harness> (claude or codex); do not guess a replacement provider.' >&2
-  else
-    echo 'Repair installed skills: run setup --host codex from your gstack checkout.' >&2
-  fi
-  exit 78
-fi
-
-_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo 'ERROR: not in a git repo' >&2; exit 1; }
-_OUTSIDE_TMP=$(mktemp -d "${TMPDIR:-/tmp}/gstack-outside.XXXXXXXX") || exit 1
-trap 'rm -rf "$_OUTSIDE_TMP"' EXIT
-_OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
-: >"$_OUTSIDE_INPUT" || exit 1
-
-_CODEX_PROBE="$HOME/.claude/skills/gstack/bin/gstack-codex-probe"
-_CODEX_OUT=$("$_CODEX_PROBE" select-model review) || exit 1
-_CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
-_CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
-"$_CODEX_PROBE" check-sandbox || exit 1
-"$_CODEX_PROBE" show-first-use-notice
-_OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort "{PLAN_EFFORT}" 540 codex review --base '<base>' -c "sandbox_mode=\"${_CODEX_SANDBOX_MODE:?}\"" -c "review_model=\"${_CODEX_SEL:?}\"" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
-cat "$_OUTSIDE_TMP/text"
-
-cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_OUTSIDE_RC=0
-bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" structured "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
-case "$_OUTSIDE_RC" in
-  0|3) ;;
-  4) echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
-  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
-esac
-echo 'OUTSIDE_STATUS: completed provider=codex host=claude'
-```
-
-Use Bash `timeout: 600000`; show the full response in a `tool-output` fence. Require successful execution and valid markers. Refusal, empty/malformed output, missing score/severity/completion markers, timeout or CLI failure means `outside_status: unavailable`. P0/P1 findings block like native ones; `OUTSIDE_STATUS: unverified` is missing coverage. Retain the required native pass without duplicating it; it cannot complete outside coverage. Scratch cleanup is automatic.
+_CODEX_T0=$(date +%s)
+~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
+_CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 ```
 
 Either way the cap stays 540s. The effort is `medium` for tiers A/B/C and
-`high` for tier D. No prompt argument is allowed with `--base` (the
-read-only form takes the prompt because it uses `codex exec`). Read stderr
-before cleanup. Check for
+`high` for tier D. The model is the one `gstack-codex-model` resolved:
+`{CODEX_MODEL_EXEC_FLAGS}` / `{CODEX_MODEL_REVIEW_FLAGS}` are empty on the
+default route and `--model <slug>` / `-c model="<slug>"` on a routed one
+(`codex review` rejects `-m`). No prompt argument is allowed with
+`--base` (the read-only form takes the prompt because it uses
+`codex exec`). Read stderr before cleanup; keep the printed
+`CODEX_ELAPSED_S` for the gate row. Check for
 `[P1]` markers: found → `GATE: FAIL`, not found → `GATE: PASS`. FAIL →
 AskUserQuestion with A) investigate and fix now (recommended), B) continue.
 The [P1] gate semantics are unchanged.
@@ -167,12 +153,15 @@ This consumes the run's single escalation; no other escalation may dispatch
 afterward. It never enables the removed free-form challenge.
 
 Persist both logs. The review row and gate row must carry the plan's literal
-effort and `effort_source:"routed"`; gate telemetry retains tokens,
-`fix_cycle`, `rerun_cause`, and `manifest_wtree`:
+effort and `effort_source:"routed"`; the gate row also carries the resolved
+model, the requested model, whether it was substituted, and the wall time,
+so `gstack-outcome-report` can read a model change from the rows it already
+aggregates; gate telemetry retains tokens (from the `tokens used` line in
+stderr when present), `fix_cycle`, `rerun_cause`, and `manifest_wtree`:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"review","gate":"codex-structured","trigger":"review-plan","model":"codex","effort":"{PLAN_EFFORT}","effort_source":"routed","verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"review","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
 Failures and timeouts are missing coverage, never a clean result. Remove
