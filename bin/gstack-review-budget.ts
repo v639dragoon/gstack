@@ -113,7 +113,7 @@ if (command === 'plan') {
   const routing = policyRaw?.routing;
   if (routing && typeof routing === 'object') {
     ignored = Object.keys(routing).filter(
-      (k) => !['budgets', 'repair_cycles', 'escalation_kinds'].includes(k),
+      (k) => !['budgets', 'repair_cycles', 'escalation_kinds', 'models'].includes(k),
     );
     const proposed = routing.budgets?.[tier];
     if (tier !== 'D' && Number.isInteger(proposed) && proposed >= 1)
@@ -152,10 +152,52 @@ if (command === 'plan') {
   const deterministicGates =
     'tests,typecheck,build,gitleaks,redaction,verification,claim-check' +
     (tier === 'D' ? ',migration-runbook' : '');
-  const reviewers = reviewerSpecs.map((s, i) => {
+  const reviewers: any[] = reviewerSpecs.map((s, i) => {
     const at = s.lastIndexOf('@');
     return { gate: s.slice(0, at), model_or_effort: s.slice(at + 1), slot: i + 1 };
   });
+  // Model substitution (policy `routing.models`, dohma ruling 2026-09-04).
+  // A Codex slot ALREADY on the plan may run on a named model
+  // (`--model <slug>`) instead of the client default. It is budget-neutral by
+  // construction: it never adds a slot, never touches the reviewer budget or
+  // the repair cycles, and never changes the effort the tier routes (a policy
+  // effort that differs from the routed one is ignored and recorded, so
+  // xhigh/max/ultra cannot arrive through this key). Only the Codex gate takes
+  // a model: specialists are Sonnet subagents pinned elsewhere. Whether the
+  // named model can actually run is decided at dispatch time by
+  // gstack-codex-model, which falls back to the default route and logs the
+  // substitution; nothing here consults the network.
+  const modelIgnored: string[] = [];
+  const modelsRaw = routing && typeof routing === 'object' ? routing.models : null;
+  if (modelsRaw && typeof modelsRaw === 'object' && !Array.isArray(modelsRaw)) {
+    for (const [gate, byTier] of Object.entries<any>(modelsRaw)) {
+      const slot = reviewers.find((r) => r.gate === gate);
+      if (gate !== 'codex-structured') {
+        modelIgnored.push(`${gate}:not-codex`);
+        continue;
+      }
+      if (!slot) {
+        modelIgnored.push(`${gate}:off-plan`);
+        continue;
+      }
+      const entry = byTier && typeof byTier === 'object' ? byTier[tier] : undefined;
+      if (entry === undefined || entry === null) continue;
+      const model = typeof entry === 'string' ? entry : entry?.model;
+      const effort = typeof entry === 'string' ? undefined : entry?.effort;
+      if (typeof model !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(model)) {
+        modelIgnored.push(`${gate}:${tier}:bad-model`);
+        continue;
+      }
+      if (effort !== undefined && effort !== slot.model_or_effort)
+        modelIgnored.push(`${gate}:${tier}:effort-${String(effort)}-ignored`);
+      slot.model = model;
+      slot.model_source = 'policy';
+    }
+  }
+  const codexSlot = reviewers.find((r) => r.gate === 'codex-structured');
+  const codexModel: string | null = codexSlot?.model ?? null;
+  const codexModelSource = codexModel ? 'policy' : 'default';
+  const codexEffort: string | null = codexSlot?.model_or_effort ?? null;
   const plan: any = {
     runId: m.run_id,
     cycle,
@@ -189,6 +231,10 @@ if (command === 'plan') {
     subagentModel: 'sonnet',
     forbiddenSubagentModels: ['fable', 'opus'],
     escalationKinds,
+    codexModel,
+    codexModelSource,
+    codexEffort,
+    policyModelIgnored: modelIgnored,
     manifestPath: path.resolve(manifestFile),
     files: m.files || [],
     scope: m.scope || {},
@@ -232,6 +278,10 @@ if (command === 'plan') {
       ['SUBAGENT_MODEL', 'sonnet'],
       ['FORBIDDEN_SUBAGENT_MODELS', 'fable,opus'],
       ['POLICY_ROUTING_IGNORED', ignored.join(',')],
+      ['CODEX_MODEL', codexModel ?? ''],
+      ['CODEX_MODEL_SOURCE', codexModelSource],
+      ['CODEX_EFFORT', codexEffort ?? ''],
+      ['POLICY_MODEL_IGNORED', modelIgnored.join(',')],
     ];
     for (const [k, v] of kv) console.log(`${k}=${v}`);
   }
