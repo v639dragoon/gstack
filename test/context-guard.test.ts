@@ -21,6 +21,7 @@ function go(tokens: number, session = 's') {
   );
   const run = () =>
     spawnSync(bin, {
+      timeout: 30_000,
       input: JSON.stringify({ transcript_path: t, session_id: session }),
       encoding: 'utf8',
       env: {
@@ -42,6 +43,6 @@ describe('context guard', () => {
     const h = go(200);
     expect(h.run().stdout).toContain('Hand off now');
     expect(h.run().stdout).toBe('');
-    expect(spawnSync(bin, { input: 'garbage', encoding: 'utf8' }).stdout).toBe('');
+    expect(spawnSync(bin, { input: 'garbage', encoding: 'utf8', timeout: 30_000 }).stdout).toBe('');
   });
 });

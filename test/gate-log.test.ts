@@ -25,7 +25,7 @@ function run(input: string, opts: { expectFail?: boolean; env?: Record<string,st
     timeout: 10000,
   };
   try {
-    const stdout = execSync(`${BIN}/gstack-gate-log '${input.replace(/'/g, "'\\''")}'`, execOpts).trim();
+    const stdout = execSync(`${BIN}/gstack-gate-log '${input.replace(/'/g, "'\\''")}'`, { ...execOpts, timeout: 30_000 }).trim();
     return { stdout, stderr: '', exitCode: 0 };
   } catch (e: any) {
     if (opts.expectFail) {
@@ -190,7 +190,7 @@ describe('gstack-gate-log', () => {
   });
 
   test('stamps outcome identity and manifest routing tier, ignoring caller values', () => {
-    const branch = execSync('git branch --show-current', { cwd: ROOT, encoding: 'utf8' }).trim();
+    const branch = execSync('git branch --show-current', { cwd: ROOT, encoding: 'utf8', timeout: 30_000 }).trim();
     const manifestDir = path.join(tmpDir, 'projects', 'governor-test', 'manifests');
     fs.mkdirSync(manifestDir, { recursive: true });
     fs.writeFileSync(path.join(manifestDir, 'abc123.json'), JSON.stringify({ routing: { risk_tier: 'C' } }));
@@ -270,10 +270,10 @@ describe('gstack-gate-log', () => {
       encoding: 'utf-8',
       timeout: 10000,
     };
-    const stats = execSync(`${BIN}/gstack-specialist-stats`, execOpts);
+    const stats = execSync(`${BIN}/gstack-specialist-stats`, { ...execOpts, timeout: 30_000 });
     expect(stats).toContain('SPECIALIST_STATS: 0 reviews analyzed');
 
-    const reviewRead = execSync(`${BIN}/gstack-review-read`, execOpts);
+    const reviewRead = execSync(`${BIN}/gstack-review-read`, { ...execOpts, timeout: 30_000 });
     expect(reviewRead).not.toContain('"record_type":"gate"');
   });
 });

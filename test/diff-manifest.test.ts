@@ -327,6 +327,7 @@ describe('gstack-diff-manifest', () => {
     const { dir, home } = createRepo([], { baseFiles: { 'ci/deploy.yml': 'deploy: true\n' } });
     mkdirSync(join(dir, '.github', 'workflows'), { recursive: true });
     spawnSync('git', ['mv', 'ci/deploy.yml', '.github/workflows/deploy.yml'], {
+      timeout: 30_000,
       cwd: dir,
       env: { ...process.env, ...GIT_ENV },
     });
