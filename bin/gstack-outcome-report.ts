@@ -97,9 +97,28 @@ const lead = {
     : null,
 };
 const runsBy: Record<string, number> = {};
+// Per model@effort detail (model routing, 2026-09-04): the SAME gate rows,
+// summed rather than counted, so a routed model change is measurable from
+// the existing report: runs, wall time (elapsed_s), tokens when the row has
+// them, and how many runs were substitutions (a named model that fell back
+// to the default route). No new telemetry stream: rows are read from the
+// gate log the dispatcher already writes.
+const runsDetail: Record<
+  string,
+  { runs: number; elapsed_s: number; tokens: number | null; substituted: number; requested: Record<string, number> }
+> = {};
 for (const r of gateRows) {
   const k = `${r.model || 'unknown'}@${r.effort || 'unknown'}`;
   runsBy[k] = (runsBy[k] || 0) + 1;
+  const d = (runsDetail[k] ||= { runs: 0, elapsed_s: 0, tokens: null, substituted: 0, requested: {} });
+  d.runs++;
+  const elapsed = Number(r.elapsed_s);
+  if (Number.isFinite(elapsed) && elapsed >= 0) d.elapsed_s += elapsed;
+  const tokens = Number(r.tokens?.total);
+  if (Number.isFinite(tokens) && tokens >= 0) d.tokens = (d.tokens ?? 0) + tokens;
+  if (r.model_substituted === true) d.substituted++;
+  const requested = typeof r.model_requested === 'string' && r.model_requested ? r.model_requested : r.model || 'unknown';
+  d.requested[requested] = (d.requested[requested] || 0) + 1;
 }
 let accepted = 0;
 const yields: Record<string, { reviewer_runs: number; accepted_blocking: number; yield: number }> =
@@ -188,6 +207,7 @@ const report = {
   outcome_id: id,
   lead,
   runs_by_model_effort: runsBy,
+  runs_detail_by_model_effort: runsDetail,
   blocking_findings_accepted: accepted,
   informational_findings: informationalFindings,
   informational_fixed: informationalFixed,
