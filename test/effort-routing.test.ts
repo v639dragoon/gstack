@@ -31,7 +31,10 @@ function codexLineWith(content: string, marker: string): string {
     .split('\n')
     .filter((l) => l.includes(marker) && (l.includes('codex exec') || l.includes('codex review --base')));
   expect(lines.length).toBeGreaterThan(0);
-  return lines[0];
+  // Prose may quote the marker (the CI_GREEN branch header names `codex review --base`);
+  // the pin is on the COMMAND line, which always runs under the timeout wrapper.
+  const wrapped = lines.filter((l) => l.includes('_gstack_codex_timeout_wrapper'));
+  return wrapped[0] ?? lines[0];
 }
 
 /** The gstack-review-log row template for one skill value. */

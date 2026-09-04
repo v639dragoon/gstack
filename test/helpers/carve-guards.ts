@@ -482,7 +482,7 @@ do not launch the downstream skill or open a browser.`,
     },
     behavioral: 'plan',
     maxSkeletonBytes: 74_881, // Shared-code identity/skip/action rules + critical-severity validation; measured 74,493 (2026-09-17). + v1.91.12.0 merge of #2999 (review clarity repairs: await reads, research alongside dispatch, /review deadline and setup authority, findings sources) with #3002 (guarded state-root lines, plan-check checkpoints); each fit alone; measured 74,881 (2026-10-01).
-    minUnionBytes: 89_000, // Phase 4 wave 1; measured union 93,357
+    minUnionBytes: 88_000, // review governor removed the LOC/adversarial prose (phase0-pr-gating); measured union 88,719 over v1.79
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
     maxSizeRatio: 1.185, // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors. + v1.91.12.0 merge of #2999 (above, plus plan-completion fallback intent and specialist checklist-by-path) with #3002; measured 1.1843 (2026-10-01).
   },

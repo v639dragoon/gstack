@@ -16,11 +16,12 @@ function repo() {
     ['config', 'user.name', 'T'],
     ['checkout', '-b', 'feature-one'],
   ])
-    spawnSync('git', a, { cwd: d });
+    spawnSync('git', a, { cwd: d, timeout: 30_000 });
   return { d, s };
 }
 function run(d: string, s: string, a: string[]) {
   return spawnSync(bin, a, {
+    timeout: 30_000,
     cwd: d,
     encoding: 'utf8',
     env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GSTACK_STATE_DIR: s },
