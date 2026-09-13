@@ -17,7 +17,7 @@
 #   CODEX_MODEL_SUBSTITUTED=true|false
 #   CODEX_MODEL_SUBSTITUTION_REASON=none|model-unavailable:<hint>|probe-inconclusive:<detail>|no-auth
 #   CODEX_MODEL_EXEC_FLAGS=--model <slug>          (empty on the default route; `codex exec` form)
-#   CODEX_MODEL_REVIEW_FLAGS=-c model="<slug>"     (empty on the default route; `codex review` rejects -m)
+#   CODEX_MODEL_REVIEW_FLAGS=-c model="<slug>" -c review_model="<slug>"  (empty on the default route; `codex review` rejects -m; both keys so the routed model wins over the rendered frontier default)
 #   CODEX_EFFORT=<medium|high>
 #
 # Contract:
@@ -103,7 +103,7 @@ fi
 AVAIL_OUT=$(_gstack_codex_model_available "$MODEL" 2>/dev/null)
 AVAIL_RC=$?
 if [ "$AVAIL_RC" -eq 0 ]; then
-  emit "$MODEL" "$MODEL" "${SOURCE:-policy}" "false" "none" "--model $MODEL" "-c model=\"$MODEL\""
+  emit "$MODEL" "$MODEL" "${SOURCE:-policy}" "false" "none" "--model $MODEL" "-c model=\"$MODEL\" -c review_model=\"$MODEL\""
   exit 0
 fi
 HINT=$(printf '%s\n' "$AVAIL_OUT" | grep '^HINT: ' | head -1 | sed 's/^HINT: //' | tr -d '\n' | tr '"$`\\' '    ' | cut -c1-200)
