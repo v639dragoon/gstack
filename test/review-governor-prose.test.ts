@@ -68,7 +68,7 @@ describe('review governor rendered prose', () => {
     const ship = read('ship/SKILL.md') + read('ship/sections/tests.md') + read('ship/sections/pr-body.md');
     expect(ship).toMatch(/tests fail[\s\S]{0,120}STOP|STOP[\s\S]{0,120}tests fail/i);
     expect(ship).toContain('gitleaks');
-    expect(ship).toContain('redaction scan-at-sink');
+    expect(ship).toContain('Scan-at-sink before sending'); // v1.84 wording of the redaction gate (was 'redaction scan-at-sink')
     expect(ship).toContain('verification gate');
     expect(union()).toMatch(/\[P1\][\s\S]{0,160}GATE: FAIL[\s\S]{0,180}AskUserQuestion/);
   });

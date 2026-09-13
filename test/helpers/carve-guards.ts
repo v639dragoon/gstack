@@ -316,7 +316,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // +Conductor AUQ-default-prose rule + one-way/continuation safety in the
     // always-loaded AskUserQuestion Format section.
     // v1.2.0 activation lift: first-run-guidance section in the shared preamble.
-    maxSkeletonBytes: 41_000, // + v1.78 AUQ objectivity + v1.79 spawned contract incl. echo-failure tie-breaker; measured 40_575
+    maxSkeletonBytes: 41_300, // + v1.79 spawned contract + Phase 0 governor sonnet/doc-voice pins (phase0-pr-gating); measured 41_244 over v1.84.1
     minUnionBytes: 56_700, // token-reduction Phases 1-2 (v1.69.x branch): preamble bash -> bin/gstack-skill-start, onboarding -> gated emission; measured union 63,018
     mustContain: ['CHANGELOG', 'Diataxis', 'coverage'],
     // Two intentional additions stack on this small skill: the AUQ-failure prose
@@ -425,7 +425,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 61_500, // + v2.0 {{ASIDE_RESEARCH}} (Aside first, WebSearch fallback); measured 60_309
+    maxSkeletonBytes: 62_000, // + v2.0 {{ASIDE_RESEARCH}} + Phase 0 review governor prose (phase0-pr-gating); measured 61_890 over v1.84.1
     minUnionBytes: 88_000, // review governor removed the LOC/adversarial prose (phase0-pr-gating); measured union 88,719 over v1.79
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
   },
