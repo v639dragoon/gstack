@@ -49,7 +49,7 @@ Each specialist prompt starts exactly with:
 
 Then append the checklist from
 `~/.claude/skills/gstack/review/specialists/<name>.md` (or
-`design-checklist.md` for design) and require newline-delimited JSON:
+`design-checklist.md` for design, and run the mechanical pass at the top of that checklist first) and require newline-delimited JSON:
 `{"severity":"CRITICAL|P1|P2|INFORMATIONAL","confidence":N,"path":"file","line":N,"category":"security|reliability|data-safety|data-migration|sql-data-safety|llm-trust-boundary|auth|other-category","summary":"description","fix":"recommended fix","fingerprint":"path:line:category","specialist":"name"}`.
 Use the closed `BLOCKING_CATEGORIES` vocabulary whenever it applies; other
 specific category strings remain advisory unless the plan lists them.
