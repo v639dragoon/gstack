@@ -25,6 +25,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
+import { CODEX_REVIEW_MODEL_CONFIG_FLAG } from '../scripts/resolvers/constants';
 
 const ROOT = join(import.meta.dir, '..');
 const BUDGET = join(ROOT, 'bin', 'gstack-review-budget');
@@ -254,7 +255,7 @@ describe('gstack-codex-model resolve', () => {
       CODEX_MODEL_SUBSTITUTED: 'false',
       CODEX_MODEL_SUBSTITUTION_REASON: 'none',
       CODEX_MODEL_EXEC_FLAGS: '--model gpt-6-astra',
-      CODEX_MODEL_REVIEW_FLAGS: '-c model="gpt-6-astra"',
+      CODEX_MODEL_REVIEW_FLAGS: '-c model="gpt-6-astra" -c review_model="gpt-6-astra"',
       CODEX_EFFORT: 'medium',
     });
     const execCalls = invocations(log).filter((l) => l.startsWith('exec '));
@@ -353,7 +354,7 @@ describe('gstack-codex-model resolve', () => {
       { cwd, env, encoding: 'utf8', timeout: 60_000 },
     );
     expect(r.status).toBe(0);
-    expect(r.stdout).toBe('gpt-6-astra|--model gpt-6-astra|-c model="gpt-6-astra"');
+    expect(r.stdout).toBe('gpt-6-astra|--model gpt-6-astra|-c model="gpt-6-astra" -c review_model="gpt-6-astra"');
   });
 });
 
@@ -486,7 +487,7 @@ describe('rendered routed step carries the model', () => {
       expect(review).toHaveLength(1);
       expect(exec[0]).toContain('codex exec {CODEX_MODEL_EXEC_FLAGS}');
       expect(exec[0]).toContain('model_reasoning_effort="{medium|high from REVIEWERS suffix}"');
-      expect(review[0]).toContain('codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS}');
+      expect(review[0]).toContain(`codex review --base <base> ${CODEX_REVIEW_MODEL_CONFIG_FLAG} {CODEX_MODEL_REVIEW_FLAGS}`); // v1.84.1: the rendered frontier default precedes the routed override, which wins
       expect(review[0]).toContain('model_reasoning_effort="{medium|high from REVIEWERS suffix}"');
       expect(text).toContain('CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))');
       const gateRow = text.split('\n').find((l) => l.includes('gstack-gate-log') && l.includes('"gate":"codex-structured"') && l.includes('"trigger":"review-plan"'));

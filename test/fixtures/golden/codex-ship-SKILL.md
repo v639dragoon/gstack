@@ -2158,14 +2158,14 @@ _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo"
 cd "$_REPO_ROOT"
 source $GSTACK_ROOT/bin/gstack-codex-probe 2>/dev/null || true
 _CODEX_T0=$(date +%s)
-_gstack_codex_timeout_wrapper 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
+_gstack_codex_timeout_wrapper 540 codex review --base <base> -c "model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" -c "review_model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
 _CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 ```
 
 Either way the cap stays 540s. The effort is `medium` for tiers A/B/C and
 `high` for tier D. The model is the one `gstack-codex-model` resolved:
 `{CODEX_MODEL_EXEC_FLAGS}` / `{CODEX_MODEL_REVIEW_FLAGS}` are empty on the
-default route and `--model <slug>` / `-c model="<slug>"` on a routed one
+default route (the rendered frontier default then applies) and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed one, appended AFTER the default so the routed model wins
 (`codex review` rejects `-m`). No prompt argument is allowed with
 `--base` (the read-only form takes the prompt because it uses
 `codex exec`). Read stderr before cleanup; keep the printed
