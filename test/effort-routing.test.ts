@@ -37,11 +37,14 @@ function codexLineWith(content: string, marker: string): string {
   return wrapped[0] ?? lines[0];
 }
 
-/** The gstack-review-log row template for one skill value. */
+/** The gstack-review-log row template for one skill value. v1.86+ also renders a
+ * disabled-review record (`"status":"skipped"`, no model ran, so no effort) ahead
+ * of the run row; the effort pin is on the row a completed run persists. */
 function rowLine(content: string, skill: string): string {
   const lines = content
     .split('\n')
-    .filter((l) => l.includes(`"skill":"${skill}"`) && l.includes('gstack-review-log'));
+    .filter((l) => l.includes(`"skill":"${skill}"`) && l.includes('gstack-review-log'))
+    .filter((l) => !l.includes('"status":"skipped"'));
   expect(lines.length).toBeGreaterThan(0);
   return lines[0];
 }
@@ -75,7 +78,9 @@ describe('effort routing (Phase 0)', () => {
   for (const site of PLAN_VOICE_SITES) {
     test(`${site}: the plan outside voice is routed to medium and records it`, () => {
       const content = read(site);
-      expect(codexLineWith(content, 'TMPERR_PV')).toContain('model_reasoning_effort="medium"');
+      // v1.86+ renders the outside voice through outsideVoiceInvocation: the one
+      // command line reads its prompt from $_OUTSIDE_INPUT (TMPERR_PV is gone).
+      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort="medium"');
       const row = rowLine(content, 'codex-plan-review');
       expect(row).toContain('"effort":"medium"');
       expect(row).toContain('"effort_source":"routed"');
@@ -84,7 +89,7 @@ describe('effort routing (Phase 0)', () => {
 
   test('document-release: the codex doc voice is routed to medium and records it', () => {
     const content = read('document-release/sections/release-body.md');
-    expect(codexLineWith(content, 'TMPERR_DOC')).toContain('model_reasoning_effort="medium"');
+    expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort="medium"');
     const row = rowLine(content, 'codex-doc-review');
     expect(row).toContain('"effort":"medium"');
     expect(row).toContain('"effort_source":"routed"');
