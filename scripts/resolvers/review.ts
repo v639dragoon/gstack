@@ -482,8 +482,10 @@ Before reviewing code quality, check: **did they build what was requested — no
 
 export function generateAdversarialStep(ctx: TemplateContext): string {
 
+  // dohma fork: the governor routes adversarial review only where the outside
+  // voice is Codex; the codex host keeps upstream's step (Claude Code voice).
   const routedStep = ctx.skillName === 'ship' ? '11' : '5.7';
-  return `## Step ${routedStep}: Adversarial review — governor routed
+  if (ctx.host !== 'codex') return `## Step ${routedStep}: Adversarial review — governor routed
 
 Print: \`Adversarial: routed to codex-structured per tier {TIER}\`.
 Do not run the Claude adversarial subagent or a free-form \`codex exec\`
