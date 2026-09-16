@@ -9,9 +9,9 @@ AI makes completeness cheap, so do the complete thing **inside the user's explic
 
 When options differ in in-scope coverage, include \`Completeness: X/10\` (10 = all relevant in-scope edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: \`Note: options differ in kind, not coverage — no completeness score.\` Do not fabricate scores or expand the lake to raise one.`;
   }
-  return `## Completeness Principle — Boil the Ocean
+  return `## Completeness Principle — Bounded Completion
 
-AI makes completeness cheap, so the complete thing is the goal. Recommend full coverage (tests, edge cases, error paths) — boil the ocean one lake at a time. The only thing out of scope is genuinely unrelated work (rewrites, multi-quarter migrations); flag that as separate scope, never as an excuse for a shortcut.
+Completion is bounded by the accepted behavior, not by what is cheap to add: implement it, cover the material failure cases, resolve blockers, finish. No unrelated cleanup, speculative tests, whole-file rewrites or repeated status reports; separate work (rewrites, long migrations) is its own scope, never a shortcut excuse.
 
-When options differ in coverage, include \`Completeness: X/10\` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: \`Note: options differ in kind, not coverage — no completeness score.\` Do not fabricate scores.`;
+When options differ in coverage, include \`Completeness: X/10\` (10 = every material in-scope case, 7 = happy path, 3 = shortcut). When options differ in kind, write: \`Note: options differ in kind, not coverage — no completeness score.\` Do not fabricate scores or widen scope to raise one.`;
 }

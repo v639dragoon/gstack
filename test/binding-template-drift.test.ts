@@ -47,7 +47,10 @@ describe('content-binding template drift', () => {
 
   test('ship Step 16 carries the evidence check (mechanized IRON LAW)', () => {
     const ship = rendered('ship/SKILL.md');
-    expect(ship).toMatch(/gstack-evidence check --label tests --expect-cmd '[^']+' --label vitest --expect-cmd '[^']+' --max-age 24 --allow-paths CHANGELOG\.md,VERSION,package\.json/);
+    // Harness pass 2026-09-15: package.json is no longer a blanket allow-path;
+    // only a version-field-only diff is accepted (--allow-version-only).
+    expect(ship).toMatch(/gstack-evidence check --label tests --expect-cmd '[^']+' --label vitest --expect-cmd '[^']+' --max-age 24 --allow-paths CHANGELOG\.md,VERSION,agents-digest\/gstack-AGENTS\.md --allow-version-only package\.json/);
+    expect(ship).not.toMatch(/--allow-paths \S*package\.json/);
     expect(ship.replace(/\s+/g, ' ')).toContain("| STALE/MISSING: changed content, command or age, or no proven run | Run `~/.claude/skills/gstack/bin/gstack-evidence run --label <lane> -- '<command>'`, read the result and recheck once");
     expect(ship.replace(/\s+/g, ' ')).toContain("**New, changed or unwaived test failure:** STOP publication. Run Steps 5–15, starting with Step 5's triage, then return to Step 16 stage 1");
     expect(ship).toContain('return to Step 16 stage 1');

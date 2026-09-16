@@ -64,7 +64,7 @@ export const RESOLVERS: Record<string, ResolverFn> = {
   OUTSIDE_PROVIDER: (ctx) => outsideVoiceFor(ctx).id,
   HOST_ID: (ctx) => ctx.host,
   OUTSIDE_PREFLIGHT: (ctx, args) => outsideVoicePreflight(ctx, { disabledBehavior: args?.[0] === 'opt-in' ? 'opt-in' : 'codex-only', ...(args?.[0] === 'autoplan' || args?.[1] === 'plan-review' ? { role: 'plan-review' as const } : {}) }),
-  OUTSIDE_INVOCATION: (ctx, args) => outsideVoiceInvocation(ctx, { timeoutMs: args?.[0] === 'spec' ? 120000 : 540000, gate: args?.[0] === 'spec' ? 'spec' : 'review', reasoningEffort: args?.[0] === 'spec' || args?.[0] === 'autoplan' ? 'medium' : 'high', ...(args?.[0] === 'autoplan' || args?.[0] === 'spec' ? { role: 'plan-review' as const } : {}) }),
+  OUTSIDE_INVOCATION: (ctx, args) => outsideVoiceInvocation(ctx, { timeoutMs: args?.[0] === 'spec' ? 120000 : 540000, gate: args?.[0] === 'spec' ? 'spec' : 'review', reasoningEffort: 'medium', voice: args?.[0] === 'spec' ? 'spec' : args?.[0] === 'autoplan' ? 'autoplan' : 'outside-review', ...(args?.[0] === 'autoplan' || args?.[0] === 'spec' ? { role: 'plan-review' as const } : {}) }),
   OUTSIDE_PROVENANCE: (ctx, args) => outsideVoiceProvenance(ctx, args?.[0] ?? ctx.skillName),
   SLUG_EVAL: generateSlugEval,
   SLUG_SETUP: generateSlugSetup,

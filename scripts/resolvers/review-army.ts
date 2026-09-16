@@ -16,6 +16,7 @@ import { DEFENSIVE_REVIEW_FRAMING, FIXTURE_SUMMARY_MODE } from './defensive-revi
 
 function generateSpecialistSelection(ctx: TemplateContext): string {
   const isShip = ctx.skillName === 'ship';
+  const ship = isShip;
   const stepSel = isShip ? '9.1' : '4.5';
   const stepMerge = isShip ? '9.2' : '4.6';
   const nextStep = isShip ? 'Step 9.3 (cross-review dedup)' : 'Step 4.8 (adversarial review), then Step 5';
@@ -62,18 +63,32 @@ manifest is an INDEX; it never replaces the raw diff.
 
 ### Governor plan and packet
 
-Create one manifest, deterministic reviewer plan, and shared packet:
+${ship ? `Reuse RUN_ID from Step 6.5. After Steps 7–8 finish their writes, refresh
+that run's manifest and plan, preserving its audit verdicts and attempt counts.
+Then build the shared packet from the final reviewed content:` : 'Create one manifest, deterministic reviewer plan, and shared packet:'}
 
 \`\`\`bash
-${ctx.paths.binDir}/gstack-diff-manifest <base>
+${ctx.paths.binDir}/gstack-diff-manifest <base>${ship ? ' "$RUN_ID"' : ''}
 ${ctx.paths.binDir}/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+${ctx.paths.binDir}/gstack-review-budget resume "$RUN_ID"
 ${ctx.paths.binDir}/gstack-review-packet "$RUN_ID" <base>
 \`\`\`
 
 Carry these printed values as literals for the rest of the invocation:
-\`RUN_ID\`, \`CYCLE\`, \`TIER\`, \`SLICE_KIND\`, \`REVIEWERS\`, \`REPAIR_CYCLES_MAX\`,
+\`RUN_ID\`, \`CYCLE\`, \`TIER\`, \`SLICE_KIND\`, \`REVIEWERS\`, \`PASSES\`, \`REPAIR_CYCLES_MAX\`,
 \`COVERAGE_AUDIT\`, \`PLAN_COMPLETION\`, \`DOC_RELEASE\`,
-\`CODEX_DOC_VOICE\`, \`PACKET_PATH\`, \`DIFF_PATH\`, and \`CI_GREEN\`.
+\`CODEX_DOC_VOICE\`, \`PACKET_PATH\`, \`DIFF_PATH\`, \`CI_GREEN\`, \`REUSED\` and \`RERUN\`.
+
+\`PASSES\` is the whole-workflow accounting for this run: every AI pass it may
+dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
+voice) with its model and effort; a pass absent from it never runs. \`resume\`
+carries forward the terminal verdicts of a PRIOR run whose content
+fingerprint, base, policy, tier, reviewer list and slice kind all equal this
+plan's (a matching commit with a dirty tree never qualifies): print
+\`Reused from {RESUME_SOURCE}: {REUSED}\` when non-empty, do not dispatch a gate
+listed in \`REUSED\` (its dispatch would be refused as duplicate-slot), and
+dispatch only \`RERUN\`. Only clean and issues_found verdicts are reusable;
+error, timeout and missing verdicts are never carried.
 Also retain \`MANIFEST_WTREE\`, \`DOC_FP\`, \`OUTCOME_ID\`,
 \`OUTCOME_MISSING\`, \`MAX_ADVISORIES\`, \`AUTOFIX_INFORMATIONAL\`,
 \`BLOCKING_SEVERITIES\`, and \`BLOCKING_CATEGORIES\`.

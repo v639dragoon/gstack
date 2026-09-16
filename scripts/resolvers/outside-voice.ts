@@ -94,12 +94,18 @@ export interface OutsideCommandOptions {
   /** Trusted, caller-owned git command preserving that workflow's original scope. */
   diffCommand?: string;
   gate?: 'review' | 'structured' | 'spec';
-  reasoningEffort?: 'high' | 'medium';
+  /** Effort the voice is routed at when the policy names none. Defaults to
+   * MEDIUM: an omitted effort never falls to a premium level. */
+  reasoningEffort?: 'high' | 'medium' | 'low';
   /** Creative proposals retain the recommendation gate with task-specific wording. */
   purpose?: 'design-direction';
   nativeAlreadyRequired?: boolean;
   /** Resolve the plan-review policy once in the invocation shell and bind it through probe and dispatch. */
   role?: OutsideRole;
+  /** Routing key for gstack-codex-model resolve --voice (policy
+   * routing.models["outside-voice"][voice]) and the gate-log record. Every
+   * caller names one; the default is a generic 'outside-review'. */
+  voice?: string;
 }
 
 /** One self-contained shell body. No shell functions/variables survive between blocks. */
@@ -110,12 +116,13 @@ export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOp
   const prompt = sh(opts.promptFile ?? '<prepared-prompt-file>');
   // /spec's 120 s gate keeps its effort: a raised effort would spend the budget it is timed for.
   // Every other gate lets run-with-timeout resolve GSTACK_CODEX_EFFORT, then codex_effort, then this default.
-  const effort = opts.reasoningEffort ?? 'high';
+  const voice = opts.voice ?? 'outside-review';
+  const effort = opts.reasoningEffort ?? 'medium';
   const pinnedEffort = opts.gate === 'spec';
   const effortFlag = pinnedEffort ? ` -c 'model_reasoning_effort="${effort}"'` : '';
   const codex = opts.structuredBase
-    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"${CODEX_SANDBOX_REF}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
-    : `codex exec - -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" ${CODEX_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
+    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"${CODEX_SANDBOX_REF}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG} $CODEX_MODEL_REVIEW_FLAGS${effortFlag} ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
+    : `codex exec - -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" ${CODEX_MODEL_CONFIG_FLAG} $CODEX_MODEL_EXEC_FLAGS${effortFlag} ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
   const kind = opts.structuredBase ? 'review' : 'exec';
   const invocation = v.id === 'codex'
     ? `${opts.role
@@ -123,10 +130,14 @@ export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOp
       : `${codexSelect(kind, `"${bin}/gstack-codex-probe"`)}
 "$_CODEX_PROBE" check-sandbox || exit 1`}
 "$_CODEX_PROBE" show-first-use-notice
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort})" || exit 1
+_OUTSIDE_T0=$(date +%s)
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout ${pinnedEffort ? '' : `--effort ${effort} `}${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout ${pinnedEffort ? '' : '--effort "$CODEX_EFFORT" '}${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 ${opts.structuredBase ? 'cat "$_OUTSIDE_TMP/text"' : 'cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"'}`
-    : `_OUTSIDE_EXIT=0
+    : `CODEX_MODEL=claude-code; CODEX_MODEL_SOURCE=harness; CODEX_EFFORT=${effort}
+_OUTSIDE_T0=$(date +%s)
+_OUTSIDE_EXIT=0
 : >"$_OUTSIDE_TMP/stderr" || exit 1
 "${bin}/gstack-claude-code" --cwd "$_REPO_ROOT" --access ${opts.access ?? 'none'} --timeout-ms ${opts.timeoutMs}${opts.role ? ` --role ${opts.role}` : ''} <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/result.json" || _OUTSIDE_EXIT=$?
 # Preserve session/usage/modelUsage from this JSON; multiple models have no invented primary.
@@ -148,12 +159,13 @@ ${v.id === 'codex' && ctx.skillName === 'autoplan' ? `if [ "$_OUTSIDE_EXIT" -eq 
   "$_CODEX_PROBE" log-hang autoplan 0 || true
 fi` : ''}
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+_row() { "$GSTACK_BIN/gstack-voice-row" '${ctx.skillName}' ${sh(voice)} "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 _OUTSIDE_RC=0
 bun "${root}/lib/outside-review-result.ts" --label '${v.label} outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" ${v.id === 'codex' && !opts.structuredBase ? '--events "$_OUTSIDE_TMP/events" ' : ''}${opts.purpose === 'design-direction' ? 'proposal' : opts.gate ?? 'review'} "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 ${v.id === 'claude-code' ? '[ "$_OUTSIDE_RC" -eq 1 ] || cat "$_OUTSIDE_TMP/text" || exit 1\n' : ''}case "$_OUTSIDE_RC" in
-  0|3) ;;
-  4) echo 'OUTSIDE_STATUS: unverified provider=${v.id} host=${ctx.host}'; exit 4 ;;
-  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
+  0|3) _row completed ;;
+  4) _row unavailable; echo 'OUTSIDE_STATUS: unverified provider=${v.id} host=${ctx.host}'; exit 4 ;;
+  *) _row unavailable; [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
 esac
 echo 'OUTSIDE_STATUS: completed provider=${v.id} host=${ctx.host}'`;
 }

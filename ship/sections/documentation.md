@@ -35,7 +35,7 @@ Reentry never resets the count or authorizes a launch.
 
 Before dispatch, run `~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
 On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
-D1: the documentation audit remains required on every ship, independent of slice metadata.
+The documentation audit is required on every ship, independent of slice metadata.
 
 
 **Dispatch /document-release as a subagent** with the Agent tool (never Skill),
@@ -104,7 +104,10 @@ Before each launch or inline takeover, generate/reuse this run's diff manifest
 Carry RUN_ID, MANIFEST_WTREE and its doc-impact shadow, or null when unavailable.
 Record the launch timestamp and the incremented 1-based attempt from the budget above.
 After parent validation, and on every failed launch, invalid output or blocked recovery,
-write ONE gate record per attempted audit before retry/stop. Reentry reuse writes no
+record the terminal governor verdict (`gstack-review-budget verdict "$RUN_ID" doc-release
+<clean|issues_found|error> --cycle <n>`) and write ONE gate record per attempted audit
+before retry/stop. Both records are best-effort; the upstream audit and named-risk
+recovery remain the documentation authority. Reentry reuse writes no
 new attempt record. Never trust returned fields until validation; use actual paths
 and null for unavailable output. Telemetry failure never changes the audit gate.
 

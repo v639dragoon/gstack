@@ -2365,13 +2365,13 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
   test('branches correctly per skillName — different prompts', () => {
     const planContent = readSkillUnion('plan-design-review');
     const consultContent = readSkillUnion('design-consultation');
-    // plan-design-review uses analytical prompt (medium reasoning); run-with-timeout
-    // turns --effort X into -c model_reasoning_effort="X" (test/codex-probe-subcommands.test.ts)
-    expect(planContent).toContain('run-with-timeout --effort medium ');
-    expect(planContent).not.toContain('--effort high');
+    // plan-design-review is a plan-stage voice: routed to medium (Phase 0
+    // effort routing — only the live design-review audit keeps high)
+    // Harness pass 2026-09-15: every design voice is routed through
+    // gstack-codex-model at medium; the policy may name a model per voice.
+    expect(planContent).toContain(`gstack-codex-model" resolve --voice 'plan-review' --effort medium`);
     // design-consultation uses creative prompt (medium reasoning)
-    expect(consultContent).toContain('run-with-timeout --effort medium ');
-    expect(consultContent).not.toContain('--effort high');
+    expect(consultContent).toContain(`gstack-codex-model" resolve --voice 'design-direction' --effort medium`);
   });
 });
 
