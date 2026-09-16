@@ -7,13 +7,25 @@ Create one manifest, deterministic reviewer plan, and shared packet:
 ```bash
 ~/.claude/skills/gstack/bin/gstack-diff-manifest <base>
 ~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
 ~/.claude/skills/gstack/bin/gstack-review-packet "$RUN_ID" <base>
 ```
 
 Carry these printed values as literals for the rest of the invocation:
-`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `REPAIR_CYCLES_MAX`,
+`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `PASSES`, `REPAIR_CYCLES_MAX`,
 `COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
-`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, and `CI_GREEN`.
+`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, `CI_GREEN`, `REUSED` and `RERUN`.
+
+`PASSES` is the whole-workflow accounting for this run: every AI pass it may
+dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
+voice) with its model and effort; a pass absent from it never runs. `resume`
+carries forward the terminal verdicts of a PRIOR run whose content
+fingerprint, base, policy, tier, reviewer list and slice kind all equal this
+plan's (a matching commit with a dirty tree never qualifies): print
+`Reused from {RESUME_SOURCE}: {REUSED}` when non-empty, do not dispatch a gate
+listed in `REUSED` (its dispatch would be refused as duplicate-slot), and
+dispatch only `RERUN`. Only clean and issues_found verdicts are reusable;
+error, timeout and missing verdicts are never carried.
 Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
 `OUTCOME_MISSING`, `MAX_ADVISORIES`, `AUTOFIX_INFORMATIONAL`,
 `BLOCKING_SEVERITIES`, and `BLOCKING_CATEGORIES`.
@@ -40,8 +52,32 @@ Before EACH specialist or red-team Agent call, run:
 ```
 
 On exit 2, print the command's line and do NOT dispatch. Every allowed Agent
-call has `subagent_type: "general-purpose"`, `model: "sonnet"` (the
-`@sonnet` reviewer suffix), and `run_in_background: false`.
+call has `subagent_type: "general-purpose"` and `model: "sonnet"` (the
+`@sonnet` reviewer suffix).
+
+### Frozen snapshot, concurrent reviewers
+
+The planned reviewers are independent read-only passes over ONE frozen
+snapshot: the packet, the diff file and the working tree as fingerprinted by
+`MANIFEST_WTREE`. Every mutation that feeds review (generated tests, fixes,
+the doc sync) completes BEFORE the snapshot; from the first dispatch until
+the last verdict is recorded the parent makes no edit, no commit and starts
+no write-capable worker, so the one write owner of this worktree is idle
+while reviewers read it. Dispatch every gate in `RERUN` in ONE message:
+first the `codex-structured` slot, if planned, as the Step 5.7 block run in a
+single Bash call with `run_in_background: true` (its output goes to a file);
+then each specialist or red-team Agent call with `run_in_background: true`,
+except the LAST Agent call of the batch, which carries
+`run_in_background: false` so this turn blocks on it while the others already
+run. With exactly one Agent-dispatched reviewer that one call is foreground.
+Then WAIT for the remaining completion notifications: never poll with
+status commands, never re-read a running reviewer's transcript. Timeouts
+(540s for Codex, ~10 minutes for an Agent) and incomplete results keep their
+existing handling; a reviewer that never returns is missing coverage. When
+every planned reviewer has returned, confirm the snapshot held
+(`~/.claude/skills/gstack/bin/gstack-wtree` still prints `MANIFEST_WTREE`); if it
+moved, the verdicts were taken against a superseded tree and `rerun-check`
+governs what re-dispatches.
 
 Each specialist prompt starts exactly with:
 
@@ -55,8 +91,10 @@ Use the closed `BLOCKING_CATEGORIES` vocabulary whenever it applies; other
 specific category strings remain advisory unless the plan lists them.
 If clean, output `NO FINDINGS` only.
 
-After every specialist or red-team reviewer returns, record its terminal
-result before doing anything else:
+As each specialist or red-team reviewer returns, record its terminal
+result before doing anything else, then a gate row (`gstack-gate-log` with
+`model:"sonnet"`, `effort:"agent-default"`, `effort_source:"routed"`,
+`purpose`, `budget:1`, `retry:"once-on-error-or-timeout"` and the verdict):
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
@@ -82,6 +120,7 @@ Before finalizing this merge, after every planned reviewer (including the
 ```bash
 ~/.claude/skills/gstack/bin/gstack-review-budget complete "$RUN_ID" --cycle <n>
 ```
+
 
 On exit 2, print its `INCOMPLETE=` line and **STOP with a blocker report**.
 Do not log the review clean and do not continue shipping: a missing, failed,

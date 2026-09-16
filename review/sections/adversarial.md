@@ -7,6 +7,11 @@ Do not run the Claude adversarial subagent or a free-form `codex exec`
 challenge. Semantic adversarial review exists only when
 `codex-structured@medium` or `codex-structured@high` is in `REVIEWERS`.
 
+This block is normally LAUNCHED from Step 4.5 as one background Bash
+call, concurrently with the specialist reviewers, against the same frozen
+snapshot; run it here only if it was not launched there (no other reviewer
+was planned) and skip it entirely when `codex-structured` is in `REUSED`.
+
 Before the structured review, run the shared Codex preflight. Nested Codex
 sessions must refuse another Codex spawn unless the explicit override is set:
 
@@ -109,14 +114,16 @@ _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo"
 cd "$_REPO_ROOT"
 source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
 _CODEX_T0=$(date +%s)
-_gstack_codex_timeout_wrapper 540 codex review --base <base> -c "model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" -c "review_model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
+_gstack_codex_timeout_wrapper 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
 _CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 ```
 
 Either way the cap stays 540s. The effort is `medium` for tiers A/B/C and
 `high` for tier D. The model is the one `gstack-codex-model` resolved:
 `{CODEX_MODEL_EXEC_FLAGS}` / `{CODEX_MODEL_REVIEW_FLAGS}` are empty on the
-default route (the rendered frontier default then applies) and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed one, appended AFTER the default so the routed model wins
+default route (the project's own Codex config then decides; no frontier
+model is rendered here, so an unrouted tier never inherits a premium model)
+and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed one
 (`codex review` rejects `-m`). No prompt argument is allowed with
 `--base` (the read-only form takes the prompt because it uses
 `codex exec`). Read stderr before cleanup; keep the printed

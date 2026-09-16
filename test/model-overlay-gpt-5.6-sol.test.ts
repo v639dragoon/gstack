@@ -64,7 +64,9 @@ describe('GPT-5.6 Sol model profile', () => {
     const generic = generateModelOverlay(ctx('gpt'));
     const completeness = generateCompletenessSection(ctx('gpt'));
     expect(generic).toContain('make your best judgment and proceed');
-    expect(completeness).toContain('the complete thing is the goal');
+    // Fork (harness pass 2026-09-15): the generic preamble is Bounded Completion.
+    expect(completeness).toContain('Bounded Completion');
+    expect(completeness).not.toContain('completeness cheap');
   });
 
   test('terse mode still suppresses the completeness section for Sol', () => {

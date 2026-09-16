@@ -74,7 +74,9 @@ _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
 cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 
 source "$HOME/.claude/skills/gstack/bin/gstack-codex-probe" || exit 1
-_gstack_codex_timeout_wrapper 600 codex exec "$(cat "$_OUTSIDE_INPUT")" -C "$_REPO_ROOT" -s read-only -c "model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" -c 'model_reasoning_effort="medium"' -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr"
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'autoplan' --effort medium)" || exit 1
+_OUTSIDE_T0=$(date +%s)
+_gstack_codex_timeout_wrapper 600 codex exec "$(cat "$_OUTSIDE_INPUT")" -C "$_REPO_ROOT" -s read-only $CODEX_MODEL_EXEC_FLAGS -c "model_reasoning_effort=\"$CODEX_EFFORT\"" -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr"
 _OUTSIDE_EXIT=$?
 # Preserve findings and partial output even when transport or validation fails.
 cat "$_OUTSIDE_TMP/text"
@@ -83,11 +85,14 @@ if [ "$_OUTSIDE_EXIT" -eq 124 ]; then
   _gstack_codex_log_hang "autoplan" "0"
 fi
 cat "$_OUTSIDE_TMP/stderr" >&2
+_row() { "$GSTACK_BIN/gstack-voice-row" 'autoplan' 'autoplan' "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 if [ "$_OUTSIDE_EXIT" -ne 0 ]; then
+  _row unavailable
   echo 'Codex outside review unavailable: execution failed; missing coverage. Check the provider diagnosis above.' >&2
   exit "$_OUTSIDE_EXIT"
 fi
-bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" review "$_OUTSIDE_TMP/text" || exit 1
+if ! bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" review "$_OUTSIDE_TMP/text"; then _row unavailable; exit 1; fi
+_row completed
 
 echo 'OUTSIDE_STATUS: completed provider=codex host=claude'
 ```

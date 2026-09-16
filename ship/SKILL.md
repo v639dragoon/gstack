@@ -281,11 +281,11 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 Curated jargon list lives at `~/.claude/skills/gstack/scripts/jargon-list.json` (80+ terms). On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
 
-## Completeness Principle — Boil the Ocean
+## Completeness Principle — Bounded Completion
 
-AI makes completeness cheap, so the complete thing is the goal. Recommend full coverage (tests, edge cases, error paths) — boil the ocean one lake at a time. The only thing out of scope is genuinely unrelated work (rewrites, multi-quarter migrations); flag that as separate scope, never as an excuse for a shortcut.
+Completion is bounded by the accepted behavior, not by what is cheap to add: implement it, cover the material failure cases, resolve blockers, finish. No unrelated cleanup, speculative tests, whole-file rewrites or repeated status reports; separate work (rewrites, long migrations) is its own scope, never a shortcut excuse.
 
-When options differ in coverage, include `Completeness: X/10` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores.
+When options differ in coverage, include `Completeness: X/10` (10 = every material in-scope case, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores or widen scope to raise one.
 
 ## Confusion Protocol
 
@@ -926,18 +926,26 @@ EOF
 The evidence ledger is the mechanical arm of this law. Check it FIRST:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<exact tests-lane command from Step 5>' --label vitest --expect-cmd '<exact vitest-lane command from Step 5>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
+~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<exact tests-lane command from Step 5>' --label vitest --expect-cmd '<exact vitest-lane command from Step 5>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,agents-digest/gstack-AGENTS.md --allow-version-only package.json
 ```
 
 Include only lane labels actually run in Step 5; `vitest` is an example, not a required framework.
 Pass each `--expect-cmd` the exact command string the wrapped Step 5 lane ran —
 that binds FRESH to the real suite (a green `echo ok` recorded under the label
-can never satisfy the check). Residual risk, accepted: `package.json` sits on
-the allow-list because Step 12's version bump writes its version field between
-the test run and this gate (and, in the gstack repo, regenerates the
-version-stamped `agents-digest/gstack-AGENTS.md`); a behavior-changing
-package.json edit in that window would not invalidate evidence. The check is
-advisory either way.
+can never satisfy the check). `package.json` is NOT blanket-exempt:
+`--allow-version-only` accepts it only when the tested content and the
+current content differ in the top-level `version` field alone (Step 12's
+bump); a dependency or script change invalidates the evidence and the lane
+re-runs. FRESH also requires the same node runtime the lane recorded
+(`toolchain`); the content fingerprint is the working tree itself, so a
+matching commit with a dirty tree never grades FRESH on its own.
+
+**Resumed runs reuse valid stages only through these records.** A /ship
+re-entered after a context handoff, a retry or a fresh session repeats no
+lane whose evidence grades FRESH, and Step 9.1's `gstack-review-budget resume`
+carries forward reviewer verdicts recorded against this exact content
+fingerprint, base, policy and plan. A plan review never substitutes for a
+code review; partial, failed or timed-out records are never reused.
 
 - **Every line FRESH (exit 0):** the recorded runs were green and the working-tree
   content is identical to what was tested, modulo the allow-listed release files

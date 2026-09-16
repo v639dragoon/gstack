@@ -19,7 +19,7 @@ If ${outsideVoiceFor(ctx).label} is available, run a lightweight design check on
 
 Prompt: "Review the git diff on this branch. Run 7 litmus checks (YES/NO each): ${litmusList} Flag any hard rejections: ${rejectionList} 5 most important design findings only. Reference file:line."
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', voice: 'design-review', diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
 
 ${outsideVoiceProvenance(ctx, 'design-lite')}
 
@@ -666,7 +666,7 @@ If user chooses A, run both independent voices below and wait for both results b
 1. **${outsideVoiceFor(ctx).label}** (via Bash, \`model_reasoning_effort="medium"\`):
 Prompt: "For this product approach, provide: a visual thesis (one sentence — mood, material, energy), a content plan (hero → support → detail → CTA), and 2 interaction ideas that change page feel. Apply beautiful defaults: composition-first, brand-first, cardless, poster not document. Be opinionated." Include the approved product approach and wireframe source in the prepared prompt.
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', purpose: 'design-direction' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', purpose: 'design-direction', voice: 'design-direction' })}
 
 ${outsideVoiceProvenance(ctx, 'design-sketch')}
 
@@ -688,10 +688,13 @@ export function generateDesignOutsideVoices(ctx: TemplateContext): string {
 
   // Determine opt-in behavior and reasoning effort
   const isAutomatic = isDesignReview; // design-review runs automatically
-  // Phase 0 effort routing: only the live design-review audit keeps high.
-  // Plan-stage voices (plan-design-review) route to medium alongside the
-  // other plan voices; design-consultation was already medium (creative).
-  const reasoningEffort = isDesignReview ? 'high' : 'medium';
+  // Phase 0 effort routing: every design voice is routed at MEDIUM by
+  // default. The live design-review audit no longer inherits high (or the
+  // frontier model) by construction: a repo that wants more for it names
+  // {model, effort} under policy routing.models["outside-voice"]["design-review"],
+  // which gstack-codex-model resolves and the gate row records.
+  const reasoningEffort = 'medium';
+  const voice = isDesignReview ? 'design-review' : isPlanDesignReview ? 'plan-review' : 'design-direction';
 
   // Build the skill-specific outside-review prompt.
   let codexPrompt: string;
@@ -836,7 +839,7 @@ Prompt (include the actual plan/product/frontend source context, not only file p
 
 "${codexPrompt}"
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort, ...(isDesignConsultation ? { purpose: 'design-direction' as const } : {}) })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort, voice, ...(isDesignConsultation ? { purpose: 'design-direction' as const } : {}) })}
 
 2. **${outsideVoiceFor(ctx).nativeLabel} design subagent** (Agent tool, \`run_in_background: false\`; await its result):
 "${subagentPrompt}"
