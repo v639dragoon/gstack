@@ -181,17 +181,20 @@ cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 source "$HOME/.claude/skills/gstack/bin/gstack-codex-probe" && _gstack_codex_select_model exec || exit 1
 _gstack_codex_sandbox_preflight >/dev/null || exit 1
 _gstack_codex_first_use_notice
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'spec' --effort medium)" || exit 1
+_OUTSIDE_T0=$(date +%s)
 _OUTSIDE_EXIT=0
-_gstack_codex_timeout_wrapper 120 codex exec - -C "$_REPO_ROOT" -s "${_GSTACK_CODEX_SANDBOX:?}" -c "model=\"${_GSTACK_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'model_reasoning_effort="medium"' -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+_gstack_codex_timeout_wrapper 120 codex exec - -C "$_REPO_ROOT" -s "${_GSTACK_CODEX_SANDBOX:?}" -c "model=\"${_GSTACK_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c "model_reasoning_effort=\"$CODEX_EFFORT\"" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+_row() { "$GSTACK_BIN/gstack-voice-row" 'spec' 'spec' "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" spec "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
-  0|3) ;;
-  4) echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
-  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
+  0|3) _row completed ;;
+  4) _row unavailable; echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
+  *) _row unavailable; [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
 esac
 echo 'OUTSIDE_STATUS: completed provider=codex host=claude'
 ```

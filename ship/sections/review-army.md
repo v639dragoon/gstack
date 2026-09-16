@@ -186,17 +186,20 @@ cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 source "$HOME/.claude/skills/gstack/bin/gstack-codex-probe" && _gstack_codex_select_model exec || exit 1
 _gstack_codex_sandbox_preflight >/dev/null || exit 1
 _gstack_codex_first_use_notice
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'design-review' --effort medium)" || exit 1
+_OUTSIDE_T0=$(date +%s)
 _OUTSIDE_EXIT=0
-_gstack_codex_timeout_wrapper 300 codex exec - -C "$_REPO_ROOT" -s "${_GSTACK_CODEX_SANDBOX:?}" -c "model=\"${_GSTACK_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'model_reasoning_effort="high"' -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+_gstack_codex_timeout_wrapper 300 codex exec - -C "$_REPO_ROOT" -s "${_GSTACK_CODEX_SANDBOX:?}" -c "model=\"${_GSTACK_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c "model_reasoning_effort=\"$CODEX_EFFORT\"" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+_row() { "$GSTACK_BIN/gstack-voice-row" 'ship' 'design-review' "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
-  0|3) ;;
-  4) echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
-  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
+  0|3) _row completed ;;
+  4) _row unavailable; echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
+  *) _row unavailable; [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
 esac
 echo 'OUTSIDE_STATUS: completed provider=codex host=claude'
 ```
@@ -226,18 +229,32 @@ distinct defects stay separate and neither pass substitutes for the other.
 
 ## Step 9.1: Review governor — manifest, plan, packet
 
-Create one manifest, deterministic reviewer plan, and shared packet:
+Reuse RUN_ID from Step 6.5. After Steps 7–8 finish their writes, refresh
+that run's manifest and plan, preserving its audit verdicts and attempt counts.
+Then build the shared packet from the final reviewed content:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-diff-manifest <base>
+~/.claude/skills/gstack/bin/gstack-diff-manifest <base> "$RUN_ID"
 ~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
 ~/.claude/skills/gstack/bin/gstack-review-packet "$RUN_ID" <base>
 ```
 
 Carry these printed values as literals for the rest of the invocation:
-`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `REPAIR_CYCLES_MAX`,
+`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `PASSES`, `REPAIR_CYCLES_MAX`,
 `COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
-`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, and `CI_GREEN`.
+`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, `CI_GREEN`, `REUSED` and `RERUN`.
+
+`PASSES` is the whole-workflow accounting for this run: every AI pass it may
+dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
+voice) with its model and effort; a pass absent from it never runs. `resume`
+carries forward the terminal verdicts of a PRIOR run whose content
+fingerprint, base, policy, tier, reviewer list and slice kind all equal this
+plan's (a matching commit with a dirty tree never qualifies): print
+`Reused from {RESUME_SOURCE}: {REUSED}` when non-empty, do not dispatch a gate
+listed in `REUSED` (its dispatch would be refused as duplicate-slot), and
+dispatch only `RERUN`. Only clean and issues_found verdicts are reusable;
+error, timeout and missing verdicts are never carried.
 Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
 `OUTCOME_MISSING`, `MAX_ADVISORIES`, `AUTOFIX_INFORMATIONAL`,
 `BLOCKING_SEVERITIES`, and `BLOCKING_CATEGORIES`.
@@ -264,8 +281,33 @@ Before EACH specialist or red-team Agent call, run:
 ```
 
 On exit 2, print the command's line and do NOT dispatch. Every allowed Agent
-call has `subagent_type: "general-purpose"`, `model: "sonnet"` (the
-`@sonnet` reviewer suffix), and `run_in_background: false`.
+call has `subagent_type: "general-purpose"` and `model: "sonnet"` (the
+`@sonnet` reviewer suffix).
+
+### Frozen snapshot, concurrent reviewers
+
+The planned reviewers are independent read-only passes over ONE frozen
+snapshot: the packet, the diff file and the working tree as fingerprinted by
+`MANIFEST_WTREE`. Every mutation that feeds review (generated tests, fixes,
+the Step 7/8 audits) completes BEFORE the snapshot; Step 14.5 follows review
+and its later doc writes are checked by Step 16 against the reviewed tree; from the first dispatch until
+the last verdict is recorded the parent makes no edit, no commit and starts
+no write-capable worker, so the one write owner of this worktree is idle
+while reviewers read it. Dispatch every gate in `RERUN` in ONE message:
+first the `codex-structured` slot, if planned, as the Step 11 block run in a
+single Bash call with `run_in_background: true` (its output goes to a file);
+then each specialist or red-team Agent call with `run_in_background: true`,
+except the LAST Agent call of the batch, which carries
+`run_in_background: false` so this turn blocks on it while the others already
+run. With exactly one Agent-dispatched reviewer that one call is foreground.
+Then WAIT for the remaining completion notifications: never poll with
+status commands, never re-read a running reviewer's transcript. Timeouts
+(540s for Codex, ~10 minutes for an Agent) and incomplete results keep their
+existing handling; a reviewer that never returns is missing coverage. When
+every planned reviewer has returned, confirm the snapshot held
+(`~/.claude/skills/gstack/bin/gstack-wtree` still prints `MANIFEST_WTREE`); if it
+moved, the verdicts were taken against a superseded tree and `rerun-check`
+governs what re-dispatches.
 
 Each specialist prompt starts exactly with:
 
@@ -279,8 +321,10 @@ Use the closed `BLOCKING_CATEGORIES` vocabulary whenever it applies; other
 specific category strings remain advisory unless the plan lists them.
 If clean, output `NO FINDINGS` only.
 
-After every specialist or red-team reviewer returns, record its terminal
-result before doing anything else:
+As each specialist or red-team reviewer returns, record its terminal
+result before doing anything else, then a gate row (`gstack-gate-log` with
+`model:"sonnet"`, `effort:"agent-default"`, `effort_source:"routed"`,
+`purpose`, `budget:1`, `retry:"once-on-error-or-timeout"` and the verdict):
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
@@ -304,8 +348,12 @@ Before finalizing this merge, after every planned reviewer (including the
 `codex-structured` slot routed in the adversarial step) has returned, run:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-budget complete "$RUN_ID" --cycle <n>
+~/.claude/skills/gstack/bin/gstack-review-budget complete "$RUN_ID" --cycle <n> --require-audits
 ```
+
+`--require-audits` also owes the coverage-audit and plan-completion verdicts
+recorded in Steps 7 and 8 when the plan scheduled them.
+
 
 On exit 2, print its `INCOMPLETE=` line and **STOP with a blocker report**.
 Do not log the review clean and do not continue shipping: a missing, failed,

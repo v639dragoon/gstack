@@ -257,11 +257,11 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 Curated jargon list lives at `~/.claude/skills/gstack/scripts/jargon-list.json`. On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
 
-## Completeness Principle — Boil the Ocean
+## Completeness Principle — Bounded Completion
 
-AI makes completeness cheap, so the complete thing is the goal. Recommend full coverage (tests, edge cases, error paths) — boil the ocean one lake at a time. The only thing out of scope is genuinely unrelated work (rewrites, multi-quarter migrations); flag that as separate scope, never as an excuse for a shortcut.
+Completion is bounded by the accepted behavior, not by what is cheap to add: implement it, cover the material failure cases, resolve blockers, finish. No unrelated cleanup, speculative tests, whole-file rewrites or repeated status reports; separate work (rewrites, long migrations) is its own scope, never a shortcut excuse.
 
-When options differ in coverage, include `Completeness: X/10` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores.
+When options differ in coverage, include `Completeness: X/10` (10 = every material in-scope case, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores or widen scope to raise one.
 
 ## Confusion Protocol
 
@@ -432,6 +432,7 @@ tests without another permission question. Step 15 commits those tests.
 **Route:** integrate (1–3) → test and review (4–11.5) → prepare the release
 (12–15) → verify frozen content (16) → push and publish (17–21).
 Every new invocation repeats Steps 1–16, including deterministic checks, tier-budgeted reviews and the docs audit.
+Deterministic tests/typecheck/build/gitleaks/redaction/verification/claim-check remain required when applicable.
 Steps 12, 17 and 19 prevent duplicate bumps, pushes and PRs, never verification.
 
 ### Keep state between steps
@@ -720,6 +721,14 @@ Otherwise continue to Step 4 directly.
 > **STOP.** Before running the test suites and (if prompt files changed) the eval suites (Steps 4-6), Read `~/.claude/skills/gstack/ship/sections/tests.md` and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.
 
+## Step 6.5: Plan the governed audits
+
+Before Steps 7–8 read their flags, run `gstack-diff-manifest <base>` and
+`gstack-review-budget plan "$MANIFEST_PATH" --cycle 0` from the installed bin directory.
+Carry RUN_ID, CYCLE, COVERAGE_AUDIT, PLAN_COMPLETION and REPAIR_CYCLES_MAX as literals.
+Step 9.1 refreshes this same run after audit writes; never mint a replacement run
+or reset the invocation's audit attempts or repair counts.
+
 > **STOP.** Before auditing test coverage of the diff (Step 7), Read `~/.claude/skills/gstack/ship/sections/test-coverage.md` and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.
 
@@ -737,16 +746,28 @@ Otherwise continue to Step 4 directly.
 
 ## Step 11.5: Bind the reviews
 
-1. **Select the two reviews.** Run `~/.claude/skills/gstack/bin/gstack-review-read`.
+1. **Select the review evidence.** Run `~/.claude/skills/gstack/bin/gstack-review-read`.
    Select this invocation's final Step 9.4 record (`skill:"review"`, `via:"ship"`)
-   and Step 11 native record (`skill:"adversarial-review"`). Match each to its saved
-   handle, original token and source; reject outside-provider or older invocation records.
-2. **Compare their content.** Require the native record's `review_binding.state`
-   to be `verified`. All three snapshots must match: its `wtree`, Step 9.4's
-   `review_binding.start_wtree` and `review_binding.end_wtree`. A mismatch or missing
-   record/field blocks release preparation: report **Review records missing or mismatched**
-   and insert `9 → 10 → 11 → 11.5` before Step 12. Bind the new records at 11.5.
-   Never attach new tokens to old work.
+   and its governor RUN_ID/CYCLE plan and ledger. Match the checklist to its saved
+   handle, original token and source; reject older invocation records.
+   Run `~/.claude/skills/gstack/bin/gstack-review-budget complete "$RUN_ID" --cycle <n> --require-audits`.
+   Require exit 0 and `COMPLETE=true`, with successful terminal verdicts for EVERY
+   planned reviewer, including `codex-structured` and any red-team slot, plus planned
+   Steps 7–8 audits. Missing, error or timeout verdicts block; no successful peer
+   substitutes. These governor records replace the native adversarial-review record;
+   do not launch a native adversarial pass or add a reviewer or budget.
+2. **Compare their content.** Require the governor evidence to be verified by
+   `COMPLETE=true` and its frozen reviewed snapshot. All three snapshots must match: the same RUN_ID/CYCLE plan's
+   `wtree`, Step 9.4's `review_binding.start_wtree` and `review_binding.end_wtree`.
+   Bind each completed verdict to that plan's reviewed tree and `head_sha`; compare
+   the actual tree captured after the last reviewer with that same snapshot.
+   Use the completed `codex-structured` verdict as adversarial evidence, or retain
+   the plan's explicit off-plan reason if it schedules no such slot. Never infer
+   an off-plan reason from missing output. Preserve `review_freshness` rules:
+   stale, missing or unverified evidence refuses, regardless of HEAD equality.
+   A mismatch or missing record/field blocks release preparation: report
+   **Review records missing or mismatched** and insert `9 → 10 → 11 → 11.5`
+   before Step 12. Bind the new records at 11.5. Never attach new tokens to old work.
 3. **Preserve any QA exception.** A named probe-risk exception may leave Step 9.4's
    root `wtree` absent; item 2 still compares its start/end snapshots. Matching content
    does not mean the failed or unrun probes passed. Keep Step 9.4's incomplete flags
@@ -987,7 +1008,7 @@ make evidence STALE even without a new code review. Use this example only after
 confirming that every allowed edit is release metadata:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
+~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,agents-digest/gstack-AGENTS.md --allow-version-only package.json
 ```
 
 | Receipt result | Next action |
@@ -995,6 +1016,24 @@ confirming that every allowed edit is release metadata:
 | FRESH (exit 0) | Cite the label, exit, timestamp and log. |
 | STALE/MISSING: changed content, command or age, or no proven run | Run `~/.claude/skills/gstack/bin/gstack-evidence run --label <lane> -- '<command>'`, read the result and recheck once. Handle failures as described below. |
 | Only receipt storage/readback failed | Independently prove unchanged final content, the same command and valid age from the successful run's evidence. Cite its exact command, exit, timestamp and log as **ledger unavailable**, never FRESH. Without that proof, use STALE/MISSING. |
+
+Include only lane labels actually run in Step 5; `vitest` is an example, not a required framework.
+Pass each `--expect-cmd` the exact command string the wrapped Step 5 lane ran —
+that binds FRESH to the real suite (a green `echo ok` recorded under the label
+can never satisfy the check). `package.json` is NOT blanket-exempt:
+`--allow-version-only` accepts it only when the tested content and the
+current content differ in the top-level `version` field alone (Step 12's
+bump); a dependency or script change invalidates the evidence and the lane
+re-runs. FRESH also requires the same node runtime the lane recorded
+(`toolchain`); the content fingerprint is the working tree itself, so a
+matching commit with a dirty tree never grades FRESH on its own.
+
+**Resumed runs reuse valid stages only through these records.** A /ship
+re-entered after a context handoff, a retry or a fresh session repeats no
+lane whose evidence grades FRESH, and Step 9.1's `gstack-review-budget resume`
+carries forward reviewer verdicts recorded against this exact content
+fingerprint, base, policy and plan. A plan review never substitutes for a
+code review; partial, failed or timed-out records are never reused.
 
 No test lanes: require Step 5's explicit untested-scope approval for final content,
 or run Steps 5–15, including the no-tests decision, then return to Step 16 stage 1.

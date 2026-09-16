@@ -575,7 +575,7 @@ do not launch the downstream skill or open a browser.`,
     maxSkeletonBytes: 70_000, // Phase-specific outside coverage, native fallback, and harness guard.
     minUnionBytes: 85_000, // measured union 86,926
     mustContain: ['6 Decision Principles', 'TASTE DECISION', 'USER CHALLENGE', 'consensus', 'Restore Point'],
-    maxSizeRatio: 1.12, // Four validated outside invocations replace raw CLI calls; phases keep independent coverage.
+    maxSizeRatio: 1.13, // 2026-09-15 harness pass: four routed voices (resolve + voice-row per phase) measured 1.126; four validated outside invocations replace raw CLI calls, phases keep independent coverage.
   },
   spec: {
     skill: 'spec',

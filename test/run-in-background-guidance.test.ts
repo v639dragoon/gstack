@@ -30,19 +30,20 @@ const reviewContext = (host: TemplateContext['host']): TemplateContext => ({
 const CEO_FOREGROUND_BRANCH = 'Set `run_in_background: false` if that field is available; omit it otherwise';
 
 describe('generated Codex plan-review shell invocation', () => {
-  const rendered = generateCodexPlanReview({ ...reviewContext('claude'),
-    paths: { ...HOST_PATHS.claude, binDir: path.join(ROOT, 'bin'), skillRoot: ROOT },
-  });
-  // B1: the heading also admits `unverified`; locate it structurally.
-  const ready = rendered.slice(rendered.search(/\*\*If `CODEX_MODE: ready`[^\n]*— run Codex:\*\*/),
-    rendered.indexOf('Present the full output verbatim:'));
-  const blocks = [...ready.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!);
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
 
   function fixture() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-codex-plan-shell-'));
     const bin = path.join(dir, 'bin');
     fs.mkdirSync(bin);
+    fs.mkdirSync(path.join(dir, 'lib'));
+    fs.writeFileSync(path.join(dir, 'lib/claude-bin.ts'), '// fixture runtime sentinel\n');
+    const rendered = generateCodexPlanReview({ ...reviewContext('claude'),
+      paths: { ...HOST_PATHS.claude, binDir: bin, skillRoot: ROOT },
+    });
+    const ready = rendered.slice(rendered.indexOf('**If `CODEX_MODE: ready` — run Codex:**'),
+      rendered.indexOf('Present the full output verbatim:'));
+    const blocks = [...ready.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!);
     const prompt = path.join(dir, 'review-prompt.txt');
     fs.writeFileSync(prompt, 'Review the current plan without edits.');
     const created = path.join(dir, 'created');
@@ -56,6 +57,9 @@ describe('generated Codex plan-review shell invocation', () => {
     fs.writeFileSync(stale, 'FOREIGN OLD REVIEW\n');
     fs.writeFileSync(staleError, 'FOREIGN OLD ERROR\n');
     const writeBin = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n' + body, { mode: 0o755 });
+    fs.copyFileSync(path.join(ROOT, 'bin/gstack-codex-probe'), path.join(bin, 'gstack-codex-probe'));
+    writeBin('gstack-codex-model', 'printf \"%s\\n\" \"CODEX_MODEL=fixture-model\" \"CODEX_MODEL_SOURCE=policy\" \"CODEX_EFFORT=medium\" \"CODEX_MODEL_EXEC_FLAGS=\"\n');
+    writeBin('gstack-voice-row', 'exit 0\n');
     writeBin('git', 'printf "%s\\n" "$FAKE_REPO"\n');
     writeBin('mktemp', `
 if [ "$FAKE_MKTEMP_FAIL" = 1 ]; then exit 42; fi
@@ -67,6 +71,9 @@ printf '%s\\n' "$p"
     // and writes its final message to -o (stdout carries --json events).
     writeBin('codex', `
 [ "$1" = sandbox ] && exit 0
+effort_ok=false
+for arg in "$@"; do [ "$arg" = 'model_reasoning_effort="medium"' ] && effort_ok=true; done
+[ "$effort_ok" = true ] || { echo 'bad effort argument' >&2; exit 81; }
 printf '%s\\n' "$FAKE_REVIEW_ID" >> "$FAKE_CALLS"
 out=; prev=; for a in "$@"; do [ "$prev" = -o ] && out=$a; prev=$a; done
 cat > /dev/null
@@ -88,7 +95,7 @@ exec ${quote(Bun.which('cat')!)} "$@"
         FAKE_CODEX_STATUS: String(code), FAKE_MKTEMP_FAIL: mktempFailure ? '1' : '0',
         FAKE_CAT_FAIL: catFailure ? '1' : '0', TMPDIR: dir, CODEX_HOME: dir, GSTACK_CODEX_MODEL: '',
         GSTACK_HOME: state, GSTACK_STATE_ROOT: '',
-        CODEX_THREAD_ID: '', CODEX_SANDBOX: '', CLAUDECODE: '1', GSTACK_ACTIVE_HOST: 'claude' };
+        CODEX_THREAD_ID: '', CODEX_SANDBOX: '', CLAUDECODE: '1', GSTACK_ACTIVE_HOST: 'claude', GSTACK_BIN: bin };
       // Each displayed block gets a fresh shell, as separate Bash tool calls do.
       return blocks.map(block => spawnSync('bash', ['-c', (errexit ? 'set -e\n' : '') + block.replace("'<prepared-prompt-file>'", quote(prompt))], {
         cwd: dir, env, encoding: 'utf8', timeout: 3_000,
@@ -258,8 +265,9 @@ describe('outside-voice dispatch contract', () => {
     const apply = rendered.indexOf('**4. Apply the answered row.**');
     expect(answer).toBeGreaterThan(0);
     expect(apply).toBeGreaterThan(answer);
-    // B1: the sandbox comes from _gstack_codex_select_model (read-only unless GSTACK_CODEX_NO_SANDBOX=1).
-    expect(rendered).toContain(`-s "\${_GSTACK_CODEX_SANDBOX:?}" ${CODEX_MODEL_CONFIG_FLAG} -c 'model_reasoning_effort="high"'`);
+    expect(rendered).toContain("resolve --voice 'plan-review' --effort medium");
+    expect(rendered).toContain('-s "${_GSTACK_CODEX_SANDBOX:?}"');
+    expect(rendered).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
   });
 
   test('the generated-carrier exception rejects missing wait, cancellation or result guards', () => {
