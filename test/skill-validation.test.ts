@@ -976,7 +976,9 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     test(`${skill} contains Completeness Principle section`, () => {
       const content = fs.readFileSync(path.join(ROOT, skill), 'utf-8');
       expect(content).toContain('Completeness Principle');
-      expect(content).toContain('Boil the Ocean');
+      // Fork (harness pass 2026-09-15): the default preamble is Bounded
+      // Completion; the gpt-5.6-sol overlay keeps its scoped Boil-the-Ocean text.
+      expect(content).toMatch(/Bounded Completion|Boil the Ocean/);
     });
   }
 
@@ -984,7 +986,7 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     // CSO is intentionally exempt; use a regular tier 2+ PREAMBLE consumer.
     const content = fs.readFileSync(path.join(ROOT, 'review', 'SKILL.md'), 'utf-8');
     expect(content).toContain('Completeness: X/10');
-    expect(content).toContain('10 = all edge cases');
+    expect(content).toContain('10 = every material in-scope case');
     expect(content).toContain('Note: options differ in kind, not coverage');
     expect(content).toContain('Do not fabricate scores');
   });
@@ -1362,7 +1364,7 @@ describe('ship step numbering', () => {
   // Drift), 9.1 (Review Army), 9.2 (Findings Merge), 9.3 (Cross-review dedup),
   // 9.4 (Fix-First and persistence), 15.0 (WIP context), 15.1 (Bisectable commits),
   // 15.2 (safe optional WIP consolidation).
-  const ALLOWED_SUBSTEPS = new Set(['0.9', '8.1', '8.2', '9.1', '9.2', '9.3', '9.4', '11.5', '14.5', '15.0', '15.1', '15.2']);
+  const ALLOWED_SUBSTEPS = new Set(['0.9', '6.5', '8.1', '8.2', '9.1', '9.2', '9.3', '9.4', '11.5', '14.5', '15.0', '15.1', '15.2']);
 
   test('ship/SKILL.md.tmpl contains no unexpected fractional step numbers', () => {
     const tmpl = fs.readFileSync(path.join(ROOT, 'ship', 'SKILL.md.tmpl'), 'utf-8');
@@ -1392,6 +1394,7 @@ describe('ship step numbering', () => {
     const unexpected = fractional.filter((n) => !ALLOWED_SUBSTEPS.has(n));
     expect(unexpected).toEqual([]);
     expect(headings.filter((n) => n === '11.5')).toHaveLength(1);
+    expect(headings.filter((n) => n === '6.5')).toHaveLength(1); // Governor flags exist before Steps 7–8.
   });
 
   test('review/SKILL.md step numbers unchanged (regression guard for resolver conditionals)', () => {

@@ -270,11 +270,11 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 Curated jargon list lives at `$GSTACK_ROOT/scripts/jargon-list.json` (80+ terms). On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
 
-## Completeness Principle — Boil the Ocean
+## Completeness Principle — Bounded Completion
 
-AI makes completeness cheap, so the complete thing is the goal. Recommend full coverage (tests, edge cases, error paths) — boil the ocean one lake at a time. The only thing out of scope is genuinely unrelated work (rewrites, multi-quarter migrations); flag that as separate scope, never as an excuse for a shortcut.
+Completion is bounded by the accepted behavior, not by what is cheap to add: implement it, cover the material failure cases, resolve blockers, finish. No unrelated cleanup, speculative tests, whole-file rewrites or repeated status reports; separate work (rewrites, long migrations) is its own scope, never a shortcut excuse.
 
-When options differ in coverage, include `Completeness: X/10` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores.
+When options differ in coverage, include `Completeness: X/10` (10 = every material in-scope case, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores or widen scope to raise one.
 
 ## Confusion Protocol
 
@@ -444,6 +444,7 @@ tests without another permission question. Step 15 commits those tests.
 **Route:** integrate (1–3) → test and review (4–11.5) → prepare the release
 (12–15) → verify frozen content (16) → push and publish (17–21).
 Every new invocation repeats Steps 1–16, including deterministic checks, tier-budgeted reviews and the docs audit.
+Deterministic tests/typecheck/build/gitleaks/redaction/verification/claim-check remain required when applicable.
 Steps 12, 17 and 19 prevent duplicate bumps, pushes and PRs, never verification.
 
 ### Keep state between steps
@@ -1111,6 +1112,14 @@ satisfy coverage.
 
 ---
 
+## Step 6.5: Plan the governed audits
+
+Before Steps 7–8 read their flags, run `gstack-diff-manifest <base>` and
+`gstack-review-budget plan "$MANIFEST_PATH" --cycle 0` from the installed bin directory.
+Carry RUN_ID, CYCLE, COVERAGE_AUDIT, PLAN_COMPLETION and REPAIR_CYCLES_MAX as literals.
+Step 9.1 refreshes this same run after audit writes; never mint a replacement run
+or reset the invocation's audit attempts or repair counts.
+
 ## Step 7: Test Coverage Audit
 
 Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
@@ -1439,6 +1448,19 @@ After your analysis, output a single JSON object on the LAST LINE of your respon
 `coverage_pct` is Y (paths with any test), `coverage_pct_value` is X (paths with a ★★/★★★ test), `gaps` counts only paths with no test. Use null for an undetermined or skipped coverage percentage, not zero. Include every remaining gap in the diagram so the parent can target a second pass.
 ````
 
+**Record the pass before anything else** (every AI pass in a ship run leaves a budget verdict and a gate row; a missing row is missing coverage, never a clean pass):
+
+```bash
+$GSTACK_ROOT/bin/gstack-review-budget verdict "$RUN_ID" coverage-audit <clean|issues_found|error|timeout> --cycle <n>
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"coverage-audit","purpose":"test coverage audit","trigger":"review-plan","model":"sonnet","effort":"agent-default","effort_source":"routed","budget":1,"retry":"inline-fallback","status":"{completed|unavailable}","verdict":"{clean|issues_found|error|timeout}","elapsed_s":{N},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+```
+
+`clean` = no gaps or every item done; `issues_found` = the audit returned
+findings the parent now applies; `error`/`timeout` = the subagent failed and
+the inline fallback ran (record the fallback's own result as a second verdict
+after the same cycle-scoped dispatch). Step 9.2's completion check owes this
+verdict (`--require-audits`).
+
 **Parent processing:**
 
 1. Read the subagent's final output. Parse the LAST line as JSON.
@@ -1699,6 +1721,19 @@ After your analysis, output a single JSON object with exactly these seven fields
 {"total_items":N,"done":N,"changed":N,"partial":N,"not_done":N,"unverifiable":N,"summary":"<markdown checklist for PR body>"}
 Counts map one-to-one to the classifications above and sum to total_items. No plan or no actionable items means all counts are zero with the skip reason in summary. Do not classify work as deferred; only the parent can record a user-approved deferral.
 ````
+
+**Record the pass before anything else** (every AI pass in a ship run leaves a budget verdict and a gate row; a missing row is missing coverage, never a clean pass):
+
+```bash
+$GSTACK_ROOT/bin/gstack-review-budget verdict "$RUN_ID" plan-completion <clean|issues_found|error|timeout> --cycle <n>
+$GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"plan-completion","purpose":"plan completion audit","trigger":"review-plan","model":"sonnet","effort":"agent-default","effort_source":"routed","budget":1,"retry":"inline-fallback","status":"{completed|unavailable}","verdict":"{clean|issues_found|error|timeout}","elapsed_s":{N},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+```
+
+`clean` = no gaps or every item done; `issues_found` = the audit returned
+findings the parent now applies; `error`/`timeout` = the subagent failed and
+the inline fallback ran (record the fallback's own result as a second verdict
+after the same cycle-scoped dispatch). Step 9.2's completion check owes this
+verdict (`--require-audits`).
 
 **Parent processing:**
 
@@ -2068,18 +2103,23 @@ _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
 cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 
 source "$GSTACK_BIN/gstack-codex-probe" || exit 1
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'design-review' --effort medium)" || exit 1
+_OUTSIDE_T0=$(date +%s)
 _OUTSIDE_PROMPT=$(cat "$_OUTSIDE_INPUT") || exit 1
 _OUTSIDE_EXIT=0
-_gstack_codex_timeout_wrapper 300 codex exec "$_OUTSIDE_PROMPT" -C "$_REPO_ROOT" -s read-only -c "model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" -c 'model_reasoning_effort="high"' -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+_gstack_codex_timeout_wrapper 300 codex exec "$_OUTSIDE_PROMPT" -C "$_REPO_ROOT" -s read-only $CODEX_MODEL_EXEC_FLAGS -c "model_reasoning_effort=\"$CODEX_EFFORT\"" -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 # Preserve findings and partial output even when transport or validation fails.
 cat "$_OUTSIDE_TMP/text" || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+_row() { "$GSTACK_BIN/gstack-voice-row" 'ship' 'design-review' "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 if [ "$_OUTSIDE_EXIT" -ne 0 ]; then
+  _row unavailable
   echo 'Codex outside review unavailable: execution failed; missing coverage. Check the provider diagnosis above.' >&2
   exit "$_OUTSIDE_EXIT"
 fi
-bun "$GSTACK_ROOT/lib/outside-review-result.ts" review "$_OUTSIDE_TMP/text" || exit 1
+if ! bun "$GSTACK_ROOT/lib/outside-review-result.ts" review "$_OUTSIDE_TMP/text"; then _row unavailable; exit 1; fi
+_row completed
 
 echo 'OUTSIDE_STATUS: completed provider=codex host=factory'
 ```
@@ -2109,18 +2149,32 @@ distinct defects stay separate and neither pass substitutes for the other.
 
 ## Step 9.1: Review governor — manifest, plan, packet
 
-Create one manifest, deterministic reviewer plan, and shared packet:
+Reuse RUN_ID from Step 6.5. After Steps 7–8 finish their writes, refresh
+that run's manifest and plan, preserving its audit verdicts and attempt counts.
+Then build the shared packet from the final reviewed content:
 
 ```bash
-$GSTACK_BIN/gstack-diff-manifest <base>
+$GSTACK_BIN/gstack-diff-manifest <base> "$RUN_ID"
 $GSTACK_BIN/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+$GSTACK_BIN/gstack-review-budget resume "$RUN_ID"
 $GSTACK_BIN/gstack-review-packet "$RUN_ID" <base>
 ```
 
 Carry these printed values as literals for the rest of the invocation:
-`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `REPAIR_CYCLES_MAX`,
+`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `PASSES`, `REPAIR_CYCLES_MAX`,
 `COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
-`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, and `CI_GREEN`.
+`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, `CI_GREEN`, `REUSED` and `RERUN`.
+
+`PASSES` is the whole-workflow accounting for this run: every AI pass it may
+dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
+voice) with its model and effort; a pass absent from it never runs. `resume`
+carries forward the terminal verdicts of a PRIOR run whose content
+fingerprint, base, policy, tier, reviewer list and slice kind all equal this
+plan's (a matching commit with a dirty tree never qualifies): print
+`Reused from {RESUME_SOURCE}: {REUSED}` when non-empty, do not dispatch a gate
+listed in `REUSED` (its dispatch would be refused as duplicate-slot), and
+dispatch only `RERUN`. Only clean and issues_found verdicts are reusable;
+error, timeout and missing verdicts are never carried.
 Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
 `OUTCOME_MISSING`, `MAX_ADVISORIES`, `AUTOFIX_INFORMATIONAL`,
 `BLOCKING_SEVERITIES`, and `BLOCKING_CATEGORIES`.
@@ -2147,8 +2201,33 @@ $GSTACK_BIN/gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>
 ```
 
 On exit 2, print the command's line and do NOT dispatch. Every allowed Agent
-call has `subagent_type: "general-purpose"`, `model: "sonnet"` (the
-`@sonnet` reviewer suffix), and `run_in_background: false`.
+call has `subagent_type: "general-purpose"` and `model: "sonnet"` (the
+`@sonnet` reviewer suffix).
+
+### Frozen snapshot, concurrent reviewers
+
+The planned reviewers are independent read-only passes over ONE frozen
+snapshot: the packet, the diff file and the working tree as fingerprinted by
+`MANIFEST_WTREE`. Every mutation that feeds review (generated tests, fixes,
+the Step 7/8 audits) completes BEFORE the snapshot; Step 14.5 follows review
+and its later doc writes are checked by Step 16 against the reviewed tree; from the first dispatch until
+the last verdict is recorded the parent makes no edit, no commit and starts
+no write-capable worker, so the one write owner of this worktree is idle
+while reviewers read it. Dispatch every gate in `RERUN` in ONE message:
+first the `codex-structured` slot, if planned, as the Step 11 block run in a
+single Bash call with `run_in_background: true` (its output goes to a file);
+then each specialist or red-team Agent call with `run_in_background: true`,
+except the LAST Agent call of the batch, which carries
+`run_in_background: false` so this turn blocks on it while the others already
+run. With exactly one Agent-dispatched reviewer that one call is foreground.
+Then WAIT for the remaining completion notifications: never poll with
+status commands, never re-read a running reviewer's transcript. Timeouts
+(540s for Codex, ~10 minutes for an Agent) and incomplete results keep their
+existing handling; a reviewer that never returns is missing coverage. When
+every planned reviewer has returned, confirm the snapshot held
+(`$GSTACK_BIN/gstack-wtree` still prints `MANIFEST_WTREE`); if it
+moved, the verdicts were taken against a superseded tree and `rerun-check`
+governs what re-dispatches.
 
 Each specialist prompt starts exactly with:
 
@@ -2162,8 +2241,10 @@ Use the closed `BLOCKING_CATEGORIES` vocabulary whenever it applies; other
 specific category strings remain advisory unless the plan lists them.
 If clean, output `NO FINDINGS` only.
 
-After every specialist or red-team reviewer returns, record its terminal
-result before doing anything else:
+As each specialist or red-team reviewer returns, record its terminal
+result before doing anything else, then a gate row (`gstack-gate-log` with
+`model:"sonnet"`, `effort:"agent-default"`, `effort_source:"routed"`,
+`purpose`, `budget:1`, `retry:"once-on-error-or-timeout"` and the verdict):
 
 ```bash
 $GSTACK_BIN/gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
@@ -2187,8 +2268,12 @@ Before finalizing this merge, after every planned reviewer (including the
 `codex-structured` slot routed in the adversarial step) has returned, run:
 
 ```bash
-$GSTACK_BIN/gstack-review-budget complete "$RUN_ID" --cycle <n>
+$GSTACK_BIN/gstack-review-budget complete "$RUN_ID" --cycle <n> --require-audits
 ```
+
+`--require-audits` also owes the coverage-audit and plan-completion verdicts
+recorded in Steps 7 and 8 when the plan scheduled them.
+
 
 On exit 2, print its `INCOMPLETE=` line and **STOP with a blocker report**.
 Do not log the review clean and do not continue shipping: a missing, failed,
@@ -2506,6 +2591,11 @@ Do not run the Claude adversarial subagent or a free-form `codex exec`
 challenge. Semantic adversarial review exists only when
 `codex-structured@medium` or `codex-structured@high` is in `REVIEWERS`.
 
+This block is normally LAUNCHED from Step 9.1 as one background Bash
+call, concurrently with the specialist reviewers, against the same frozen
+snapshot; run it here only if it was not launched there (no other reviewer
+was planned) and skip it entirely when `codex-structured` is in `REUSED`.
+
 Before the structured review, run the shared Codex preflight. Nested Codex
 sessions must refuse another Codex spawn unless the explicit override is set:
 
@@ -2615,14 +2705,16 @@ _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo"
 cd "$_REPO_ROOT"
 source $GSTACK_ROOT/bin/gstack-codex-probe 2>/dev/null || true
 _CODEX_T0=$(date +%s)
-_gstack_codex_timeout_wrapper 540 codex review --base <base> -c "model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" -c "review_model=\"${GSTACK_CODEX_MODEL:-gpt-6-astra}\"" {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
+_gstack_codex_timeout_wrapper 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
 _CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 ```
 
 Either way the cap stays 540s. The effort is `medium` for tiers A/B/C and
 `high` for tier D. The model is the one `gstack-codex-model` resolved:
 `{CODEX_MODEL_EXEC_FLAGS}` / `{CODEX_MODEL_REVIEW_FLAGS}` are empty on the
-default route (the rendered frontier default then applies) and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed one, appended AFTER the default so the routed model wins
+default route (the project's own Codex config then decides; no frontier
+model is rendered here, so an unrouted tier never inherits a premium model)
+and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed one
 (`codex review` rejects `-m`). No prompt argument is allowed with
 `--base` (the read-only form takes the prompt because it uses
 `codex exec`). Read stderr before cleanup; keep the printed
@@ -2707,16 +2799,28 @@ one sentence. If none applies, continue without a reference.
 
 ## Step 11.5: Bind the reviews
 
-1. **Select the two reviews.** Run `$GSTACK_ROOT/bin/gstack-review-read`.
+1. **Select the review evidence.** Run `$GSTACK_ROOT/bin/gstack-review-read`.
    Select this invocation's final Step 9.4 record (`skill:"review"`, `via:"ship"`)
-   and Step 11 native record (`skill:"adversarial-review"`). Match each to its saved
-   handle, original token and source; reject outside-provider or older invocation records.
-2. **Compare their content.** Require the native record's `review_binding.state`
-   to be `verified`. All three snapshots must match: its `wtree`, Step 9.4's
-   `review_binding.start_wtree` and `review_binding.end_wtree`. A mismatch or missing
-   record/field blocks release preparation: report **Review records missing or mismatched**
-   and insert `9 → 10 → 11 → 11.5` before Step 12. Bind the new records at 11.5.
-   Never attach new tokens to old work.
+   and its governor RUN_ID/CYCLE plan and ledger. Match the checklist to its saved
+   handle, original token and source; reject older invocation records.
+   Run `$GSTACK_ROOT/bin/gstack-review-budget complete "$RUN_ID" --cycle <n> --require-audits`.
+   Require exit 0 and `COMPLETE=true`, with successful terminal verdicts for EVERY
+   planned reviewer, including `codex-structured` and any red-team slot, plus planned
+   Steps 7–8 audits. Missing, error or timeout verdicts block; no successful peer
+   substitutes. These governor records replace the native adversarial-review record;
+   do not launch a native adversarial pass or add a reviewer or budget.
+2. **Compare their content.** Require the governor evidence to be verified by
+   `COMPLETE=true` and its frozen reviewed snapshot. All three snapshots must match: the same RUN_ID/CYCLE plan's
+   `wtree`, Step 9.4's `review_binding.start_wtree` and `review_binding.end_wtree`.
+   Bind each completed verdict to that plan's reviewed tree and `head_sha`; compare
+   the actual tree captured after the last reviewer with that same snapshot.
+   Use the completed `codex-structured` verdict as adversarial evidence, or retain
+   the plan's explicit off-plan reason if it schedules no such slot. Never infer
+   an off-plan reason from missing output. Preserve `review_freshness` rules:
+   stale, missing or unverified evidence refuses, regardless of HEAD equality.
+   A mismatch or missing record/field blocks release preparation: report
+   **Review records missing or mismatched** and insert `9 → 10 → 11 → 11.5`
+   before Step 12. Bind the new records at 11.5. Never attach new tokens to old work.
 3. **Preserve any QA exception.** A named probe-risk exception may leave Step 9.4's
    root `wtree` absent; item 2 still compares its start/end snapshots. Matching content
    does not mean the failed or unrun probes passed. Keep Step 9.4's incomplete flags
@@ -2913,7 +3017,7 @@ Reentry never resets the count or authorizes a launch.
 
 Before dispatch, run `$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
 On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
-D1: the documentation audit remains required on every ship, independent of slice metadata.
+The documentation audit is required on every ship, independent of slice metadata.
 
 
 **Dispatch /document-release as a subagent** with the Agent tool (never Skill),
@@ -2975,7 +3079,10 @@ Before each launch or inline takeover, generate/reuse this run's diff manifest
 Carry RUN_ID, MANIFEST_WTREE and its doc-impact shadow, or null when unavailable.
 Record the launch timestamp and the incremented 1-based attempt from the budget above.
 After parent validation, and on every failed launch, invalid output or blocked recovery,
-write ONE gate record per attempted audit before retry/stop. Reentry reuse writes no
+record the terminal governor verdict (`gstack-review-budget verdict "$RUN_ID" doc-release
+<clean|issues_found|error> --cycle <n>`) and write ONE gate record per attempted audit
+before retry/stop. Both records are best-effort; the upstream audit and named-risk
+recovery remain the documentation authority. Reentry reuse writes no
 new attempt record. Never trust returned fields until validation; use actual paths
 and null for unavailable output. Telemetry failure never changes the audit gate.
 
@@ -3125,7 +3232,7 @@ make evidence STALE even without a new code review. Use this example only after
 confirming that every allowed edit is release metadata:
 
 ```bash
-$GSTACK_ROOT/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
+$GSTACK_ROOT/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,agents-digest/gstack-AGENTS.md --allow-version-only package.json
 ```
 
 | Receipt result | Next action |
@@ -3133,6 +3240,24 @@ $GSTACK_ROOT/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --la
 | FRESH (exit 0) | Cite the label, exit, timestamp and log. |
 | STALE/MISSING: changed content, command or age, or no proven run | Run `$GSTACK_ROOT/bin/gstack-evidence run --label <lane> -- '<command>'`, read the result and recheck once. Handle failures as described below. |
 | Only receipt storage/readback failed | Independently prove unchanged final content, the same command and valid age from the successful run's evidence. Cite its exact command, exit, timestamp and log as **ledger unavailable**, never FRESH. Without that proof, use STALE/MISSING. |
+
+Include only lane labels actually run in Step 5; `vitest` is an example, not a required framework.
+Pass each `--expect-cmd` the exact command string the wrapped Step 5 lane ran —
+that binds FRESH to the real suite (a green `echo ok` recorded under the label
+can never satisfy the check). `package.json` is NOT blanket-exempt:
+`--allow-version-only` accepts it only when the tested content and the
+current content differ in the top-level `version` field alone (Step 12's
+bump); a dependency or script change invalidates the evidence and the lane
+re-runs. FRESH also requires the same node runtime the lane recorded
+(`toolchain`); the content fingerprint is the working tree itself, so a
+matching commit with a dirty tree never grades FRESH on its own.
+
+**Resumed runs reuse valid stages only through these records.** A /ship
+re-entered after a context handoff, a retry or a fresh session repeats no
+lane whose evidence grades FRESH, and Step 9.1's `gstack-review-budget resume`
+carries forward reviewer verdicts recorded against this exact content
+fingerprint, base, policy and plan. A plan review never substitutes for a
+code review; partial, failed or timed-out records are never reused.
 
 No test lanes: require Step 5's explicit untested-scope approval for final content,
 or run Steps 5–15, including the no-tests decision, then return to Step 16 stage 1.
