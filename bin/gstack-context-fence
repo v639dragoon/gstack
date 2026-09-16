@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# gstack-context-fence — Claude Code PreToolUse hook: past the context handoff
+# threshold, refuse a NEW expensive dispatch until a checkpoint exists.
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}" bun "$SCRIPT_DIR/gstack-context-fence.ts"
+exit 0

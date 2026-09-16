@@ -52,7 +52,7 @@ gbrain:
 
 ## Shared preamble (load first)
 
-This skill follows gstack shared preamble `bddb4b7ad57b` (AskUserQuestion format, voice, writing, completeness and completion rules). A section or subsection here with a shared heading replaces the shared one. Unless the next line loaded that file: if your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `~/.claude/skills/gstack/plan-ceo-review/sections/preamble.md` in full before the command below.
+This skill follows gstack shared preamble `6e5a2408473f` (AskUserQuestion format, voice, writing, completeness and completion rules). A section or subsection here with a shared heading replaces the shared one. Unless the next line loaded that file: if your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `~/.claude/skills/gstack/plan-ceo-review/sections/preamble.md` in full before the command below.
 
 !`~/.claude/skills/gstack/bin/gstack-skill-load preamble ~/.claude/skills/gstack/plan-ceo-review/sections/preamble.md`
 
