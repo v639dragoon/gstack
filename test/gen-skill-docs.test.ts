@@ -1751,9 +1751,11 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
     const consultContent = fs.readFileSync(path.join(ROOT, 'design-consultation', 'SKILL.md'), 'utf-8');
     // plan-design-review is a plan-stage voice: routed to medium (Phase 0
     // effort routing — only the live design-review audit keeps high)
-    expect(planContent).toContain('model_reasoning_effort="medium"');
+    // Harness pass 2026-09-15: every design voice is routed through
+    // gstack-codex-model at medium; the policy may name a model per voice.
+    expect(planContent).toContain(`gstack-codex-model" resolve --voice 'plan-review' --effort medium`);
     // design-consultation uses creative prompt (medium reasoning)
-    expect(consultContent).toContain('model_reasoning_effort="medium"');
+    expect(consultContent).toContain(`gstack-codex-model" resolve --voice 'design-direction' --effort medium`);
   });
 });
 

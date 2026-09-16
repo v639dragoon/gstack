@@ -230,6 +230,19 @@ After your analysis, output a single JSON object on the LAST LINE of your respon
 Use null for an undetermined or skipped coverage percentage, not zero. Include every remaining gap in the diagram so the parent can target a second pass.
 ````
 
+**Record the pass before anything else** (every AI pass in a ship run leaves a budget verdict and a gate row; a missing row is missing coverage, never a clean pass):
+
+```bash
+~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" coverage-audit <clean|issues_found|error|timeout> --cycle <n>
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"coverage-audit","purpose":"test coverage audit","trigger":"review-plan","model":"sonnet","effort":"agent-default","effort_source":"routed","budget":1,"retry":"inline-fallback","status":"{completed|unavailable}","verdict":"{clean|issues_found|error|timeout}","elapsed_s":{N},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+```
+
+`clean` = no gaps or every item done; `issues_found` = the audit returned
+findings the parent now applies; `error`/`timeout` = the subagent failed and
+the inline fallback ran (record the fallback's own result as a second verdict
+after the same cycle-scoped dispatch). Step 9.2's completion check owes this
+verdict (`--require-audits`).
+
 **Parent processing:**
 
 1. Read the subagent's final output. Parse the LAST line as JSON.

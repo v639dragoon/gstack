@@ -2,7 +2,7 @@
  * Callers own prompts, opt-in rules, timeouts, gates, and native fallbacks.
  */
 import { toShellPath, type TemplateContext } from './types';
-import { CODEX_MODEL_CONFIG_FLAG, CODEX_REVIEW_MODEL_CONFIG_FLAG, CODEX_WEB_SEARCH_FLAG, codexPreflight } from './constants';
+import { CODEX_WEB_SEARCH_FLAG, codexPreflight } from './constants';
 import { getHostConfig } from '../../hosts';
 
 export function outsideVoiceFor(ctx: Pick<TemplateContext, 'host'>) {
@@ -102,9 +102,15 @@ export interface OutsideCommandOptions {
   /** Trusted, caller-owned git command preserving that workflow's original scope. */
   diffCommand?: string;
   gate?: 'review' | 'structured' | 'spec';
-  reasoningEffort?: 'high' | 'medium';
+  /** Effort the voice is routed at when the policy names none. Defaults to
+   * MEDIUM: an omitted effort never falls to a premium level. */
+  reasoningEffort?: 'high' | 'medium' | 'low';
   /** Creative proposals retain the recommendation gate with task-specific wording. */
   purpose?: 'design-direction';
+  /** Routing key for gstack-codex-model resolve --voice (policy
+   * routing.models["outside-voice"][voice]) and the gate-log record. Every
+   * caller names one; the default is a generic 'outside-review'. */
+  voice?: string;
 }
 
 /** One self-contained shell body. No shell functions/variables survive between blocks. */
@@ -113,16 +119,27 @@ export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOp
   const bin = toShellPath(ctx.paths.binDir);
   const root = toShellPath(ctx.paths.skillRoot);
   const prompt = sh(opts.promptFile ?? '<prepared-prompt-file>');
+  const voice = opts.voice ?? 'outside-review';
+  const effort = opts.reasoningEffort ?? 'medium';
+  // Model and effort are ROUTED, never inherited: gstack-codex-model resolves
+  // the voice against the repo policy (routing.models["outside-voice"]), then
+  // GSTACK_CODEX_MODEL, then the project's own Codex default. The rendered
+  // frontier constant is deliberately absent here so no voice runs a premium
+  // model by omission (dohma harness pass, 2026-09-15).
   const codex = opts.structuredBase
-    ? `codex review --base ${sh(opts.structuredBase)} ${CODEX_REVIEW_MODEL_CONFIG_FLAG} -c 'model_reasoning_effort="${opts.reasoningEffort ?? 'high'}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
-    : `codex exec "$(cat "$_OUTSIDE_INPUT")" -C "$_REPO_ROOT" -s read-only ${CODEX_MODEL_CONFIG_FLAG} -c 'model_reasoning_effort="${opts.reasoningEffort ?? 'high'}"' ${CODEX_WEB_SEARCH_FLAG} < /dev/null`;
+    ? `codex review --base ${sh(opts.structuredBase)} $CODEX_MODEL_REVIEW_FLAGS -c "model_reasoning_effort=\\"$CODEX_EFFORT\\"" ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
+    : `codex exec "$(cat "$_OUTSIDE_INPUT")" -C "$_REPO_ROOT" -s read-only $CODEX_MODEL_EXEC_FLAGS -c "model_reasoning_effort=\\"$CODEX_EFFORT\\"" ${CODEX_WEB_SEARCH_FLAG} < /dev/null`;
   const invocation = v.id === 'codex'
     ? `source "${bin}/gstack-codex-probe" || exit 1
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort})" || exit 1
+_OUTSIDE_T0=$(date +%s)
 _gstack_codex_timeout_wrapper ${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr"
 _OUTSIDE_EXIT=$?
 # Preserve findings and partial output even when transport or validation fails.
 cat "$_OUTSIDE_TMP/text"`
-    : `"${bin}/gstack-claude-code" --cwd "$_REPO_ROOT" --access ${opts.access ?? 'none'} --timeout-ms ${opts.timeoutMs} <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/result.json" 2>"$_OUTSIDE_TMP/stderr"
+    : `CODEX_MODEL=claude-code; CODEX_MODEL_SOURCE=harness; CODEX_EFFORT=${effort}
+_OUTSIDE_T0=$(date +%s)
+"${bin}/gstack-claude-code" --cwd "$_REPO_ROOT" --access ${opts.access ?? 'none'} --timeout-ms ${opts.timeoutMs} <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/result.json" 2>"$_OUTSIDE_TMP/stderr"
 _OUTSIDE_EXIT=$?
 # Preserve session/usage/modelUsage from this JSON; multiple models have no invented primary.
 cat "$_OUTSIDE_TMP/result.json"
@@ -145,11 +162,14 @@ ${v.id === 'codex' && ctx.skillName === 'autoplan' ? `if [ "$_OUTSIDE_EXIT" -eq 
   _gstack_codex_log_hang "autoplan" "0"
 fi` : ''}
 cat "$_OUTSIDE_TMP/stderr" >&2
+_row() { "$GSTACK_BIN/gstack-voice-row" '${ctx.skillName}' ${sh(voice)} "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 if [ "$_OUTSIDE_EXIT" -ne 0 ]; then
+  _row unavailable
   echo '${v.label} outside review unavailable: execution failed; missing coverage. Check the provider diagnosis above.' >&2
   exit "$_OUTSIDE_EXIT"
 fi
-bun "${root}/lib/outside-review-result.ts" ${opts.gate ?? 'review'} "$_OUTSIDE_TMP/text" || exit 1
+if ! bun "${root}/lib/outside-review-result.ts" ${opts.gate ?? 'review'} "$_OUTSIDE_TMP/text"; then _row unavailable; exit 1; fi
+_row completed
 ${v.id === 'claude-code' ? 'cat "$_OUTSIDE_TMP/text"' : ''}
 echo 'OUTSIDE_STATUS: completed provider=${v.id} host=${ctx.host}'`;
 }

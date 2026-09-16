@@ -80,7 +80,13 @@ describe('effort routing (Phase 0)', () => {
       const content = read(site);
       // v1.86+ renders the outside voice through outsideVoiceInvocation: the one
       // command line reads its prompt from $_OUTSIDE_INPUT (TMPERR_PV is gone).
-      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort="medium"');
+      // Harness pass 2026-09-15: the voice is ROUTED. The resolve line pins the
+      // default effort and the command consumes the resolved value, so the
+      // policy may lower or raise it but never past high (resolver refuses).
+      expect(content).toContain(`gstack-codex-model" resolve --voice 'plan-review' --effort medium`);
+      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
+      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('$CODEX_MODEL_EXEC_FLAGS');
+      expect(content).toContain(`gstack-voice-row" '${site.split('/')[0]}' 'plan-review' "$1"`);
       const row = rowLine(content, 'codex-plan-review');
       expect(row).toContain('"effort":"medium"');
       expect(row).toContain('"effort_source":"routed"');
@@ -89,7 +95,9 @@ describe('effort routing (Phase 0)', () => {
 
   test('document-release: the codex doc voice is routed to medium and records it', () => {
     const content = read('document-release/sections/release-body.md');
-    expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort="medium"');
+    expect(content).toContain(`gstack-codex-model" resolve --voice 'doc-release' --effort medium`);
+    expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
+    expect(content).toContain(`gstack-voice-row" 'document-release' 'doc-release' "$1"`);
     const row = rowLine(content, 'codex-doc-review');
     expect(row).toContain('"effort":"medium"');
     expect(row).toContain('"effort_source":"routed"');

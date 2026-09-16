@@ -14,7 +14,7 @@
  */
 import { toShellPath, type TemplateContext } from './types';
 import { generateInvokeSkill } from './composition';
-import { CC_BACKGROUND_DEFAULT_SINCE, CODEX_REVIEW_MODEL_CONFIG_FLAG } from './constants';
+import { CC_BACKGROUND_DEFAULT_SINCE } from './constants';
 import { outsideVoiceFor, outsideVoiceInvocation, outsideVoicePreflight, outsideVoiceProvenance, outsideVoiceRuntime } from './outside-voice';
 import { DESIGN_DOC_DISCOVERY_BLOCK } from './design-doc-discovery';
 import { getHostConfig } from '../../hosts/index';
@@ -383,7 +383,7 @@ Then add the context block and mode-appropriate instructions:
 
 3. Run ${outsideVoiceFor(ctx).label} with the assembled prompt:
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000 })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', voice: 'second-opinion' })}
 
 **Error handling:** All errors are non-blocking — second opinion is a quality enhancement, not a prerequisite.
 - **Auth failure:** If stderr contains "auth", "login", "unauthorized", or "API key": "${outsideVoiceFor(ctx).label} authentication failed. Run \\\`${outsideVoiceFor(ctx).id === 'codex' ? 'codex login' : 'claude auth login'}\\\` to authenticate." Fall back to ${outsideVoiceFor(ctx).nativeLabel} subagent.
@@ -492,6 +492,11 @@ Do not run the Claude adversarial subagent or a free-form \`codex exec\`
 challenge. Semantic adversarial review exists only when
 \`codex-structured@medium\` or \`codex-structured@high\` is in \`REVIEWERS\`.
 
+This block is normally LAUNCHED from Step ${ctx.skillName === 'ship' ? '9.1' : '4.5'} as one background Bash
+call, concurrently with the specialist reviewers, against the same frozen
+snapshot; run it here only if it was not launched there (no other reviewer
+was planned) and skip it entirely when \`codex-structured\` is in \`REUSED\`.
+
 Before the structured review, run the shared Codex preflight. Nested Codex
 sessions must refuse another Codex spawn unless the explicit override is set:
 
@@ -553,14 +558,16 @@ _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo"
 cd "$_REPO_ROOT"
 source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
 _CODEX_T0=$(date +%s)
-_gstack_codex_timeout_wrapper 540 codex review --base <base> ${CODEX_REVIEW_MODEL_CONFIG_FLAG} {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' \${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
+_gstack_codex_timeout_wrapper 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' \${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
 _CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 \`\`\`
 
 Either way the cap stays 540s. The effort is \`medium\` for tiers A/B/C and
 \`high\` for tier D. The model is the one \`gstack-codex-model\` resolved:
 \`{CODEX_MODEL_EXEC_FLAGS}\` / \`{CODEX_MODEL_REVIEW_FLAGS}\` are empty on the
-default route (the rendered frontier default then applies) and \`--model <slug>\` / \`-c model="<slug>" -c review_model="<slug>"\` on a routed one, appended AFTER the default so the routed model wins
+default route (the project's own Codex config then decides; no frontier
+model is rendered here, so an unrouted tier never inherits a premium model)
+and \`--model <slug>\` / \`-c model="<slug>" -c review_model="<slug>"\` on a routed one
 (\`codex review\` rejects \`-m\`). No prompt argument is allowed with
 \`--base\` (the read-only form takes the prompt because it uses
 \`codex exec\`). Read stderr before cleanup; keep the printed
@@ -657,7 +664,7 @@ Outside prompt (supply repository context from the parent):
 
 "${CODEX_BOUNDARY}Review the changes on this branch against the base branch. Use the supplied branch diff. If it was not supplied and you have repository tools, run DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE". Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, resource leaks, failure modes, and silent data corruption paths. Be adversarial. Be thorough. No compliments — just the problems. End your output with ONE line in the canonical format \`Recommendation: <action> because <one-line reason naming the most exploitable finding>\`. Generic reasons like 'because it's safer' do not qualify; the reason must point to a specific finding or no-fix rationale."
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 540000, diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 540000, reasoningEffort: 'medium', voice: 'adversarial', diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
 
 Set the outer tool timeout to 600000ms so the provider timeout can report its failure.
 
@@ -680,7 +687,7 @@ If \`DIFF_TOTAL >= 200\` AND \`CODEX_MODE\` is \`ready\`:
 
 Prepare a structured review prompt requesting severity-tagged findings ([P1], [P2], [P3]) or an explicit NO_FINDINGS conclusion. Preserve the base-branch scope including committed changes and working-tree changes.
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 540000, structuredBase: '<base>', gate: 'structured', diffCommand: 'DIFF_BASE=$(git merge-base <base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 540000, reasoningEffort: 'medium', voice: 'adversarial', structuredBase: '<base>', gate: 'structured', diffCommand: 'DIFF_BASE=$(git merge-base <base> HEAD) && git diff "$DIFF_BASE"' })}
 
 ${outsideVoiceFor(ctx).id === 'codex' ? 'The Codex backend uses `codex review --base` without a positional prompt: those arguments are mutually exclusive. Never drop --base to resolve an argv error; prompt-only review changes the diff scope.' : 'The Claude Code backend receives the parent-captured base diff, including committed and working-tree changes, because review mode cannot execute git.'}
 
@@ -821,7 +828,7 @@ THE PLAN:
 
 **If \`CODEX_MODE: ready\` — run ${outsideVoiceFor(ctx).label}:**
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', voice: 'plan-review' })}
 
 Present the full output verbatim:
 
@@ -971,7 +978,7 @@ THE DOCS AND DIFF: <include current contents of each touched document, with its 
 
 **If \`CODEX_MODE: ready\` — run ${outsideVoiceFor(ctx).label}:**
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', diffCommand: 'DOC_DIFF_BASE=$(git merge-base origin/<base> HEAD 2>/dev/null || git merge-base <base> HEAD) && git diff "$DOC_DIFF_BASE" HEAD' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', voice: 'doc-release', diffCommand: 'DOC_DIFF_BASE=$(git merge-base origin/<base> HEAD 2>/dev/null || git merge-base <base> HEAD) && git diff "$DOC_DIFF_BASE" HEAD' })}
 
 Present the full output verbatim under \`${outsideVoiceFor(ctx).label.toUpperCase()} SAYS (documentation review):\`.
 

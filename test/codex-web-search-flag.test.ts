@@ -103,11 +103,20 @@ describe('codex frontier model flag is present', () => {
       const expected = override || 'gpt-6-astra';
       expect(argv).toEqual(['-c', `model="${expected}"`, '-c', `review_model="${expected}"`]);
     }
-    for (const file of ['codex/sections/review-mode.md', 'review/sections/adversarial.md', 'ship/sections/adversarial.md']) {
+    // Fork: only the user-invoked /codex skill keeps the frontier default; the
+    // governed adversarial slot and every outside voice are ROUTED (the project
+    // config decides on the default route) so no review inherits a premium model.
+    for (const file of ['codex/sections/review-mode.md']) {
       const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8');
       const calls = rendered.split('\n').filter(line => line.includes('codex review --base') && line.includes('2>'));
       expect(calls.length).toBeGreaterThan(0);
       for (const call of calls) expect(call).toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
+    }
+    for (const file of ['review/sections/adversarial.md', 'ship/sections/adversarial.md']) {
+      const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      const calls = rendered.split('\n').filter(line => line.includes('codex review --base') && line.includes('2>'));
+      expect(calls.length).toBeGreaterThan(0);
+      for (const call of calls) expect(call).not.toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
     }
   });
 
@@ -121,10 +130,14 @@ describe('codex frontier model flag is present', () => {
     }
   });
 
-  test('rendered autoplan phase sections resolve the model token at every inline site', () => {
+  test('rendered autoplan phase sections route the voice model at every inline site', () => {
+    // Fork: autoplan voices are routed (policy -> GSTACK_CODEX_MODEL -> project
+    // default) through gstack-codex-model, never the rendered frontier flag.
     for (const file of ['ceo-phase.md', 'design-phase.md', 'eng-phase.md', 'dx-phase.md']) {
       const rendered = fs.readFileSync(path.join(ROOT, 'autoplan', 'sections', file), 'utf-8');
-      expect(rendered, `${file} lost the model flag`).toContain(CODEX_MODEL_CONFIG_FLAG);
+      expect(rendered, `${file} lost the routed model`).toContain(`gstack-codex-model" resolve --voice 'autoplan' --effort medium`);
+      expect(rendered).toContain('$CODEX_MODEL_EXEC_FLAGS');
+      expect(rendered).not.toContain(CODEX_MODEL_CONFIG_FLAG);
       expect(rendered).not.toContain('{{CODEX_MODEL_CONFIG_FLAG}}');
     }
   });

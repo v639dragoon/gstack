@@ -58,6 +58,32 @@ interface EvidenceRecord {
   wtree?: string;
   log_path?: string;
   redacted?: boolean;
+  /** Toolchain binding: the node runtime the lane ran under. `check` grades
+   * STALE when the current runtime differs or the record carries none. */
+  toolchain?: { node?: string };
+}
+
+/** sha of the node runtime version, the executable input wtree cannot see. */
+function currentToolchain(): { node?: string } {
+  const out: { node?: string } = {};
+  try {
+    const r = spawnSync("node", ["--version"], { encoding: "utf8", timeout: 5000 });
+    if (r.status === 0 && r.stdout.trim()) out.node = r.stdout.trim();
+  } catch {}
+  return out;
+}
+
+/** True when the JSON documents differ ONLY in their top-level `version`. */
+export function versionOnlyChange(before: string, after: string): boolean {
+  try {
+    const a = JSON.parse(before), b = JSON.parse(after);
+    if (!a || !b || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) || Array.isArray(b)) return false;
+    const sortKeys = (v: any): any => Array.isArray(v) ? v.map(sortKeys) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v;
+    const { version: _va, ...ra } = a; const { version: _vb, ...rb } = b;
+    return JSON.stringify(sortKeys(ra)) === JSON.stringify(sortKeys(rb));
+  } catch {
+    return false;
+  }
 }
 
 function warn(msg: string): void {
@@ -385,6 +411,7 @@ function record(
       duration_s: Math.round((Date.now() - startedMs) / 100) / 10,
     };
     if (redacted) rec.redacted = true;
+    rec.toolchain = currentToolchain();
     const commit = git(["rev-parse", "HEAD"]);
     if (commit) {
       rec.commit = commit;
@@ -421,6 +448,7 @@ function cmdCheck(argv: string[]): number {
   let all = false;
   let maxAgeHours: number | undefined;
   let allowPaths: string[] = [];
+  let versionOnlyPaths: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--label") wanted.push({ label: argv[++i] ?? "" });
@@ -441,9 +469,14 @@ function cmdCheck(argv: string[]): number {
       }
     }
     else if (a === "--allow-paths") allowPaths = (argv[++i] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    // A file listed here may differ from the tested content ONLY in its
+    // top-level JSON `version` field (the /ship version bump). A dependency
+    // or script change in the same file invalidates the evidence: there is
+    // no blanket package.json exemption.
+    else if (a === "--allow-version-only") versionOnlyPaths = (argv[++i] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   }
   if (!all && wanted.length === 0) {
-    console.error("usage: gstack-evidence check [--label <L> [--expect-cmd <s>]]... | --all  [--max-age <hrs>] [--allow-paths <csv>]");
+    console.error("usage: gstack-evidence check [--label <L> [--expect-cmd <s>]]... | --all  [--max-age <hrs>] [--allow-paths <csv>] [--allow-version-only <csv>]");
     return 2;
   }
 
@@ -463,6 +496,7 @@ function cmdCheck(argv: string[]): number {
   }
 
   const wtreeNow = currentWtree();
+  const toolchainNow = currentToolchain();
   let allFresh = true;
   for (const { label, expectCmd } of labels) {
     const latest = records.findLast((r) => r.label === label);
@@ -489,6 +523,20 @@ function cmdCheck(argv: string[]): number {
       reason = "command changed (cmd_sha256 mismatch)";
     }
     if (verdict === "FRESH") {
+      // Toolchain binding: the same content under a different node runtime is
+      // a different executable check. A record without the binding predates
+      // it and grades STALE once, like a record without a fingerprint.
+      const nodeThen = latest.toolchain?.node;
+      const nodeNow = toolchainNow.node;
+      if (!nodeThen) {
+        verdict = "STALE";
+        reason = "record has no toolchain binding";
+      } else if (nodeNow && nodeThen !== nodeNow) {
+        verdict = "STALE";
+        reason = `toolchain changed (node ${nodeThen} -> ${nodeNow})`;
+      }
+    }
+    if (verdict === "FRESH") {
       // Content binding: identical working-tree fingerprint, or a diff confined
       // to the allow-list. Any git failure (gc'd tree, not a repo) → STALE —
       // never an error into the calling flow.
@@ -508,7 +556,13 @@ function cmdCheck(argv: string[]): number {
           reason = "content changed (fingerprint diff unavailable)";
         } else {
           const changed = diff.split("\n").map((s) => s.trim()).filter(Boolean);
-          const outside = changed.filter((f) => !allowPaths.some((a) => f === a || f.startsWith(a.replace(/\/$/, "") + "/")));
+          const versionOnlyOk = (f: string) => {
+            if (!versionOnlyPaths.includes(f)) return false;
+            const before = git(["show", `${latest.wtree}:${f}`]);
+            const after = git(["show", `${wtreeNow}:${f}`]);
+            return before !== undefined && after !== undefined && versionOnlyChange(before, after);
+          };
+          const outside = changed.filter((f) => !allowPaths.some((a) => f === a || f.startsWith(a.replace(/\/$/, "") + "/")) && !versionOnlyOk(f));
           if (changed.length === 0 || outside.length === 0) {
             reason = changed.length ? `diff confined to allow-paths (${changed.length} file(s))` : "";
           } else {

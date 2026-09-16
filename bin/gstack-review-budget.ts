@@ -172,6 +172,9 @@ if (command === 'plan') {
   if (modelsRaw && typeof modelsRaw === 'object' && !Array.isArray(modelsRaw)) {
     for (const [gate, byTier] of Object.entries<any>(modelsRaw)) {
       const slot = reviewers.find((r) => r.gate === gate);
+      // `outside-voice` is consumed by gstack-codex-model resolve --voice at
+      // each voice's own dispatch; it is not a review slot and not an error.
+      if (gate === 'outside-voice') continue;
       if (gate !== 'codex-structured') {
         modelIgnored.push(`${gate}:not-codex`);
         continue;
@@ -198,6 +201,27 @@ if (command === 'plan') {
   const codexModel: string | null = codexSlot?.model ?? null;
   const codexModelSource = codexModel ? 'policy' : 'default';
   const codexEffort: string | null = codexSlot?.model_or_effort ?? null;
+  const docVoice = tier === 'D' && final;
+  // Whole-workflow accounting (dohma harness pass 2026-09-15): every AI pass
+  // this run may dispatch is declared ONCE here with its purpose, model,
+  // effort, budget and retry policy. The reviewer slots are the same objects
+  // as `reviewers`; the audits and the doc passes join them so nothing runs
+  // untracked. `planned:false` entries are on the plan as "not this slice".
+  const passes: any[] = [
+    ...reviewers.map((r) => ({
+      gate: r.gate,
+      purpose: r.gate === 'codex-structured' ? 'semantic code review' : r.gate === 'red-team' ? 'adversarial red team' : `${r.gate.slice('specialist:'.length)} specialist review`,
+      model: r.gate === 'codex-structured' ? (r.model ?? 'project-default') : 'sonnet',
+      effort: r.gate === 'codex-structured' ? r.model_or_effort : 'agent-default',
+      budget: 1,
+      retry: 'once-on-error-or-timeout',
+      planned: true,
+    })),
+    { gate: 'coverage-audit', purpose: 'test coverage audit', model: 'sonnet', effort: 'agent-default', budget: 1, retry: 'inline-fallback', planned: final },
+    { gate: 'plan-completion', purpose: 'plan completion audit', model: 'sonnet', effort: 'agent-default', budget: 1, retry: 'inline-fallback', planned: final },
+    { gate: 'doc-release', purpose: 'documentation sync', model: 'sonnet', effort: 'agent-default', budget: 1, retry: 'none', planned: !!m.routing.doc_impact_would_dispatch || final },
+    { gate: 'outside-voice:doc-release', purpose: 'documentation review voice', model: 'routed:outside-voice', effort: 'medium', budget: 1, retry: 'none', planned: docVoice },
+  ];
   const plan: any = {
     runId: m.run_id,
     cycle,
@@ -221,7 +245,12 @@ if (command === 'plan') {
     coverageAudit: final,
     planCompletion: final,
     docRelease: !!m.routing.doc_impact_would_dispatch || final,
-    codexDocVoice: tier === 'D' && final,
+    codexDocVoice: docVoice,
+    passes,
+    wtree: m.wtree ?? null,
+    base: m.base ?? null,
+    merge_base: m.merge_base ?? null,
+    policy_sha256: m.policy?.sha256 ?? null,
     repairCyclesMax: cycles,
     autofixInformational: false,
     maxAdvisories: 5,
@@ -269,6 +298,7 @@ if (command === 'plan') {
       ['PLAN_COMPLETION', plan.planCompletion],
       ['DOC_RELEASE', plan.docRelease],
       ['CODEX_DOC_VOICE', plan.codexDocVoice],
+      ['PASSES', passes.filter((x) => x.planned).map((x) => `${x.gate}@${x.model}:${x.effort}`).join(',')],
       ['REPAIR_CYCLES_MAX', cycles],
       ['AUTOFIX_INFORMATIONAL', false],
       ['MAX_ADVISORIES', 5],
@@ -422,7 +452,7 @@ if (command === 'verdict') {
     fail('run id, gate, and valid verdict required');
   const cycle = requestedCycle();
   const p = cyclePlan(loadPlan(id), cycle);
-  if (!p.reviewers.some((r: any) => r.gate === gate)) {
+  if (!p.reviewers.some((r: any) => r.gate === gate) && !auditPlanned(p, gate)) {
     console.log('VERDICT=blocked reason=off-plan');
     process.exit(2);
   }
@@ -464,6 +494,16 @@ if (command === 'verdict') {
   process.exit(0);
 }
 
+/** The three ship audits are on the plan when their slice flag is true. */
+function auditPlanned(p: any, gate: string): boolean {
+  const flag: any = {
+    'coverage-audit': p.coverageAudit,
+    'plan-completion': p.planCompletion,
+    'doc-release': p.docRelease,
+  };
+  return !!flag[gate];
+}
+
 if (command === 'complete') {
   const id = argv[0];
   if (!id) fail('run id required');
@@ -472,8 +512,22 @@ if (command === 'complete') {
   const rs = records(id).filter(
     (r) => r.record_type === 'verdict' && Number(r.cycle ?? 0) === cycle,
   );
-  const incomplete = p.reviewers
-    .map((r: any) => r.gate)
+  // --require-audits: the ship path also owes a terminal verdict for every
+  // planned pre-review audit (coverage, plan completion); --final adds the
+  // doc-release pass. A dispatched-but-unfinished audit is incomplete on
+  // every path. /review dispatches none, so it passes neither flag.
+  const requireAudits = has('--require-audits') || has('--final');
+  const audits = ['coverage-audit', 'plan-completion', ...(has('--final') ? ['doc-release'] : [])];
+  const dispatched = new Set(
+    records(id)
+      .filter((r) => r.record_type === 'dispatch' && r.allowed && Number(r.cycle ?? 0) === cycle)
+      .map((r) => r.gate),
+  );
+  const owed = [
+    ...p.reviewers.map((r: any) => r.gate),
+    ...audits.filter((g) => (requireAudits && auditPlanned(p, g)) || dispatched.has(g)),
+  ];
+  const incomplete = owed
     .filter((gate: string) => {
       const verdict = rs.filter((r) => r.gate === gate).at(-1)?.verdict;
       return !['clean', 'issues_found'].includes(verdict);
@@ -483,6 +537,72 @@ if (command === 'complete') {
     process.exit(2);
   }
   console.log('COMPLETE=true');
+  process.exit(0);
+}
+
+/**
+ * resume <run_id> [--json]: reuse terminal verdicts from a PRIOR run of the
+ * SAME inputs. A prior cycle-0 plan qualifies only when its content
+ * fingerprint (wtree), base, merge-base, policy sha256, tier, reviewer
+ * specs and slice kind all equal this plan's; a matching commit with a
+ * differing working tree never qualifies because wtree is the fingerprint.
+ * For each planned gate whose prior verdict is terminal and successful
+ * (clean or issues_found) the dispatch, verdict and finding records are
+ * copied into this run's ledger marked reused_from, so `dispatch` refuses a
+ * second run (duplicate-slot) and `complete` counts it. error/timeout and
+ * missing verdicts are never reused. Prints REUSED=... and RERUN=...
+ */
+if (command === 'resume') {
+  const id = argv[0];
+  if (!id) fail('run id required');
+  const rootPlan = loadPlan(id);
+  const p = cyclePlan(rootPlan, 0);
+  const key = (x: any) =>
+    JSON.stringify([x.wtree, x.base, x.merge_base, x.policy_sha256, x.effectiveTier, x.reviewerSpecs, x.sliceKind, x.coverageAudit, x.planCompletion, x.docRelease]);
+  const reusable = ['clean', 'issues_found'];
+  let source: any = null;
+  if (p.wtree && fs.existsSync(budgetDir)) {
+    const candidates = fs
+      .readdirSync(budgetDir)
+      .filter((f) => f.endsWith('.json') && f !== `${id}.json`)
+      .map((f) => {
+        try {
+          return JSON.parse(fs.readFileSync(path.join(budgetDir, f), 'utf8'));
+        } catch {
+          return null;
+        }
+      })
+      .filter((c: any) => c && c.runId !== id && key(cyclePlan(c, 0)) === key(p))
+      .sort((a: any, b: any) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    source = candidates[0] ?? null;
+  }
+  const gates = [
+    ...p.reviewers.map((r: any) => r.gate),
+    ...['coverage-audit', 'plan-completion', 'doc-release'].filter((g) => auditPlanned(p, g)),
+  ];
+  const already = new Set(records(id).filter((r) => r.record_type === 'verdict').map((r) => r.gate));
+  const reused: string[] = [];
+  if (source) {
+    const old = records(source.runId).filter((r) => Number(r.cycle ?? 0) === 0);
+    for (const gate of gates) {
+      if (already.has(gate)) continue;
+      const verdict = old.filter((r) => r.record_type === 'verdict' && r.gate === gate).at(-1);
+      const dispatch = old.find((r) => r.record_type === 'dispatch' && r.allowed && r.gate === gate && !r.verify_of);
+      if (!verdict || !dispatch || !reusable.includes(verdict.verdict)) continue;
+      const copy = (r: any) => append(id, { ...r, run_id: id, reused_from: source.runId, reused_ts: now() });
+      copy(dispatch);
+      for (const f of old.filter((r) => r.record_type === 'finding' && r.gate === gate)) copy(f);
+      copy(verdict);
+      reused.push(gate);
+    }
+  }
+  const rerun = gates.filter((g) => !reused.includes(g) && !already.has(g));
+  if (has('--json')) console.log(JSON.stringify({ runId: id, source: source?.runId ?? null, reused, rerun }));
+  else {
+    console.log(`RESUME_SOURCE=${source?.runId ?? ''}`);
+    console.log(`REUSED=${reused.join(',')}`);
+    console.log(`RERUN=${rerun.join(',')}`);
+  }
   process.exit(0);
 }
 
@@ -643,4 +763,4 @@ if (command === 'report') {
   );
   process.exit(0);
 }
-fail('usage: plan|dispatch|verdict|complete|rerun-check|finding|resolve|report');
+fail('usage: plan|dispatch|verdict|complete|resume|rerun-check|finding|resolve|report');

@@ -20,7 +20,10 @@ function rendered(rel: string): string {
 describe('content-binding template drift', () => {
   test('ship Step 16 carries the evidence check (mechanized IRON LAW)', () => {
     const ship = rendered('ship/SKILL.md');
-    expect(ship).toMatch(/gstack-evidence check --label tests --expect-cmd '[^']+' --label vitest --expect-cmd '[^']+' --max-age 24 --allow-paths CHANGELOG\.md,VERSION,package\.json/);
+    // Harness pass 2026-09-15: package.json is no longer a blanket allow-path;
+    // only a version-field-only diff is accepted (--allow-version-only).
+    expect(ship).toMatch(/gstack-evidence check --label tests --expect-cmd '[^']+' --label vitest --expect-cmd '[^']+' --max-age 24 --allow-paths CHANGELOG\.md,VERSION,agents-digest\/gstack-AGENTS\.md --allow-version-only package\.json/);
+    expect(ship).not.toMatch(/--allow-paths \S*package\.json/);
     expect(ship).toContain('a failed CHECK never blocks');
   });
 

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# gstack-voice-row — log ONE gate row for an outside-voice pass.
+#   gstack-voice-row <skill> <voice> <completed|unavailable> <model> <model_source> <effort> <t0_epoch>
+# Keeps the rendered invocation short: the row carries purpose, model, effort,
+# budget, retry policy and terminal status so every AI pass is accounted for.
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+skill="${1:-}"; voice="${2:-}"; status="${3:-unavailable}"; model="${4:-}"; src="${5:-}"; effort="${6:-}"; t0="${7:-$(date +%s)}"
+q() { printf '%s' "$1" | tr -d '"\\'; }
+elapsed=$(( $(date +%s) - t0 )); [ "$elapsed" -ge 0 ] || elapsed=0
+echo "Outside voice $(q "$voice"): $(q "$status") on $(q "$model") ($(q "$src")) at $(q "$effort"), ${elapsed}s"
+"$SCRIPT_DIR/gstack-gate-log" "{\"record_type\":\"gate\",\"run_id\":\"${GSTACK_RUN_ID:-voice-$$-$(date +%s)}\",\"skill\":\"$(q "$skill")\",\"gate\":\"outside-voice:$(q "$voice")\",\"purpose\":\"$(q "$voice")\",\"trigger\":\"$(q "$voice")\",\"model\":\"$(q "$model")\",\"model_source\":\"$(q "$src")\",\"effort\":\"$(q "$effort")\",\"effort_source\":\"routed\",\"budget\":1,\"retry\":\"none\",\"status\":\"$(q "$status")\",\"elapsed_s\":$elapsed}" >/dev/null 2>&1 || true
+exit 0
