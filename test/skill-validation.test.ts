@@ -970,7 +970,9 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     test(`${skill} contains Completeness Principle section`, () => {
       const content = readSkillStartup(path.join(ROOT, skill));
       expect(content).toContain('Completeness Principle');
-      expect(content).toContain('Boil the Ocean');
+      // Fork (harness pass 2026-09-15): the default preamble is Bounded
+      // Completion; the gpt-5.6-sol overlay keeps its scoped Boil-the-Ocean text.
+      expect(content).toMatch(/Bounded Completion|Boil the Ocean/);
     });
   }
 
@@ -978,7 +980,7 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     // CSO is intentionally exempt; use a regular tier 2+ PREAMBLE consumer.
     const content = readSkillStartup(path.join(ROOT, 'review', 'SKILL.md'));
     expect(content).toContain('Completeness: X/10');
-    expect(content).toContain('10 = all edge cases');
+    expect(content).toContain('10 = every material in-scope case');
     expect(content).toContain('Note: options differ in kind, not coverage');
     expect(content).toContain('Do not fabricate scores');
   });
@@ -1386,6 +1388,7 @@ describe('ship step numbering', () => {
     const unexpected = fractional.filter((n) => !ALLOWED_SUBSTEPS.has(n));
     expect(unexpected).toEqual([]);
     expect(headings.filter((n) => n === '11.5')).toHaveLength(1);
+    expect(headings.filter((n) => n === '6.5')).toHaveLength(1); // Governor flags exist before Steps 7–8.
   });
 
   test('review/SKILL.md step numbers unchanged (regression guard for resolver conditionals)', () => {

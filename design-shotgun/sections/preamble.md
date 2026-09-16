@@ -1,6 +1,6 @@
 <!-- AUTO-GENERATED from scripts/resolvers/preamble-hoist.ts — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
-# gstack shared preamble 4e82fa4c839f
+# gstack shared preamble eaf8ffac6e67
 
 ## Plan Mode Safe Operations
 
@@ -201,11 +201,11 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 
 Curated jargon list lives at `~/.claude/skills/gstack/scripts/jargon-list.json`. On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
-## Completeness Principle — Boil the Ocean
+## Completeness Principle — Bounded Completion
 
 Complete coverage, minimal code. Recommend full coverage of the requirement (tests, edge cases, error paths) and no code beyond it: on equal coverage, prefer the smaller diff; no checks for impossible states. Unrelated work (rewrites, multi-quarter migrations) is separate scope: flag it; it never excuses a gap.
 
-When options differ in coverage, include `Completeness: X/10` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores.
+When options differ in coverage, include `Completeness: X/10` (10 = every material in-scope case, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores or widen scope to raise one.
 
 ## Confusion Protocol
 

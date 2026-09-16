@@ -111,7 +111,14 @@ if ((rec.effort === 'xhigh' || rec.effort === 'max' || rec.effort === 'ultra') &
 // effort_source routed), never the label alone: a worker record that merely
 // says effort_source \"routed\" still owes its reason (ship red-team, 2026-09-04).
 const routedReviewSlot = rec.gate === 'codex-structured' && rec.effort_source === 'routed';
-if (typeof rec.model === 'string' && /astra/i.test(rec.model) && !routedReviewSlot
+// An outside voice routed by the repo POLICY (routing.models[\"outside-voice\"]) carries
+// its justification in the policy entry; an env or hand-picked Astra voice still owes one.
+const policyRoutedVoice = typeof rec.gate === 'string' && rec.gate.startsWith('outside-voice:') && rec.model_source === 'policy';
+if (typeof rec.gate === 'string' && rec.gate.startsWith('outside-voice:')) {
+  for (const k of ['purpose', 'model', 'effort', 'status']) if (typeof rec[k] !== 'string' || !rec[k]) fail('outside-voice record requires a non-empty ' + k);
+  if (!['completed', 'unavailable', 'disabled', 'skipped'].includes(rec.status)) fail('outside-voice status must be completed|unavailable|disabled|skipped');
+}
+if (typeof rec.model === 'string' && /astra/i.test(rec.model) && !routedReviewSlot && !policyRoutedVoice
     && !(typeof rec.model_reason === 'string' && rec.model_reason.trim().length > 0)) {
   fail('model \"' + rec.model + '\" outside the routed codex-structured slot requires a non-empty model_reason');
 }

@@ -12,7 +12,7 @@ description: |
 
 ## Shared preamble (load first)
 
-This skill follows gstack shared preamble `6872f1ec4eb9` (AskUserQuestion format, voice, writing, completeness and completion rules). If your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `sections/preamble.md` relative to the installed `gstack-ship` SKILL.md directory in full before the command below. A section or subsection here with a shared heading replaces the shared one.
+This skill follows gstack shared preamble `12c5370b2399` (AskUserQuestion format, voice, writing, completeness and completion rules). If your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `sections/preamble.md` relative to the installed `gstack-ship` SKILL.md directory in full before the command below. A section or subsection here with a shared heading replaces the shared one.
 
 ## Preamble (run first)
 
@@ -479,6 +479,14 @@ repeat Step 2 (decisions included) on the merged content, then Step 4.
 > **STOP.** Before opening the PR early for a parallel Greptile review after the free tests pass (Step 6.5), Read `sections/greptile-early.md` relative to the installed `gstack-ship` SKILL.md directory and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.
 
+### Plan the governed audits
+
+Before Steps 7–8 read their flags, run `gstack-diff-manifest <base>` and
+`gstack-review-budget plan "$MANIFEST_PATH" --cycle 0` from the installed bin directory.
+Carry RUN_ID, CYCLE, COVERAGE_AUDIT, PLAN_COMPLETION and REPAIR_CYCLES_MAX as literals.
+Step 9.1 refreshes this same run after audit writes; never mint a replacement run
+or reset the invocation's audit attempts or repair counts.
+
 > **STOP.** Before auditing test coverage of the diff (Step 7), Read `sections/test-coverage.md` relative to the installed `gstack-ship` SKILL.md directory and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.
 
@@ -737,7 +745,7 @@ rerun. Cite the original command, result, timestamp and log; never resample. Man
 `--label <lane> --expect-cmd '<exact Step 5 command>'`, like this example:
 
 ```bash
-~/.gemini/antigravity-cli/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
+~/.gemini/antigravity-cli/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,agents-digest/gstack-AGENTS.md --allow-version-only package.json
 ```
 
 `--allow-paths` exempts only release metadata (in `package.json`, only a version edit). Docs, TODO edits, new/generated tests and fixes
@@ -750,6 +758,24 @@ make evidence STALE even without a new code review.
 | ZERO-RUN: the receipt's `tests_ran` is 0 | STALE-equivalent: use Step 5's ZERO-RUN triage (a failed lane), never FRESH, even with exit 0. |
 | `tests_ran: unknown` | Non-blocking: keep the exit-0 verdict, cite the lane as `count unavailable`. Never record it as ZERO-RUN or as a counted pass. |
 | Only receipt storage/readback failed | Prove unchanged final content, the same command and valid age from the successful run's evidence. Cite its exact command, exit, timestamp and log as **ledger unavailable**, never FRESH. Without that proof, use STALE/MISSING. |
+
+Include only lane labels actually run in Step 5; `vitest` is an example, not a required framework.
+Pass each `--expect-cmd` the exact command string the wrapped Step 5 lane ran —
+that binds FRESH to the real suite (a green `echo ok` recorded under the label
+can never satisfy the check). `package.json` is NOT blanket-exempt:
+`--allow-version-only` accepts it only when the tested content and the
+current content differ in the top-level `version` field alone (Step 12's
+bump); a dependency or script change invalidates the evidence and the lane
+re-runs. FRESH also requires the same node runtime the lane recorded
+(`toolchain`); the content fingerprint is the working tree itself, so a
+matching commit with a dirty tree never grades FRESH on its own.
+
+**Resumed runs reuse valid stages only through these records.** A /ship
+re-entered after a context handoff, a retry or a fresh session repeats no
+lane whose evidence grades FRESH, and Step 9.1's `gstack-review-budget resume`
+carries forward reviewer verdicts recorded against this exact content
+fingerprint, base, policy and plan. A plan review never substitutes for a
+code review; partial, failed or timed-out records are never reused.
 
 No test lanes: rerun with `--no-lanes-approved` on Step 5's explicit untested-scope approval,
 or run Steps 5–15, including the no-tests decision, then return to Step 16 stage 1.

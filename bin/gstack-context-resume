@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# gstack-context-resume — Claude Code SessionStart hook (compact|resume):
+# inject the newest checkpoint head so continuity survives auto-compaction.
+set -uo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}" bun "$SCRIPT_DIR/gstack-context-resume.ts"
+exit 0

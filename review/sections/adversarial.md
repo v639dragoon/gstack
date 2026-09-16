@@ -137,17 +137,20 @@ _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" check-sandbox || exit 1
 "$_CODEX_PROBE" show-first-use-notice
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'adversarial' --effort medium)" || exit 1
+_OUTSIDE_T0=$(date +%s)
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort high 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+_row() { "$GSTACK_BIN/gstack-voice-row" 'review' 'adversarial' "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 _OUTSIDE_RC=0
 bun --no-env-file --config=/dev/null "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
-  0|3) ;;
-  4) echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
-  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
+  0|3) _row completed ;;
+  4) _row unavailable; echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
+  *) _row unavailable; [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
 esac
 echo 'OUTSIDE_STATUS: completed provider=codex host=claude'
 ```
@@ -197,17 +200,20 @@ _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" check-sandbox || exit 1
 "$_CODEX_PROBE" show-first-use-notice
+eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'adversarial' --effort medium)" || exit 1
+_OUTSIDE_T0=$(date +%s)
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort high 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+_row() { "$GSTACK_BIN/gstack-voice-row" 'review' 'adversarial' "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 _OUTSIDE_RC=0
 bun --no-env-file --config=/dev/null "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" structured "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
-  0|3) ;;
-  4) echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
-  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
+  0|3) _row completed ;;
+  4) _row unavailable; echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
+  *) _row unavailable; [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
 esac
 echo 'OUTSIDE_STATUS: completed provider=codex host=claude'
 ```
@@ -310,6 +316,11 @@ Print: `Adversarial: routed to codex-structured per tier {TIER}`.
 Do not run the Claude adversarial subagent or a free-form `codex exec`
 challenge. Semantic adversarial review exists only when
 `codex-structured@medium` or `codex-structured@high` is in `REVIEWERS`.
+
+This block is normally LAUNCHED from Step 4.5 as one background Bash
+call, concurrently with the specialist reviewers, against the same frozen
+snapshot; run it here only if it was not launched there (no other reviewer
+was planned) and skip it entirely when `codex-structured` is in `REUSED`.
 
 Before the structured review, run the shared Codex preflight. Nested Codex
 sessions must refuse another Codex spawn unless the explicit override is set:
@@ -432,7 +443,9 @@ _CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX
 Either way the cap stays 540s. The effort is `medium` for tiers A/B/C and
 `high` for tier D. The model is the one `gstack-codex-model` resolved:
 `{CODEX_MODEL_EXEC_FLAGS}` / `{CODEX_MODEL_REVIEW_FLAGS}` are empty on the
-default route (the rendered frontier default then applies) and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed one, appended AFTER the default so the routed model wins
+default route (the project's own Codex config then decides; no frontier
+model is rendered here, so an unrouted tier never inherits a premium model)
+and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed one
 (`codex review` rejects `-m`). No prompt argument is allowed with
 `--base` (the read-only form takes the prompt because it uses
 `codex exec`). Read stderr before cleanup; keep the printed

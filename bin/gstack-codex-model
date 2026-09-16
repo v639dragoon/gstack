@@ -2,6 +2,16 @@
 # gstack-codex-model — resolve the MODEL a routed Codex call runs on.
 #
 #   gstack-codex-model resolve --model <slug|""> --effort <medium|high> [--source policy|default]
+#   gstack-codex-model resolve --voice <purpose> [--effort <low|medium|high>]
+#
+# `--voice <purpose>` routes an OUTSIDE VOICE (plan-review, design-review,
+# design-direction, doc-release, spec, autoplan, codex-review, ...): the
+# repo's .gstack-policy.json `routing.models["outside-voice"][<purpose>]`
+# may name {model, effort}; GSTACK_CODEX_MODEL names a model when the policy
+# does not (source env); otherwise the default route (the project's own
+# .codex/config.toml) at the caller's --effort (medium when omitted). A voice
+# NEVER inherits the frontier model: an unrouted voice runs the project
+# default, and a policy effort above high is refused exactly like --effort.
 #
 # The review plan (gstack-review-budget plan, policy `routing.models`) may name
 # a model for the codex-structured slot; the client default (the project's
@@ -31,16 +41,32 @@
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cmd="${1:-}"; shift || true
-[ "$cmd" = "resolve" ] || { echo "usage: gstack-codex-model resolve --model <slug|\"\"> --effort <medium|high> [--source policy|default]" >&2; exit 1; }
-MODEL=""; EFFORT=""; SOURCE=""
+[ "$cmd" = "resolve" ] || { echo "usage: gstack-codex-model resolve --model <slug|\"\"> --effort <medium|high> [--source policy|default] | resolve --voice <purpose> [--effort <low|medium|high>]" >&2; exit 1; }
+MODEL=""; EFFORT=""; SOURCE=""; VOICE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --model) MODEL="${2:-}"; shift 2 ;;
     --effort) EFFORT="${2:-}"; shift 2 ;;
     --source) SOURCE="${2:-}"; shift 2 ;;
+    --voice) VOICE="${2:-}"; shift 2 ;;
     *) echo "gstack-codex-model: unknown argument $1" >&2; exit 1 ;;
   esac
 done
+if [ -n "$VOICE" ]; then
+  case "$VOICE" in
+    *[!A-Za-z0-9._-]*|'') echo "gstack-codex-model: malformed voice '$VOICE'" >&2; exit 1 ;;
+  esac
+  [ -n "$EFFORT" ] || EFFORT="medium"
+  _POLICY_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+  if [ -f "$_POLICY_ROOT/.gstack-policy.json" ]; then
+    _VOICE_ROUTE=$(bun -e 'try { const p = JSON.parse(await Bun.file(process.argv[1]).text()); const v = p?.routing?.models?.["outside-voice"]?.[process.argv[2]]; if (v && typeof v === "object") process.stdout.write(`${typeof v.model === "string" ? v.model : ""}\t${typeof v.effort === "string" ? v.effort : ""}`); else if (typeof v === "string") process.stdout.write(`${v}\t`); } catch {}' "$_POLICY_ROOT/.gstack-policy.json" "$VOICE" 2>/dev/null || true)
+    _VOICE_MODEL="${_VOICE_ROUTE%%	*}"
+    _VOICE_EFFORT="${_VOICE_ROUTE#*	}"
+    if [ -n "$_VOICE_MODEL" ]; then MODEL="$_VOICE_MODEL"; SOURCE="policy"; fi
+    if [ -n "$_VOICE_EFFORT" ]; then EFFORT="$_VOICE_EFFORT"; fi
+  fi
+  if [ -z "$MODEL" ] && [ -n "${GSTACK_CODEX_MODEL:-}" ]; then MODEL="$GSTACK_CODEX_MODEL"; SOURCE="env"; fi
+fi
 case "$EFFORT" in
   low|medium|high) ;;
   xhigh|max|ultra) echo "gstack-codex-model: effort '$EFFORT' is never selected automatically; pass it only through an explicit, recorded user override" >&2; exit 1 ;;
@@ -84,6 +110,7 @@ emit() {
   printf "CODEX_MODEL_EXEC_FLAGS='%s'\n" "$(q "$6")"
   printf "CODEX_MODEL_REVIEW_FLAGS='%s'\n" "$(q "$7")"
   printf "CODEX_EFFORT='%s'\n" "$(q "$EFFORT")"
+  printf "CODEX_VOICE='%s'\n" "$(q "$VOICE")"
 }
 
 DEFAULT_NAME=$(default_model_name)
