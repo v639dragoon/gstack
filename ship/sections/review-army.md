@@ -428,8 +428,9 @@ Output a summary header: `Pre-Landing Review: N issues (X critical, Y informatio
      `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`. Carry the new
      tier and `REVIEWERS` (they may rise/change), then re-run that plan with
      every dispatch, verdict, and completion call using `--cycle <n+1>`.
-   - Exit 3: STOP and report which findings keep reappearing — the existing
-     non-convergence blocker wording applies.
+   - Exit 3: persist item 9 with `converged:false` using that pass's original
+     REVIEW_START, then STOP and report which findings keep reappearing — the
+     existing non-convergence blocker wording applies.
    The bound is the literal `REPAIR_CYCLES_MAX`; continue only when the loop
    converges with zero remaining BLOCKING findings.
 
