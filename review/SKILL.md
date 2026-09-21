@@ -569,10 +569,12 @@ Compute the merge base, then diff the working tree against that point:
 
 ```bash
 DIFF_BASE=$(git merge-base origin/<base> HEAD)
+~/.claude/skills/gstack/bin/gstack-review-log --start review
 git diff "$DIFF_BASE"
 ```
 
 This includes both committed and uncommitted changes while excluding commits that landed on the base branch after this branch was created.
+Remember the printed start token as REVIEW_START for this pass. Capture it before reading the diff, never at log time. On each full re-review, capture a new token. Read any non-ignored untracked source files too (`git ls-files --others --exclude-standard`); the fingerprint includes them.
 
 ## Step 3.4: Workspace-aware queue status (advisory)
 
@@ -955,10 +957,12 @@ If no documentation files exist, skip this step silently.
 After all review passes complete, persist the final `/review` outcome so `/ship` can
 recognize that Eng Review was run on this branch.
 
+Follow the completion/retry and detailed record-field rules in the adversarial section before persisting.
+
 Run:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"COMMIT","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
 ```
 
 Substitute:
