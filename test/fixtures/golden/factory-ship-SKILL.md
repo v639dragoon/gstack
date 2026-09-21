@@ -2501,7 +2501,7 @@ the invocation record. Apply these decisions in order:
    `rerun_cause:"scope-expansion:{triggers}"`, refresh `gstack-diff-manifest <base> "$RUN_ID"`
    and `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`. Carry the new tier
    and REVIEWERS; dispatch, verdict and complete use cycle n+1.
-   Exit 3: STOP and report which findings keep reappearing. Never exceed `REPAIR_CYCLES_MAX`.
+   Exit 3: persist with `converged:false` using this pass's original REVIEW_START, then STOP and report which findings keep reappearing. Never exceed `REPAIR_CYCLES_MAX`.
    Continue only after zero remaining BLOCKING findings and complete required coverage.
 
 4. **No edits in this pass:** Resolve the required-probe gate below. Only after it
