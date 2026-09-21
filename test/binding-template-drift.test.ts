@@ -45,6 +45,25 @@ describe('content-binding template drift', () => {
     expectMentions(text, [['never', 'convergence', 'approval']], 'text');
   });
 
+  test('ship binds governed adversarial evidence without dropping snapshot or freshness guards', () => {
+    const ship = rendered('ship/SKILL.md');
+    const binding = ship.slice(ship.indexOf('## Step 11.5'), ship.indexOf('## Step 12:'));
+    expect(binding).toContain('complete "$RUN_ID" --cycle <n> --require-audits');
+    expect(binding).toContain('COMPLETE=true');
+    expect(binding).toContain('EVERY');
+    expect(binding).toContain('codex-structured');
+    expect(binding).toContain('red-team');
+    expect(binding).toContain('governor evidence to be verified');
+    expect(binding).toContain('review_binding.start_wtree');
+    expect(binding).toContain('review_binding.end_wtree');
+    expect(binding).toContain('head_sha');
+    expect(binding).toContain('review_freshness');
+    expect(binding).toContain('stale, missing or unverified evidence refuses');
+    expect(binding).toContain('Never attach new tokens to old work');
+    expect(binding).not.toContain('Require the native record');
+    expect(ship.indexOf('## Step 6.5')).toBeLessThan(ship.indexOf('ship/sections/test-coverage.md', ship.indexOf('## Step 6.5')));
+  });
+
   test('ship Step 16 carries the evidence check (mechanized IRON LAW)', () => {
     const ship = rendered('ship/SKILL.md');
     // Harness pass 2026-09-15: package.json is no longer a blanket allow-path;
@@ -116,7 +135,10 @@ describe('content-binding template drift', () => {
     expect(army.replace(/\s+/g, ' ')).toContain('Complete items 5–6 exactly once with the original REVIEW_START');
     expect(army).toContain('fixes also require `converged:false`');
     const ship = rendered('ship/SKILL.md');
-    expect(army.replace(/\s+/g, ' ')).toContain('**Third fixing cycle reached (`CYCLES >= 3`):** STOP and report recurring findings with `converged:false`; do not run a fourth fixing cycle');
+    expect(army).toContain('REPAIR_CYCLES_MAX');
+    expect(army).toContain('Exit 3: persist with');
+    expect(army).toContain('converged:false');
+    expect(army).toContain('STOP and report which findings keep reappearing');
     expectMentions(ship.replace(/\s+/g, ' '), [['never', 'approvals', 'expands']], 'ship.replace(/\s+/g,  )');
     expect(army).toContain('--start design-review-lite');
     expect(army).toContain('--finish DESIGN_START');
@@ -128,12 +150,20 @@ describe('content-binding template drift', () => {
     expect(codex).toContain('--finish CODEX_REVIEW_START');
     expect(codex).toContain('"completed":COMPLETED,"converged":CONVERGED');
     expectMentions(codex, [['until', 'genuine', 'fixes']], 'codex');
+    // Fork divergence (governor commit 7b9fa8b4): the fork's adversarial step
+    // is governor routed, so it binds each outside pass to the review run
+    // (dispatch + verdict on $RUN_ID) and the minted manifest's tree
+    // (manifest_wtree on the gate row), not upstream's --start/--finish token
+    // capture. Pin the governor binding instead, so a template refactor still
+    // can't silently drop it.
     for (const skill of ['ship', 'review']) {
       const adversarial = rendered(`${skill}/sections/adversarial.md`);
-      expect(adversarial).toContain('--start adversarial-review');
-      expect(adversarial).toContain('--finish PASS_START');
-      expectMentions(adversarial.replace(/\s+/g, ' '), [['before', 'adversarial', 'structured']], 'adversarial.replace(/\s+/g,  )');
-      expect(adversarial).toContain('Each token is consumed once');
+      expect(adversarial).toContain('Adversarial review — governor routed');
+      expect(adversarial).toContain('gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle <n>');
+      expect(adversarial).toContain('gstack-review-budget verdict "$RUN_ID" codex-structured');
+      expect(adversarial).toContain(`"run_id":"{RUN_ID}","skill":"${skill}","gate":"codex-structured"`);
+      expect(adversarial).toContain('"manifest_wtree":"{MANIFEST_WTREE}"');
+      expect(adversarial).toContain('"skill":"adversarial-review"');
     }
   });
 
