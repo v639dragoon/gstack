@@ -425,7 +425,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 62_000, // + v2.0 {{ASIDE_RESEARCH}} + Phase 0 review governor prose (phase0-pr-gating); measured 61_890 over v1.84.1
+    maxSkeletonBytes: 63_000, // + v2.0 {{ASIDE_RESEARCH}} + Phase 0 review governor prose (phase0-pr-gating) + upstream v1.87 REVIEW_START capture; measured 62_442 over v1.87.5
     minUnionBytes: 88_000, // review governor removed the LOC/adversarial prose (phase0-pr-gating); measured union 88,719 over v1.79
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
   },
@@ -479,7 +479,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     },
     behavioral: 'prompt',
     maxSkeletonBytes: 74_500, // + Aside browser contract for Step 7 canary ({{ASIDE_SETUP}}); measured 73_523
-    maxSizeRatio: 1.10, // + v1.81 Aside contract + gstack-browser fallback block; measured 1.077
+    maxSizeRatio: 1.11, // + v1.81 Aside contract + gstack-browser fallback block + upstream v1.87 review_freshness readiness rules; measured 1.101 over v1.87.5
     minUnionBytes: 91_000, // Phase 4 wave 1; estimated union ~94.9KB
     mustContain: ['readiness', 'merge', 'canary', 'revert', 'staging'],
   },

@@ -94,12 +94,20 @@ describe('content-binding template drift', () => {
     expect(codex).toContain('--finish CODEX_REVIEW_START');
     expect(codex).toContain('"completed":COMPLETED,"converged":CONVERGED');
     expect(codex).toContain('Fixes stay stale until a genuine rerun');
+    // Fork divergence (governor commit 7b9fa8b4): the fork's adversarial step
+    // is governor routed, so it binds each outside pass to the review run
+    // (dispatch + verdict on $RUN_ID) and the minted manifest's tree
+    // (manifest_wtree on the gate row), not upstream's --start/--finish token
+    // capture. Pin the governor binding instead, so a template refactor still
+    // can't silently drop it.
     for (const skill of ['ship', 'review']) {
       const adversarial = rendered(`${skill}/sections/adversarial.md`);
-      expect(adversarial).toContain('--start adversarial-review');
-      expect(adversarial).toContain('--finish PASS_START');
-      expect(adversarial).toContain('Each outside adversarial/structured pass');
-      expect(adversarial).toContain('Each token is consumed once');
+      expect(adversarial).toContain('Adversarial review — governor routed');
+      expect(adversarial).toContain('gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle <n>');
+      expect(adversarial).toContain('gstack-review-budget verdict "$RUN_ID" codex-structured');
+      expect(adversarial).toContain(`"run_id":"{RUN_ID}","skill":"${skill}","gate":"codex-structured"`);
+      expect(adversarial).toContain('"manifest_wtree":"{MANIFEST_WTREE}"');
+      expect(adversarial).toContain('"skill":"adversarial-review"');
     }
   });
 
