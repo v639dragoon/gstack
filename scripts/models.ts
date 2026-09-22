@@ -24,6 +24,7 @@ export const ALL_MODEL_NAMES = [
   'gpt',
   'gpt-5.4',
   'gpt-5.6-sol',
+  'gpt-6-sol',
   'gpt-6-astra',
   'gemini',
   'o-series',
@@ -31,12 +32,18 @@ export const ALL_MODEL_NAMES = [
 
 export type Model = (typeof ALL_MODEL_NAMES)[number];
 
+export const SOL_PROFILE_MODELS = ['gpt-5.6-sol', 'gpt-6-sol'] as const;
+
+export function isSolProfileModel(model: string | undefined): boolean {
+  return model !== undefined && (SOL_PROFILE_MODELS as readonly string[]).includes(model);
+}
+
 /**
  * Resolve a model argument from CLI input to a known Model family.
  *
  * Precedence rules:
  * 1. Exact match against ALL_MODEL_NAMES → return as-is. This is the ONLY
- *    path that selects `gpt-5.6-sol` — Sol is intentionally exact-only.
+ *    path that selects `gpt-5.6-sol` or `gpt-6-sol` — Sol is intentionally exact-only.
  * 2. Family heuristics for common variants:
  *    - `gpt-5.4-mini`, `gpt-5.4-turbo`, `gpt-5.4-*` → `gpt-5.4`
  *    - `gpt-*` (anything else GPT, including other 5.6 variants) → `gpt`
@@ -59,8 +66,8 @@ export function resolveModel(input: string): Model | null {
   }
 
   // Family heuristics
-  // Sol never reaches here — the exact match above already returned it. Do
-  // not add a Sol family pattern: Terra, Luna, future 5.6 variants, and
+  // Sol never reaches here — the exact match above already returned both IDs.
+  // Do not add a Sol family pattern: Terra, Luna, future variants, and
   // suffixed model IDs must NOT inherit Sol's behavioral profile; they fall
   // through to the generic `gpt` family below.
   if (/^gpt-6-astra(-|$)/.test(s)) return 'gpt-6-astra';
