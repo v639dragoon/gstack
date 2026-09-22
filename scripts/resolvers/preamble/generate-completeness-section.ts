@@ -1,8 +1,9 @@
+import { isSolProfileModel } from '../../models';
 import type { TemplateContext } from '../types';
 
 export function generateCompletenessSection(ctx?: TemplateContext): string {
   if (ctx?.explainLevel === 'terse') return '';
-  if (ctx?.model === 'gpt-5.6-sol') {
+  if (isSolProfileModel(ctx?.model)) {
     return `## Completeness Principle — Boil the Ocean Within Scope
 
 AI makes completeness cheap, so do the complete thing **inside the user's explicit task boundary**. The requested target, allowed files or systems, and acceptance criteria define the lake. Within that lake, cover the relevant tests, edge cases, and error paths. Related but unnecessary refactors, speculative hardening, cleanup, and migrations are separate scope: report them, do not implement them.

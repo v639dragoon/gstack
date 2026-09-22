@@ -96,6 +96,29 @@ model = "gpt-5.6-terra"
     });
     expect(result.model).toBe('gpt');
     expect(result.warnings[0]).toContain("requires the exact ID 'gpt-5.6-sol'");
+    expect(result.warnings[0]).toContain("'gpt-6-sol'");
+  });
+
+  test('exact GPT-6 Sol config resolves without warning', () => {
+    const home = codexHome('model = "gpt-6-sol"\n');
+    expect(resolveCodexGenerationModel({ codexHome: home })).toEqual({
+      model: 'gpt-6-sol',
+      source: path.join(home, 'config.toml'),
+      warnings: [],
+    });
+  });
+
+  test('GPT-6 Sol near-miss warns and other GPT-6 variants remain generic', () => {
+    const nearMiss = resolveCodexGenerationModel({
+      codexHome: codexHome('model = "gpt-6-sol-2026-09-01"\n'),
+    });
+    expect(nearMiss.model).toBe('gpt');
+    expect(nearMiss.warnings).toHaveLength(1);
+    expect(nearMiss.warnings[0]).toContain("'gpt-5.6-sol' or 'gpt-6-sol'");
+
+    const luna = resolveCodexGenerationModel({ codexHome: codexHome('model = "gpt-6-luna"\n') });
+    expect(luna.model).toBe('gpt');
+    expect(luna.warnings).toEqual([]);
   });
 
   test('warnings never carry control characters from config values', () => {

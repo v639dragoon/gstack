@@ -18,6 +18,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { isSolProfileModel } from '../models';
 import type { TemplateContext } from './types';
 
 const OVERLAY_DIR = path.resolve(import.meta.dir, '../../model-overlays');
@@ -47,10 +48,10 @@ export function readOverlay(model: string, seen: Set<string> = new Set(), exclud
 export function generateModelOverlay(ctx: TemplateContext): string {
   if (!ctx.model) return '';
 
-  const content = readOverlay(ctx.model, new Set(), ctx.modules?.excluded);
+  const content = readOverlay(isSolProfileModel(ctx.model) ? 'gpt-5.6-sol' : ctx.model, new Set(), ctx.modules?.excluded);
   if (!content) return '';
 
-  const precedence = ctx.model === 'gpt-5.6-sol'
+  const precedence = isSolProfileModel(ctx.model)
     ? `The following instructions disambiguate scope for the ${ctx.model} model.
 They govern ambiguous completeness words such as \`complete\`, \`full\`, \`every\`,
 \`exhaustive\`, \`100%\`, and \`Boil the Ocean\`, and when to stop iterating on
