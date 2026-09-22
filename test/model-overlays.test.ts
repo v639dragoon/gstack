@@ -9,7 +9,7 @@ import * as path from 'path';
 import type { TemplateContext } from '../scripts/resolvers/types';
 import { HOST_PATHS } from '../scripts/resolvers/types';
 import { generateModelOverlay } from '../scripts/resolvers/model-overlay';
-import { resolveModel, type Model } from '../scripts/models';
+import { isSolProfileModel, resolveModel, type Model } from '../scripts/models';
 import { CLAUDE_FRONTIER_EVAL_MODEL } from '../lib/eval-model';
 import { readOverlay } from '../scripts/resolvers/model-overlay';
 import { generateCompletenessSection } from '../scripts/resolvers/preamble/generate-completeness-section';
@@ -81,9 +81,19 @@ function ctx(model: TemplateContext['model']): TemplateContext {
 describe('GPT-5.6 Sol model profile', () => {
   test('only the exact Sol ID selects the Sol profile', () => {
     expect(resolveModel('gpt-5.6-sol')).toBe('gpt-5.6-sol');
+    expect(resolveModel('gpt-6-sol')).toBe('gpt-6-sol');
+    expect(isSolProfileModel('gpt-5.6-sol')).toBe(true);
+    expect(isSolProfileModel('gpt-6-sol')).toBe(true);
     expect(resolveModel('gpt-5.6-terra')).toBe('gpt');
     expect(resolveModel('gpt-5.6-luna')).toBe('gpt');
     expect(resolveModel('gpt-5.6-sol-preview')).toBe('gpt');
+    expect(resolveModel('gpt-6-sol-2026-09-01')).toBe('gpt');
+    expect(resolveModel('gpt-6-luna')).toBe('gpt');
+    expect(resolveModel('gpt-6-terra')).toBe('gpt');
+    expect(resolveModel('gpt-6-astra')).toBe('gpt-6-astra');
+    expect(isSolProfileModel('gpt-6-sol-2026-09-01')).toBe(false);
+    expect(isSolProfileModel('gpt-6-luna')).toBe(false);
+    expect(isSolProfileModel(undefined)).toBe(false);
     expect(resolveModel('gpt-5.7')).toBe('gpt');
   });
 
@@ -103,6 +113,16 @@ describe('GPT-5.6 Sol model profile', () => {
     expect(out).toContain('Never use this patch to skip a concrete requirement');
   });
 
+  test('GPT-6 Sol uses the shared Sol overlay with its own model heading', () => {
+    const out = generateModelOverlay(ctx('gpt-6-sol'));
+    expect(out).toStartWith('## Model-Specific Behavioral Patch (gpt-6-sol)');
+    expect(out).toContain('The explicit task is the lake');
+    expect(out).toContain('one clean relevant verification pass');
+    expect(out).toContain('The following instructions disambiguate scope for the gpt-6-sol model.');
+    expect(out).toContain('Never use this patch to skip a concrete requirement');
+    expect(out).not.toContain('make your best judgment and proceed');
+  });
+
   // The lake intro moved from a per-model render-time generator into
   // bin/gstack-skill-start's one-time emission layer (token-reduction Phase 2).
   // Sol's scope discipline is carried by the model overlay + completeness
@@ -115,18 +135,29 @@ describe('GPT-5.6 Sol model profile', () => {
     expect(completeness).toContain('all relevant in-scope edge cases');
   });
 
+  test('GPT-6 Sol gets the Sol completeness section', () => {
+    expect(generateCompletenessSection(ctx('gpt-6-sol'))).toBe(generateCompletenessSection(ctx('gpt-5.6-sol')));
+    expect(generateCompletenessSection(ctx('gpt-6-sol'))).toContain('Boil the Ocean Within Scope');
+  });
+
   test('generic GPT copy remains unchanged', () => {
     const generic = generateModelOverlay(ctx('gpt'));
     const completeness = generateCompletenessSection(ctx('gpt'));
     expect(generic).toContain('make your best judgment and proceed');
+    // Fork (harness pass 2026-09-15): the generic preamble is Bounded Completion.
     expect(completeness).toContain('Bounded Completion');
     expect(completeness).not.toContain('completeness cheap');
+    for (const model of ['gpt-6-luna', 'gpt-6-sol-2026-09-01']) {
+      expect(generateCompletenessSection(ctx(resolveModel(model)!))).toBe(completeness);
+      expect(generateModelOverlay(ctx(resolveModel(model)!))).toBe(generic);
+    }
   });
 
   test('terse mode still suppresses the completeness section for Sol', () => {
     // Terse short-circuits before the Sol branch — a check-order flip would
     // ship Sol completeness prose to terse users (a token regression).
     expect(generateCompletenessSection({ ...ctx('gpt-5.6-sol'), explainLevel: 'terse' })).toBe('');
+    expect(generateCompletenessSection({ ...ctx('gpt-6-sol'), explainLevel: 'terse' })).toBe('');
   });
 });
 
