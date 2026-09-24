@@ -79,27 +79,47 @@ const cyclePlan = (plan: any, cycle: number) => {
 };
 const priorRunFinished = (ledger: any[], plan: any): boolean => {
   const lastRerunIndex = ledger.findLastIndex((r) => r.record_type === 'rerun-check');
-  if (lastRerunIndex < 0) return ledger.some((r) => r.record_type === 'complete');
   const lastRerun = ledger[lastRerunIndex];
-  const rerunPlan = plan.cyclePlans?.[String(lastRerun.cycle)] ?? plan;
-  if ((lastRerun.effective_cycle ?? lastRerun.cycle) > rerunPlan.repairCyclesMax) return false;
+  if (lastRerun) {
+    const rerunPlan = plan.cyclePlans?.[String(lastRerun.cycle)] ?? plan;
+    if ((lastRerun.effective_cycle ?? lastRerun.cycle) > rerunPlan.repairCyclesMax) return false;
+  }
   const after = ledger.slice(lastRerunIndex + 1);
-  if (after.some((r) => r.record_type === 'complete')) return true;
-  if (lastRerun.full_rerun !== false) return false;
-  const verifies = after
-    .map((r, index) => ({ r, index }))
-    .filter(({ r }) => r.record_type === 'dispatch' && !!r.verify_of);
-  const usedVerdicts = new Set<number>();
-  return verifies.length > 0 && verifies.every(({ r, index }) => {
-    if (!r.allowed) return false;
-    const verdictIndex = after.findIndex((later, i) =>
-      i > index && !usedVerdicts.has(i) && later.record_type === 'verdict' &&
-      later.gate === r.gate && later.cycle === r.cycle && later.verdict === 'clean',
-    );
-    if (verdictIndex < 0) return false;
-    usedVerdicts.add(verdictIndex);
-    return true;
-  });
+  const completion = after.filter((r) => r.record_type === 'complete').at(-1);
+  if (!completion && lastRerun?.full_rerun !== false) return false;
+  const cycle = completion ? completion.cycle : lastRerun.cycle;
+  const findings = ledger.filter((r) =>
+    r.record_type === 'finding' && r.blocking === true && r.cycle === cycle,
+  );
+  for (const verdict of ledger.filter((r) => r.record_type === 'verdict' && r.cycle === cycle)) {
+    const count = findings.filter((f) => f.gate === verdict.gate).length;
+    if (count < (verdict.critical ?? 0)) return false;
+  }
+  const pending = new Map<string, any[]>();
+  const verified = new Set<string>();
+  for (const record of after) {
+    const key = JSON.stringify([record.gate, record.cycle]);
+    if (record.record_type === 'dispatch' && record.allowed) {
+      const queue = pending.get(key) ?? [];
+      queue.push(record);
+      pending.set(key, queue);
+    } else if (record.record_type === 'verdict') {
+      const dispatch = pending.get(key)?.shift();
+      if (dispatch?.verify_of && record.verdict === 'clean')
+        verified.add(JSON.stringify([dispatch.gate, dispatch.cycle, dispatch.verify_of]));
+    }
+  }
+  let cleanVerifications = 0;
+  for (const finding of new Map(findings.map((f) => [f.fingerprint, f])).values()) {
+    const resolution = ledger.filter((r) =>
+      r.record_type === 'resolved' && r.fingerprint === finding.fingerprint,
+    ).at(-1);
+    if (resolution?.action === 'skipped' || resolution?.action === 'accepted') continue;
+    if (resolution?.action !== 'fixed') return false;
+    if (!verified.has(JSON.stringify([finding.gate, cycle, finding.fingerprint]))) return false;
+    cleanVerifications++;
+  }
+  return !!completion || cleanVerifications > 0;
 };
 
 if (command === 'plan') {
