@@ -88,12 +88,27 @@ const priorRunFinished = (ledger: any[], plan: any): boolean => {
   const completion = after.filter((r) => r.record_type === 'complete').at(-1);
   if (!completion && lastRerun?.full_rerun !== false) return false;
   const cycle = completion ? completion.cycle : lastRerun.cycle;
-  const findings = ledger.filter((r) =>
-    r.record_type === 'finding' && r.blocking === true && r.cycle === cycle,
+  const blockingFindings = ledger.filter((r) =>
+    r.record_type === 'finding' && r.blocking === true && r.cycle <= cycle,
   );
-  for (const verdict of ledger.filter((r) => r.record_type === 'verdict' && r.cycle === cycle)) {
-    const count = findings.filter((f) => f.gate === verdict.gate).length;
-    if (count < (verdict.critical ?? 0)) return false;
+  const resolutionFor = (fingerprint: string) => ledger.filter((r) =>
+    r.record_type === 'resolved' && r.fingerprint === fingerprint,
+  ).at(-1);
+  if (blockingFindings.some((f) =>
+    f.cycle < cycle && !['fixed', 'skipped', 'accepted'].includes(resolutionFor(f.fingerprint)?.action),
+  )) return false;
+  const findings = blockingFindings.filter((f) => f.cycle === cycle);
+  const criticalByGateCycle = new Map<string, number>();
+  for (const verdict of ledger.filter((r) => r.record_type === 'verdict' && r.cycle <= cycle)) {
+    const key = JSON.stringify([verdict.cycle, verdict.gate]);
+    criticalByGateCycle.set(key, (criticalByGateCycle.get(key) ?? 0) + (verdict.critical ?? 0));
+  }
+  for (const [key, critical] of criticalByGateCycle) {
+    const [findingCycle, gate] = JSON.parse(key);
+    const count = new Set(blockingFindings.filter((f) =>
+      f.cycle === findingCycle && f.gate === gate,
+    ).map((f) => f.fingerprint)).size;
+    if (critical > count) return false;
   }
   const pending = new Map<string, any[]>();
   const verified = new Set<string>();
@@ -111,9 +126,7 @@ const priorRunFinished = (ledger: any[], plan: any): boolean => {
   }
   let cleanVerifications = 0;
   for (const finding of new Map(findings.map((f) => [f.fingerprint, f])).values()) {
-    const resolution = ledger.filter((r) =>
-      r.record_type === 'resolved' && r.fingerprint === finding.fingerprint,
-    ).at(-1);
+    const resolution = resolutionFor(finding.fingerprint);
     if (resolution?.action === 'skipped' || resolution?.action === 'accepted') continue;
     if (resolution?.action !== 'fixed') return false;
     if (!verified.has(JSON.stringify([finding.gate, cycle, finding.fingerprint]))) return false;
