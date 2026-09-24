@@ -77,6 +77,30 @@ const cyclePlan = (plan: any, cycle: number) => {
   if (!selected) fail(`cycle ${cycle} not planned`);
   return selected;
 };
+const priorRunFinished = (ledger: any[], plan: any): boolean => {
+  const lastRerunIndex = ledger.findLastIndex((r) => r.record_type === 'rerun-check');
+  if (lastRerunIndex < 0) return ledger.some((r) => r.record_type === 'complete');
+  const lastRerun = ledger[lastRerunIndex];
+  const rerunPlan = plan.cyclePlans?.[String(lastRerun.cycle)] ?? plan;
+  if ((lastRerun.effective_cycle ?? lastRerun.cycle) > rerunPlan.repairCyclesMax) return false;
+  const after = ledger.slice(lastRerunIndex + 1);
+  if (after.some((r) => r.record_type === 'complete')) return true;
+  if (lastRerun.full_rerun !== false) return false;
+  const verifies = after
+    .map((r, index) => ({ r, index }))
+    .filter(({ r }) => r.record_type === 'dispatch' && !!r.verify_of);
+  const usedVerdicts = new Set<number>();
+  return verifies.length > 0 && verifies.every(({ r, index }) => {
+    if (!r.allowed) return false;
+    const verdictIndex = after.findIndex((later, i) =>
+      i > index && !usedVerdicts.has(i) && later.record_type === 'verdict' &&
+      later.gate === r.gate && later.cycle === r.cycle && later.verdict === 'clean',
+    );
+    if (verdictIndex < 0) return false;
+    usedVerdicts.add(verdictIndex);
+    return true;
+  });
+};
 
 if (command === 'plan') {
   const manifestFile = argv[0];
@@ -90,10 +114,62 @@ if (command === 'plan') {
   const manifestTier = m.routing?.risk_tier;
   if (!/^[ABCD]$/.test(manifestTier)) fail('manifest missing routing tier');
   const cycle = requestedCycle();
+  const resetRequested = cycle === 0 && has('--reset-repair-budget');
+  const resetReason = opt('--reset-repair-budget');
+  if (resetRequested && !resetReason?.trim()) fail('reset-repair-budget requires a reason');
   let previous: any = null;
   try {
     previous = JSON.parse(fs.readFileSync(planPath(m.run_id), 'utf8'));
   } catch {}
+  const oldCycleZero = previous?.cyclePlans?.['0'] ?? (previous?.cycle === 0 ? previous : null);
+  const branchResult = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+  });
+  const branch = branchResult.status === 0 && !branchResult.error
+    ? branchResult.stdout.trim()
+    : null;
+  const currentBranch = branch && branch !== 'HEAD' ? branch : null;
+  let carriedCycles = oldCycleZero?.carriedCycles ?? 0;
+  let carriedFrom = carriedCycles > 0 ? oldCycleZero?.carriedFrom ?? null : null;
+  let repairBudgetReset = oldCycleZero?.repairBudgetReset;
+  if (cycle === 0 && (!oldCycleZero || resetRequested)) {
+    let prior: any = null;
+    if (currentBranch && fs.existsSync(budgetDir)) {
+      const candidates = fs.readdirSync(budgetDir)
+        .filter((f) => f.endsWith('.json') && f !== `${m.run_id}.json`)
+        .map((f) => {
+          try {
+            return JSON.parse(fs.readFileSync(path.join(budgetDir, f), 'utf8'));
+          } catch {
+            return null;
+          }
+        })
+        .filter((c: any) => {
+          const zero = c?.cyclePlans?.['0'] ?? (c?.cycle === 0 ? c : null);
+          return zero?.branch === currentBranch && zero?.base === (m.base ?? null);
+        })
+        .sort((a: any, b: any) => {
+          const aZero = a.cyclePlans?.['0'] ?? a;
+          const bZero = b.cyclePlans?.['0'] ?? b;
+          return String(bZero.createdAt).localeCompare(String(aZero.createdAt));
+        });
+      prior = candidates[0] ?? null;
+    }
+    let wouldCarry = 0;
+    if (prior) {
+      const old = records(prior.runId);
+      if (!priorRunFinished(old, prior)) {
+        const zero = prior.cyclePlans?.['0'] ?? prior;
+        const fixCycles = new Set(old.filter((r) => r.record_type === 'rerun-check').map((r) => r.cycle)).size;
+        wouldCarry = (zero.carriedCycles ?? 0) + fixCycles;
+      }
+    }
+    carriedCycles = resetRequested ? 0 : wouldCarry;
+    carriedFrom = carriedCycles > 0 ? prior.runId : null;
+    if (resetRequested)
+      repairBudgetReset = { reason: resetReason, from: wouldCarry > 0 ? prior.runId : null, ts: now() };
+  }
   const cycleZeroTier =
     previous?.cyclePlans?.['0']?.effectiveTier ??
     (previous?.cycle === 0 ? previous.effectiveTier : null);
@@ -225,6 +301,10 @@ if (command === 'plan') {
   const plan: any = {
     runId: m.run_id,
     cycle,
+    branch: currentBranch,
+    carriedCycles,
+    carriedFrom,
+    ...(repairBudgetReset ? { repairBudgetReset } : {}),
     head_sha:
       spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repoRoot, encoding: 'utf8' }).stdout.trim() ||
       null,
@@ -300,6 +380,9 @@ if (command === 'plan') {
       ['CODEX_DOC_VOICE', plan.codexDocVoice],
       ['PASSES', passes.filter((x) => x.planned).map((x) => `${x.gate}@${x.model}:${x.effort}`).join(',')],
       ['REPAIR_CYCLES_MAX', cycles],
+      ['CARRIED_REPAIR_CYCLES', carriedCycles],
+      ['CARRIED_FROM', carriedFrom ?? ''],
+      ...(resetRequested ? [['REPAIR_BUDGET_RESET', resetReason]] as [string, any][] : []),
       ['AUTOFIX_INFORMATIONAL', false],
       ['MAX_ADVISORIES', 5],
       ['BLOCKING_SEVERITIES', blocking.join(',')],
@@ -537,6 +620,7 @@ if (command === 'complete') {
     process.exit(2);
   }
   console.log('COMPLETE=true');
+  append(id, { record_type: 'complete', run_id: id, cycle, ts: now() });
   process.exit(0);
 }
 
@@ -672,6 +756,8 @@ if (command === 'rerun-check') {
   if (lines > 50) triggers.push('delta-lines>50');
   const unique = [...new Set(triggers)];
   const full = unique.length > 0;
+  const carriedCycles = (rootPlan.cyclePlans?.['0'] ?? (rootPlan.cycle === 0 ? rootPlan : null))?.carriedCycles ?? 0;
+  const effective = cycle + carriedCycles;
   append(id, {
     record_type: 'rerun-check',
     run_id: id,
@@ -680,12 +766,15 @@ if (command === 'rerun-check') {
     fix_delta_lines: lines,
     since,
     cycle,
+    carried_cycles: carriedCycles,
+    effective_cycle: effective,
     ts: now(),
   });
   console.log(`FULL_RERUN=${full}`);
   console.log(`RERUN_TRIGGERS=${unique.length ? unique.join(',') : 'none'}`);
   console.log(`FIX_DELTA_LINES=${lines}`);
-  if (cycle > p.repairCyclesMax) {
+  console.log(`EFFECTIVE_REPAIR_CYCLE=${effective}`);
+  if (effective > p.repairCyclesMax) {
     console.log('REPAIR_CYCLES_EXHAUSTED=true');
     process.exit(3);
   }
