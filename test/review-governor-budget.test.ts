@@ -259,7 +259,7 @@ describe('review budgets', () => {
   });
   test('unfinished repair cycles carry into a new run and exhaust the shared budget', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     expect(run(d, s, ['plan', manifest(d, 'C', 'A'), '--cycle', '0']).status).toBe(0);
     expect(run(d, s, ['rerun-check', 'A', '--cycle', '0']).status).toBe(0);
     expect(run(d, s, ['plan', manifest(d, 'C', 'A'), '--cycle', '1']).status).toBe(0);
@@ -287,7 +287,7 @@ describe('review budgets', () => {
   });
   test('a successful completion after the last rerun finishes the prior run', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A')]);
     run(d, s, ['rerun-check', 'A']);
     expect(run(d, s, ['complete', 'A']).status).toBe(2);
@@ -305,7 +305,7 @@ describe('review budgets', () => {
   });
   test('a rerun after successful completion leaves the prior run unfinished', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A')]);
     expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
     expect(run(d, s, ['verdict', 'A', 'codex-structured', 'clean']).status).toBe(0);
@@ -316,10 +316,10 @@ describe('review budgets', () => {
   });
   test('different branches and legacy plans cannot carry cycles', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A')]);
     run(d, s, ['rerun-check', 'A']);
-    expect(spawnSync('git', ['checkout', '-b', 'feat/y'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/y'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     expect(run(d, s, ['plan', manifest(d, 'B', 'B')]).stdout).toContain('CARRIED_REPAIR_CYCLES=0');
     const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
     const bPath = join(project, 'B.json');
@@ -334,7 +334,7 @@ describe('review budgets', () => {
   });
   test('carry chains through abandoned runs and a recorded override resets it', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'C', 'A')]);
     run(d, s, ['rerun-check', 'A']);
     expect(run(d, s, ['plan', manifest(d, 'C', 'B')]).stdout).toContain('CARRIED_REPAIR_CYCLES=1');
@@ -354,7 +354,7 @@ describe('review budgets', () => {
   });
   test('a clean narrow verification finishes the prior run', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     const mp = manifest(d, 'B', 'A');
     expect(run(d, s, ['plan', mp]).status).toBe(0);
     rmSync(mp);
@@ -376,7 +376,7 @@ describe('review budgets', () => {
   });
   test('a narrow verification that finds issues leaves the prior run unfinished', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     const mp = manifest(d, 'B', 'A');
     run(d, s, ['plan', mp]);
     rmSync(mp);
@@ -396,7 +396,7 @@ describe('review budgets', () => {
   });
   test('an exhausted rerun stays unfinished even if a completion follows', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '2']);
     expect(run(d, s, ['rerun-check', 'A', '--cycle', '2']).status).toBe(3);
@@ -411,7 +411,7 @@ describe('review budgets', () => {
   });
   test('completion with an unresolved blocking finding does not finish a later cycle', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
     expect(run(d, s, ['rerun-check', 'A', '--cycle', '0']).stdout).toContain('FULL_RERUN=true');
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '1']);
@@ -427,7 +427,7 @@ describe('review budgets', () => {
   });
   test('completion cannot hide a critical verdict without recorded findings', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
     run(d, s, ['rerun-check', 'A', '--cycle', '0']);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '1']);
@@ -438,7 +438,7 @@ describe('review budgets', () => {
   });
   test('a narrow rerun needs clean verification for every fixed blocking finding', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     const mp = manifest(d, 'B', 'A');
     run(d, s, ['plan', mp]);
     rmSync(mp);
@@ -460,7 +460,7 @@ describe('review budgets', () => {
   });
   test('a narrow rerun converges with one verified fix and one skipped finding', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     const mp = manifest(d, 'B', 'A');
     run(d, s, ['plan', mp]);
     rmSync(mp);
@@ -482,7 +482,7 @@ describe('review budgets', () => {
   });
   test('a clean completed run without findings carries no cycles', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A')]);
     expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
     expect(run(d, s, ['verdict', 'A', 'codex-structured', 'clean']).status).toBe(0);
@@ -493,7 +493,7 @@ describe('review budgets', () => {
   });
   test('a clean later cycle cannot hide an unresolved earlier blocking finding', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
     expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--cycle', '0']).status).toBe(0);
     expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found', '--critical', '1', '--cycle', '0']).status).toBe(0);
@@ -511,7 +511,7 @@ describe('review budgets', () => {
   });
   test('an earlier fixed finding is closed by a later clean full rerun', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
     expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--cycle', '0']).status).toBe(0);
     expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found', '--critical', '1', '--cycle', '0']).status).toBe(0);
@@ -530,7 +530,7 @@ describe('review budgets', () => {
   });
   test('critical counts sum across retry verdicts for the same gate and cycle', () => {
     const { d, s } = setup();
-    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d, timeout: 30_000 }).status).toBe(0);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
     run(d, s, ['rerun-check', 'A', '--cycle', '0']);
     run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '1']);
