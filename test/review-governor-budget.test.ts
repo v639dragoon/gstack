@@ -363,6 +363,7 @@ describe('review budgets', () => {
     expect(run(d, s, ['finding', 'A', JSON.stringify({
       severity: 'P1', fingerprint: 'fp', gate: 'codex-structured', summary: 'fix',
     })]).status).toBe(0);
+    expect(run(d, s, ['resolve', 'A', 'fp', '--action', 'fixed']).status).toBe(0);
     writeFileSync(join(d, 'x.ts'), 'fixed\n');
     const rerun = run(d, s, ['rerun-check', 'A']);
     expect(rerun.status).toBe(0);
@@ -384,6 +385,7 @@ describe('review budgets', () => {
     expect(run(d, s, ['finding', 'A', JSON.stringify({
       severity: 'P1', fingerprint: 'fp', gate: 'codex-structured', summary: 'fix',
     })]).status).toBe(0);
+    expect(run(d, s, ['resolve', 'A', 'fp', '--action', 'fixed']).status).toBe(0);
     writeFileSync(join(d, 'x.ts'), 'fixed\n');
     expect(run(d, s, ['rerun-check', 'A']).stdout).toContain('FULL_RERUN=false');
     expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--verify-of', 'fp']).status).toBe(0);
@@ -406,5 +408,87 @@ describe('review budgets', () => {
     const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
     expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
     expect(b.stdout).toMatch(/^CARRIED_FROM=A$/m);
+  });
+  test('completion with an unresolved blocking finding does not finish a later cycle', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
+    expect(run(d, s, ['rerun-check', 'A', '--cycle', '0']).stdout).toContain('FULL_RERUN=true');
+    run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '1']);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--cycle', '1']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found', '--cycle', '1']).status).toBe(0);
+    expect(run(d, s, ['finding', 'A', JSON.stringify({
+      severity: 'P1', fingerprint: 'fp', gate: 'codex-structured', summary: 'still open',
+    }), '--cycle', '1']).status).toBe(0);
+    expect(run(d, s, ['complete', 'A', '--cycle', '1']).stdout).toContain('COMPLETE=true');
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=A$/m);
+  });
+  test('completion cannot hide a critical verdict without recorded findings', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
+    run(d, s, ['rerun-check', 'A', '--cycle', '0']);
+    run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '1']);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--cycle', '1']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found', '--critical', '1', '--cycle', '1']).status).toBe(0);
+    expect(run(d, s, ['complete', 'A', '--cycle', '1']).status).toBe(0);
+    expect(run(d, s, ['plan', manifest(d, 'B', 'B')]).stdout).toContain('CARRIED_REPAIR_CYCLES=1');
+  });
+  test('a narrow rerun needs clean verification for every fixed blocking finding', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    const mp = manifest(d, 'B', 'A');
+    run(d, s, ['plan', mp]);
+    rmSync(mp);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found', '--critical', '2']).status).toBe(0);
+    for (const fp of ['first', 'second']) {
+      expect(run(d, s, ['finding', 'A', JSON.stringify({
+        severity: 'P1', fingerprint: fp, gate: 'codex-structured', summary: fp,
+      })]).status).toBe(0);
+      expect(run(d, s, ['resolve', 'A', fp, '--action', 'fixed']).status).toBe(0);
+    }
+    writeFileSync(join(d, 'x.ts'), 'fixed\n');
+    expect(run(d, s, ['rerun-check', 'A']).stdout).toContain('FULL_RERUN=false');
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--verify-of', 'first']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'clean']).status).toBe(0);
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=A$/m);
+  });
+  test('a narrow rerun converges with one verified fix and one skipped finding', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    const mp = manifest(d, 'B', 'A');
+    run(d, s, ['plan', mp]);
+    rmSync(mp);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found', '--critical', '2']).status).toBe(0);
+    for (const fp of ['fixed', 'skipped'])
+      expect(run(d, s, ['finding', 'A', JSON.stringify({
+        severity: 'P1', fingerprint: fp, gate: 'codex-structured', summary: fp,
+      })]).status).toBe(0);
+    expect(run(d, s, ['resolve', 'A', 'fixed', '--action', 'fixed']).status).toBe(0);
+    expect(run(d, s, ['resolve', 'A', 'skipped', '--action', 'skipped']).status).toBe(0);
+    writeFileSync(join(d, 'x.ts'), 'fixed\n');
+    expect(run(d, s, ['rerun-check', 'A']).stdout).toContain('FULL_RERUN=false');
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--verify-of', 'fixed']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'clean']).status).toBe(0);
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=0');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=$/m);
+  });
+  test('a clean completed run without findings carries no cycles', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'B', 'A')]);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'clean']).status).toBe(0);
+    expect(run(d, s, ['complete', 'A']).status).toBe(0);
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=0');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=$/m);
   });
 });
