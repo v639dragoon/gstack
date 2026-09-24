@@ -257,4 +257,154 @@ describe('review budgets', () => {
     expect(JSON.parse(ledger.trim()).blocking).toBe(true);
     expect(run(d, s, ['report', 'blocking']).stdout).toContain('BLOCKING_FINDINGS=1');
   });
+  test('unfinished repair cycles carry into a new run and exhaust the shared budget', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    expect(run(d, s, ['plan', manifest(d, 'C', 'A'), '--cycle', '0']).status).toBe(0);
+    expect(run(d, s, ['rerun-check', 'A', '--cycle', '0']).status).toBe(0);
+    expect(run(d, s, ['plan', manifest(d, 'C', 'A'), '--cycle', '1']).status).toBe(0);
+    expect(run(d, s, ['rerun-check', 'A', '--cycle', '1']).status).toBe(0);
+    const b = run(d, s, ['plan', manifest(d, 'C', 'B'), '--cycle', '0']);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=2');
+    expect(b.stdout).toContain('CARRIED_FROM=A');
+    const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
+    const bPlan = JSON.parse(readFileSync(join(project, 'B.json'), 'utf8'));
+    expect(bPlan.cyclePlans['0'].branch).toBe('feat/x');
+    expect(bPlan.cyclePlans['0'].carriedCycles).toBe(2);
+    const first = run(d, s, ['rerun-check', 'B', '--cycle', '0']);
+    expect(first.status).toBe(0);
+    expect(first.stdout).toContain('EFFECTIVE_REPAIR_CYCLE=2');
+    const ledger = readFileSync(join(project, 'B.ledger.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    expect(ledger[0].carried_cycles).toBe(2);
+    expect(ledger[0].effective_cycle).toBe(2);
+    run(d, s, ['plan', manifest(d, 'C', 'B'), '--cycle', '1']);
+    const inherited = JSON.parse(readFileSync(join(project, 'B.json'), 'utf8'));
+    expect(inherited.cyclePlans['1'].carriedCycles).toBe(2);
+    expect(inherited.cyclePlans['1'].carriedFrom).toBe('A');
+    const exhausted = run(d, s, ['rerun-check', 'B', '--cycle', '1']);
+    expect(exhausted.status).toBe(3);
+    expect(exhausted.stdout).toContain('REPAIR_CYCLES_EXHAUSTED=true');
+  });
+  test('a successful completion after the last rerun finishes the prior run', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'B', 'A')]);
+    run(d, s, ['rerun-check', 'A']);
+    expect(run(d, s, ['complete', 'A']).status).toBe(2);
+    for (const gate of ['codex-structured']) {
+      expect(run(d, s, ['dispatch', 'A', gate]).status).toBe(0);
+      expect(run(d, s, ['verdict', 'A', gate, 'clean']).status).toBe(0);
+    }
+    expect(run(d, s, ['complete', 'A']).stdout).toContain('COMPLETE=true');
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=0');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=$/m);
+    const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
+    const events = readFileSync(join(project, 'A.ledger.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    expect(events.filter((r: any) => r.record_type === 'complete')).toHaveLength(1);
+  });
+  test('a rerun after successful completion leaves the prior run unfinished', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'B', 'A')]);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'clean']).status).toBe(0);
+    expect(run(d, s, ['complete', 'A']).status).toBe(0);
+    run(d, s, ['rerun-check', 'A']);
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
+  });
+  test('different branches and legacy plans cannot carry cycles', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'B', 'A')]);
+    run(d, s, ['rerun-check', 'A']);
+    expect(spawnSync('git', ['checkout', '-b', 'feat/y'], { cwd: d }).status).toBe(0);
+    expect(run(d, s, ['plan', manifest(d, 'B', 'B')]).stdout).toContain('CARRIED_REPAIR_CYCLES=0');
+    const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
+    const bPath = join(project, 'B.json');
+    const legacy = JSON.parse(readFileSync(bPath, 'utf8'));
+    delete legacy.branch;
+    delete legacy.cyclePlans['0'].branch;
+    writeFileSync(bPath, JSON.stringify(legacy));
+    run(d, s, ['rerun-check', 'B']);
+    const c = run(d, s, ['plan', manifest(d, 'B', 'C')]);
+    expect(c.stdout).toContain('CARRIED_REPAIR_CYCLES=0');
+    expect(c.stdout).toContain('CARRIED_FROM=');
+  });
+  test('carry chains through abandoned runs and a recorded override resets it', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'C', 'A')]);
+    run(d, s, ['rerun-check', 'A']);
+    expect(run(d, s, ['plan', manifest(d, 'C', 'B')]).stdout).toContain('CARRIED_REPAIR_CYCLES=1');
+    run(d, s, ['rerun-check', 'B']);
+    const c = run(d, s, ['plan', manifest(d, 'C', 'C')]);
+    expect(c.stdout).toContain('CARRIED_REPAIR_CYCLES=2');
+    expect(c.stdout).toContain('CARRIED_FROM=B');
+    const reset = run(d, s, ['plan', manifest(d, 'C', 'D'), '--reset-repair-budget', 'founder: new scope']);
+    expect(reset.status).toBe(0);
+    expect(reset.stdout).toContain('REPAIR_BUDGET_RESET=founder: new scope');
+    expect(reset.stdout).toContain('CARRIED_REPAIR_CYCLES=0');
+    const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
+    const plan = JSON.parse(readFileSync(join(project, 'D.json'), 'utf8'));
+    expect(plan.cyclePlans['0'].repairBudgetReset.reason).toBe('founder: new scope');
+    expect(plan.cyclePlans['0'].repairBudgetReset.from).toBe('C');
+    expect(run(d, s, ['plan', manifest(d, 'C', 'E'), '--reset-repair-budget', '  ']).status).not.toBe(0);
+  });
+  test('a clean narrow verification finishes the prior run', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    const mp = manifest(d, 'B', 'A');
+    expect(run(d, s, ['plan', mp]).status).toBe(0);
+    rmSync(mp);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found']).status).toBe(0);
+    expect(run(d, s, ['finding', 'A', JSON.stringify({
+      severity: 'P1', fingerprint: 'fp', gate: 'codex-structured', summary: 'fix',
+    })]).status).toBe(0);
+    writeFileSync(join(d, 'x.ts'), 'fixed\n');
+    const rerun = run(d, s, ['rerun-check', 'A']);
+    expect(rerun.status).toBe(0);
+    expect(rerun.stdout).toContain('FULL_RERUN=false');
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--verify-of', 'fp']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'clean']).status).toBe(0);
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=0');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=$/m);
+  });
+  test('a narrow verification that finds issues leaves the prior run unfinished', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    const mp = manifest(d, 'B', 'A');
+    run(d, s, ['plan', mp]);
+    rmSync(mp);
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found']).status).toBe(0);
+    expect(run(d, s, ['finding', 'A', JSON.stringify({
+      severity: 'P1', fingerprint: 'fp', gate: 'codex-structured', summary: 'fix',
+    })]).status).toBe(0);
+    writeFileSync(join(d, 'x.ts'), 'fixed\n');
+    expect(run(d, s, ['rerun-check', 'A']).stdout).toContain('FULL_RERUN=false');
+    expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--verify-of', 'fp']).status).toBe(0);
+    expect(run(d, s, ['verdict', 'A', 'codex-structured', 'issues_found']).status).toBe(0);
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=A$/m);
+  });
+  test('an exhausted rerun stays unfinished even if a completion follows', () => {
+    const { d, s } = setup();
+    expect(spawnSync('git', ['checkout', '-b', 'feat/x'], { cwd: d }).status).toBe(0);
+    run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '0']);
+    run(d, s, ['plan', manifest(d, 'B', 'A'), '--cycle', '2']);
+    expect(run(d, s, ['rerun-check', 'A', '--cycle', '2']).status).toBe(3);
+    const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
+    const ledgerPath = join(project, 'A.ledger.jsonl');
+    writeFileSync(ledgerPath, readFileSync(ledgerPath, 'utf8') + JSON.stringify({
+      record_type: 'complete', run_id: 'A', cycle: 2, ts: new Date().toISOString(),
+    }) + '\n');
+    const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
+    expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
+    expect(b.stdout).toMatch(/^CARRIED_FROM=A$/m);
+  });
 });
