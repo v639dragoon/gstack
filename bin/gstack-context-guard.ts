@@ -14,7 +14,7 @@ export const CONTINUITY_FIELDS =
 export function messages(tokens: number, warn: number, handoff: number) {
   return {
     warn: `CONTEXT GUARD: ${tokens} tokens (>= ${Math.round(warn / 1000)}k). Refresh the task ledger now (Completed / Remaining / Current SHA / Next action) and prepare a compact checkpoint (/context-save) carrying: ${CONTINUITY_FIELDS}. Finish the current gate; plan the split at the next natural boundary.`,
-    handoff: `CONTEXT GUARD: ${tokens} tokens (>= ${Math.round(handoff / 1000)}k). Hand off now: finish the active operation safely (never kill a running worker or discard an unfinished gate result), update the ledger, then run /context-save with: ${CONTINUITY_FIELDS}. Until that checkpoint exists, gstack-context-fence refuses any new worker, review, planning or Codex dispatch in this session. Resume in a fresh session from the checkpoint.`,
+    handoff: `CONTEXT GUARD: ${tokens} tokens (>= ${Math.round(handoff / 1000)}k). Hand off now: finish the active operation safely (never kill a running worker or discard an unfinished gate result), update the ledger, then run /context-save with: ${CONTINUITY_FIELDS}. Until that checkpoint exists, gstack-context-fence asks the user's permission before any new worker, review, planning or Codex dispatch in this session. Once it is saved, ask the user to type /clear: the resume hook restores the checkpoint in the cleared session.`,
   };
 }
 async function main() {
