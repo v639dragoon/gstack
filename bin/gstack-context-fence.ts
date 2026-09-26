@@ -35,7 +35,7 @@ export function decide(
     expensive = EXPENSIVE_BASH.test(cmd) && !/context-save|checkpoints\//.test(cmd);
   }
   if (!expensive) return null;
-  return `CONTEXT GUARD: this session crossed the handoff threshold and no checkpoint has been written since. Finish the active operation, update the ledger, run /context-save (objective, acceptance criteria, completed, remaining, decisions, branch/worktree/commit, dirty changes, running workers, verification evidence, next action), then ask the user to type /clear (the resume hook restores the checkpoint). Until that checkpoint exists, every new ${tool} dispatch needs the user's permission.`;
+  return `CONTEXT GUARD: this session crossed the handoff threshold and no checkpoint has been written since. Finish the active operation, update the ledger, run /context-save (objective, acceptance criteria, completed, remaining, decisions, branch/worktree/commit, dirty changes, running workers, verification evidence, next action), then ask the user to type /clear (the resume hook then cues /context-restore). Until that checkpoint exists, every new ${tool} dispatch needs the user's permission.`;
 }
 function newestCheckpoint(dir: string): number | null {
   try {
