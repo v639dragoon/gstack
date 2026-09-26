@@ -13,6 +13,9 @@ import { spawnSync } from 'child_process';
  * MAX_LINES so the injection never becomes its own context problem.
  */
 export const MAX_LINES = 60;
+// dohma's .claude/settings.json greps this file for the name CLEAR_MAX_AGE_MS
+// before wiring /clear to this hook, so an older install never sees /clear.
+// Renaming it silently turns the /clear restore off there.
 export const CLEAR_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export function pick(dir: string, branch: string | null, source?: string, now = Date.now()): string | null {
   let files: string[];
