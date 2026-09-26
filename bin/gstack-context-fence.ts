@@ -4,14 +4,16 @@ import { spawnSync } from 'child_process';
 /**
  * gstack-context-fence — PreToolUse hook that ENFORCES the context guard's
  * handoff line. Once bin/gstack-context-guard has written the session's
- * `.handoff` marker, this hook denies every NEW expensive dispatch — an Agent
+ * `.handoff` marker, this hook holds every NEW expensive dispatch — an Agent
  * spawn, a Codex invocation, a review-budget dispatch, a wrapped verification
- * lane, or a planning/review/ship skill — until a checkpoint newer than the
- * marker exists under $GSTACK_HOME/projects/<slug>/checkpoints/ (what
- * /context-save writes). Everything else stays allowed, so the active
- * operation can finish, the ledger can be edited and the checkpoint written;
- * running workers are never touched. Missing input or any failure is silent
- * and allows the call (fail-open, like every gstack hook).
+ * lane, or a planning/review/ship skill — for the user's permission
+ * (`permissionDecision: "ask"`, so the user can approve one past the line)
+ * until a checkpoint newer than the marker exists under
+ * $GSTACK_HOME/projects/<slug>/checkpoints/ (what /context-save writes).
+ * Everything else stays allowed, so the active operation can finish, the
+ * ledger can be edited and the checkpoint written; running workers are never
+ * touched. Missing input or any failure is silent and allows the call
+ * (fail-open, like every gstack hook).
  */
 export const EXPENSIVE_TOOLS = ['Agent', 'Task'];
 export const EXPENSIVE_SKILLS = /^(autoplan|ship|review|plan-(ceo|eng|design|devex)-review|design-review|design-consultation|design-shotgun|spec|qa|qa-only|investigate|codex|land-and-deploy)$/;
@@ -33,7 +35,7 @@ export function decide(
     expensive = EXPENSIVE_BASH.test(cmd) && !/context-save|checkpoints\//.test(cmd);
   }
   if (!expensive) return null;
-  return `CONTEXT GUARD: this session crossed the handoff threshold and no checkpoint has been written since. Finish the active operation, update the ledger, run /context-save (objective, acceptance criteria, completed, remaining, decisions, branch/worktree/commit, dirty changes, running workers, verification evidence, next action), then continue in a fresh session. New ${tool} dispatches are refused until that checkpoint exists.`;
+  return `CONTEXT GUARD: this session crossed the handoff threshold and no checkpoint has been written since. Finish the active operation, update the ledger, run /context-save (objective, acceptance criteria, completed, remaining, decisions, branch/worktree/commit, dirty changes, running workers, verification evidence, next action), then ask the user to type /clear (the resume hook then cues /context-restore). Until that checkpoint exists, every new ${tool} dispatch needs the user's permission.`;
 }
 function newestCheckpoint(dir: string): number | null {
   try {
@@ -80,7 +82,7 @@ async function main() {
       JSON.stringify({
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
-          permissionDecision: 'deny',
+          permissionDecision: 'ask',
           permissionDecisionReason: reason,
         },
       }),
