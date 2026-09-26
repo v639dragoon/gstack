@@ -1,5 +1,6 @@
 /** Context handoff ENFORCEMENT: past the handoff marker, a new expensive
- * dispatch is refused until a checkpoint newer than the marker exists. */
+ * dispatch needs the user's permission until a checkpoint newer than the
+ * marker exists. */
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'fs';
 import { join } from 'path';
@@ -35,9 +36,9 @@ describe('decide (pure)', () => {
     expect(decide('Agent', {}, null, null)).toBeNull();
     expect(decide('Agent', {}, 1000, 2000)).toBeNull();
   });
-  test('expensive tools are refused past the marker, ordinary work is not', () => {
+  test('expensive tools are held for permission past the marker, ordinary work is not', () => {
     expect(decide('Agent', {}, 1000, null)).toContain('CONTEXT GUARD');
-    expect(decide('Agent', {}, 1000, 900)).toContain('refused');
+    expect(decide('Agent', {}, 1000, 900)).toContain("needs the user's permission");
     expect(decide('Skill', { skill: 'ship' }, 1000, null)).toContain('CONTEXT GUARD');
     expect(decide('Skill', { skill: 'context-save' }, 1000, null)).toBeNull();
     expect(decide('Bash', { command: 'codex exec "x" -s read-only' }, 1000, null)).toContain('CONTEXT GUARD');
@@ -49,7 +50,7 @@ describe('decide (pure)', () => {
   });
 });
 describe('fence + guard end to end', () => {
-  test('guard writes a marker with the token count; fence denies until /context-save writes a checkpoint', () => {
+  test('guard writes a marker with the token count; fence asks until /context-save writes a checkpoint', () => {
     const d = repo(), state = mkdtempSync(join(tmpdir(), 'fence-state-'));
     dirs.push(state);
     const t = join(state, 't.jsonl');
@@ -60,8 +61,9 @@ describe('fence + guard end to end', () => {
     const marker = JSON.parse(require('fs').readFileSync(join(state, 'context-guard', 'sess1.handoff'), 'utf8'));
     expect(marker.tokens).toBe(250);
     const hook = { session_id: 'sess1', cwd: d, tool_name: 'Agent', tool_input: { prompt: 'review' } };
-    const denied = run(fence, hook, state, d);
-    expect(denied.stdout).toContain('"permissionDecision":"deny"');
+    const held = run(fence, hook, state, d);
+    expect(held.stdout).toContain('"permissionDecision":"ask"');
+    expect(held.stdout).not.toContain('"deny"');
     expect(run(fence, { ...hook, tool_name: 'Bash', tool_input: { command: 'git diff' } }, state, d).stdout).toBe('');
     // Another session is untouched.
     expect(run(fence, { ...hook, session_id: 'other' }, state, d).stdout).toBe('');
@@ -70,7 +72,7 @@ describe('fence + guard end to end', () => {
     mkdirSync(ck, { recursive: true });
     writeFileSync(join(ck, '20260101-old.md'), 'branch: main\n');
     utimesSync(join(ck, '20260101-old.md'), new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
-    expect(run(fence, hook, state, d).stdout).toContain('deny');
+    expect(run(fence, hook, state, d).stdout).toContain('"ask"');
     writeFileSync(join(ck, '20260915-new.md'), 'branch: main\n');
     utimesSync(join(ck, '20260915-new.md'), new Date(Date.now() + 5_000), new Date(Date.now() + 5_000));
     expect(run(fence, hook, state, d).stdout).toBe('');
