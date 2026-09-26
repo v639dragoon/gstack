@@ -38,7 +38,9 @@ describe('context guard', () => {
   test('below is silent, warn and handoff emit once, garbage is silent', () => {
     expect(go(99).run().stdout).toBe('');
     const w = go(100);
-    expect(w.run().stdout).toContain('CONTEXT GUARD');
+    const warned = w.run().stdout;
+    expect(warned).toContain('CONTEXT GUARD');
+    expect(warned).toContain('Tell the user in chat now');
     expect(w.run().stdout).toBe('');
     const h = go(200);
     expect(h.run().stdout).toContain('Hand off now');
