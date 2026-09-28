@@ -26,6 +26,10 @@ Write the text into each printed file with your file-write tool (Claude Code's W
 4. **NO_VERSION:** replaces items 1-3: keep an existing title (the platform title
    piped straight into the file), or write `<type>: <summary>`; no version prefix.
 
+**Post-merge:** replaces items 1-3: write `<type>: <summary>` into the same title
+file, stripping any stale version prefix. Do not run the version rewrite helper.
+For the title self-check, in-branch it must start with `v$NEW_VERSION `, and post-merge it must have no version prefix.
+
 Save the title file name for Step 19.
 
 ---
@@ -61,7 +65,7 @@ The PR/MR body should contain these sections (never reuse a prior run's body):
 ```
 ## Summary
 <Read `git log origin/<base>..HEAD --oneline`. Group every substantive commit by
-theme, excluding VERSION/CHANGELOG bookkeeping. Do not paste the commit list.>
+theme, excluding release metadata (VERSION/CHANGELOG in-branch or the fragment post-merge). Do not paste the commit list.>
 
 ## Test Coverage
 <coverage diagram from Step 7, or "All new code paths have test coverage.">

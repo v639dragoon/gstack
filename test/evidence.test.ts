@@ -227,6 +227,17 @@ describe('gstack-evidence check', () => {
     expect(run(['check', '--label', 'tests', '--allow-paths', 'CHANGELOG.md']).status).toBe(1);
   });
 
+  test('allow-paths accepts exactly one nested fragment path', () => {
+    expect(run(['run', '--label', 'tests', '--', 'echo green']).status).toBe(0);
+    fs.mkdirSync(path.join(repoDir, 'changelog.d'));
+    fs.writeFileSync(path.join(repoDir, 'changelog.d', 'feature-one.md'), '---\nbump: patch\n---\nFixed one issue.\n');
+    git('add changelog.d/feature-one.md');
+    git('commit -q -m fragment');
+
+    expect(run(['check', '--label', 'tests', '--allow-paths', 'changelog.d/feature-one.md']).status).toBe(0);
+    expect(run(['check', '--label', 'tests', '--allow-paths', 'changelog.d/feature-two.md']).status).toBe(1);
+  });
+
   test('--expect-cmd binds the label to the exact command string', () => {
     expect(run(['run', '--label', 'tests', '--', 'echo green']).status).toBe(0);
     expect(run(['check', '--label', 'tests', '--expect-cmd', 'echo green']).status).toBe(0);

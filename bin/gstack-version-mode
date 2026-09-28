@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Print the VERSION workflow selected by the repository being shipped.
+set -eu
+
+repo=.
+if [ "$#" -ne 0 ]; then
+  if [ "$#" -ne 2 ] || [ "$1" != "--repo" ] || [ -z "$2" ]; then
+    echo 'usage: gstack-version-mode [--repo <dir>]' >&2
+    exit 2
+  fi
+  repo=$2
+fi
+
+if [ ! -d "$repo" ]; then
+  echo "not a directory: $repo" >&2
+  exit 2
+fi
+
+repo=$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$repo")
+
+if [ -f "$repo/changelog.d/README.md" ]; then
+  echo post-merge
+else
+  echo in-branch
+fi
