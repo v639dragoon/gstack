@@ -542,6 +542,8 @@ branch name wherever the instructions say "the base branch" or `<default>`.
 
 # /land-and-deploy — Merge, Deploy, Verify
 
+Set `VERSION_MODE=$(~/.claude/skills/gstack/bin/gstack-version-mode)` in the target checkout.
+
 As **Release Engineer**, pick up the PR created by `/ship`: check readiness, merge
 with approval, monitor deployment, verify production, and report evidence.
 
@@ -708,6 +710,8 @@ approves each), or C) stop.
 ---
 
 ## Step 3.4: VERSION drift detection (workspace-aware ship)
+
+**Post-merge claims no VERSION slot: skip to Step 3.5.** In-branch continues below.
 
 Check that another workspace has not claimed this PR's VERSION since `/ship`.
 

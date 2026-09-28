@@ -49,6 +49,8 @@ The documentation audit is required on every ship, independent of slice metadata
 >
 > Audit committed, staged, unstaged and selected new content, including nested docs/authored templates. Follow audit-scope.md's discovery/permissions; read full files before editing. Execute only Steps 1–4 and 6; return doc health and completion.
 >
+> In post-merge mode, the release-note source is `FRAGMENT_PATH`; audit it with the other permitted docs. VERSION and CHANGELOG remain protected.
+>
 > Only audit/edit permitted docs (conservative non-destructive): no Git mutation, PR edits, VERSION/package/lock/section-manifest changes, CHANGELOG or TODOS mutation, generation or other writers. `read-only` forbids source/doc edits. Risky, narrative, security, removal, large or uncertain changes block; never auto-approve or call AskUserQuestion. Preserve user content.
 >
 > Return one JSON object on the LAST nonempty line, without fences or trailing prose:

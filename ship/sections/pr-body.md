@@ -31,7 +31,7 @@ The PR/MR body should contain these sections (never reuse a prior run's body):
 ```
 ## Summary
 <Read `git log origin/<base>..HEAD --oneline`. Group every substantive commit by
-theme, excluding VERSION/CHANGELOG bookkeeping. Do not paste the commit list.>
+theme, excluding release metadata (VERSION/CHANGELOG in-branch or the fragment post-merge). Do not paste the commit list.>
 
 ## Test Coverage
 <coverage diagram from Step 7, or "All new code paths have test coverage.">
@@ -129,7 +129,7 @@ BODY_REST_FILE=$(mktemp "${_GT:?}/pr-body-rest.XXXXXX") || { echo "Not sent: mkt
 
 Write the text into each printed file with your file-write tool (Claude Code's Write tool needs a Read of the empty file first), exactly as it should appear. The text never goes into a shell command, heredoc or quoted argument. If a write fails or is refused, do not send: print the cause, the file path and the command below for sending by hand.
 
-Use Step 18's `NEW_TITLE` unchanged; its version prefix is already present.
+Use Step 18's `NEW_TITLE` unchanged; its value is mode-specific, with the version prefix already present in-branch.
 In a new shell, restore the saved literal title before this block, and Step 14.5's
 saved section file path as `DOCS_SECTION_FILE`. Substitute the printed names. The
 block deletes both drafts; to change the body, write fresh ones.
@@ -172,7 +172,7 @@ Update the title with the same scanned `NEW_TITLE`: `gh pr edit --title "$NEW_TI
 
 **REST fallback:** if `gh pr edit` fails with the `repository.pullRequest.projectCards` GraphQL deprecation, do not re-ask for auth. Use the SAME scanned file: `PR_NUMBER=$(gh pr view --json number -q .number)`, then `gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" -X PATCH -F body=@"$PR_BODY_FILE"`; for the title use `gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" -X PATCH -f title="$NEW_TITLE"`.
 
-**Self-check:** re-fetch the title and assert it equals `NEW_TITLE`. Retry once if wrong, then surface any failure. Print the existing URL and continue to Step 20; do not run the create commands below.
+**Self-check:** re-fetch the title and assert it equals the mode-specific `NEW_TITLE`; in-branch it must start with `v$NEW_VERSION `, and post-merge it must have no version prefix. Retry once if wrong, then surface any failure. Print the existing URL and continue to Step 20; do not run the create commands below.
 
 **No open PR/MR, GitHub:**
 

@@ -437,6 +437,8 @@ STOP blocks advancement until the stated repair/resume route clears; without one
 Answer each AskUserQuestion before continuing.
 Routine authorization never waives those gates or their required user decisions.
 
+Set `VERSION_MODE=$($GSTACK_ROOT/bin/gstack-version-mode)` in this checkout. In post-merge mode leave VERSION, CHANGELOG.md, and manifest versions untouched.
+
 Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
 
 **Routine work needs no confirmation:** include uncommitted changes, choose MICRO/PATCH
@@ -449,6 +451,7 @@ tests without another permission question. Step 15 commits those tests.
 Every new invocation repeats Steps 1–16, including deterministic checks, tier-budgeted reviews and the docs audit.
 Deterministic tests/typecheck/build/gitleaks/redaction/verification/claim-check remain required when applicable.
 Steps 12, 17 and 19 prevent duplicate bumps, pushes and PRs, never verification.
+In post-merge mode, Step 12 chooses BUMP_LEVEL and Step 13 rewrites this branch's one fragment.
 
 ### Keep state between steps
 
@@ -724,7 +727,7 @@ Merge the base ref fetched in Step 1 so tests and reviews cover the integrated c
 git merge origin/<base> --no-edit
 ```
 
-**If there are merge conflicts:** Try to auto-resolve if they are simple (VERSION, schema.rb, CHANGELOG ordering). For complex or ambiguous conflicts, **STOP**, show the conflicting choices, use AskUserQuestion for the needed resolution decision, and wait for the answer before editing or continuing.
+**If there are merge conflicts:** Try to auto-resolve if they are simple (schema.rb; VERSION/CHANGELOG only in-branch). Post-merge leaves version files untouched. For complex or ambiguous conflicts, **STOP**, show the conflicting choices, use AskUserQuestion for the needed resolution decision, and wait for the answer before editing or continuing.
 
 **If already up to date:** Continue silently.
 
@@ -792,6 +795,10 @@ or reset the invocation's audit attempts or repair counts.
    Step 16. Continue to Step 12.
 
 ## Step 12: Version bump (auto-decide)
+
+**Post-merge:** Use item 2 for `BUMP_LEVEL`, including MINOR/MAJOR questions.
+Skip classify/write/repair, `gstack-next-version`, queue, and `NEW_VERSION`.
+**In-branch:** Follow items 1–5 below.
 
 Item 3 needs `BUMP_LEVEL`: reuse this invocation's saved level. Otherwise FRESH
 chooses it in item 2 and ALREADY_BUMPED derives it in item 1.
@@ -923,9 +930,10 @@ Make bisectable commits; if already committed, continue to Step 16. Never create
    Under 50 lines across fewer than 4 files may use one commit.
 2. Order dependencies first: infrastructure → models/services → controllers/views.
    Each commit must work independently, without broken imports or missing code.
-   Group VERSION + CHANGELOG + TODOS.md after the feature commits.
+   In-branch: group VERSION + CHANGELOG + TODOS.md after the feature commits.
+   Post-merge: group the one fragment + TODOS.md instead.
 3. Use `<type>: <summary>` (feat/fix/chore/refactor/docs) and a brief body.
-   Only the final VERSION/CHANGELOG commit gets the release version and co-author
+   In-branch, only the final VERSION/CHANGELOG commit gets the release version and co-author
    trailer. Do not create a Git tag:
 
 ```bash
@@ -937,9 +945,14 @@ EOF
 )"
 ```
 
+   - Post-merge: final fragment commit `chore: changelog fragment (<bump>)` with co-author trailer. Never stage version files.
+
 ---
 
 ## Step 16: Verification Gate
+
+Post-merge: evidence permits only `--allow-paths "$FRAGMENT_PATH"` (exact path);
+no version or package exemption. In-branch uses the example below.
 
 **IRON LAW: NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE.**
 
@@ -1026,6 +1039,8 @@ can qualify; scripts, dependencies and runtime configuration require live tests.
 Uncertain edits cannot be exempted. Docs, TODO edits, new/generated tests and fixes
 make evidence STALE even without a new code review. Use this example only after
 confirming that every allowed edit is release metadata:
+
+Post-merge: use only `--allow-paths "$FRAGMENT_PATH"` (exact path). Below is in-branch.
 
 ```bash
 [ -d "${GSTACK_ROOT:-/-}/bin" ]&&[ -d "$GSTACK_ROOT/lib" ]||{ _r=$(git rev-parse --show-toplevel 2>/dev/null)/.agents/skills/gstack;[ -d "$_r/bin" ]||_r=${CODEX_HOME:-~/.codex}/skills/gstack;[ -d "$_r/bin" ]||{ echo "gstack: no install found (tried $_r). Fix: ./setup --host codex from your gstack checkout; ./setup --status shows it.">&2;exit 1;};GSTACK_ROOT=$_r;}
@@ -1179,6 +1194,11 @@ Continue to Step 18. No documentation writer runs after push.
 
 ## Step 18: Prepare publication metadata
 
+**Post-merge:** Set `NEW_TITLE="<type>: <summary>"`, stripping any stale version
+prefix; do not use the rewrite helper or NEW_VERSION. Name BUMP_LEVEL and
+FRAGMENT_PATH in the body without claiming an assigned version. The lookup
+and saved-title rules still apply; the prefix instructions below are in-branch only.
+
 First look up open PRs/MRs for `<branch-name>` on the detected platform:
 
 - GitHub: `gh pr list --head <branch-name> --state open --json number,title,url`
@@ -1222,7 +1242,7 @@ Substitute from earlier steps:
 - **PLAN_TOTAL**: total plan items extracted in Step 8 (0 if no plan file)
 - **PLAN_DONE**: count of DONE + CHANGED items from Step 8 (0 if no plan file)
 - **VERIFY_RESULT**: "pass", "fail", or "skipped", set after Step 9 executes Step 8.1's verification list
-- **VERSION**: `NEW_VERSION` from Step 12; `null` (unquoted) under NO_VERSION
+- **VERSION**: post-merge, literal `post-merge:<BUMP_LEVEL>` as a pre-release metric; in-branch, `NEW_VERSION` from Step 12 or `null` (unquoted) under NO_VERSION
 
 The shell supplies the branch. Run this automatically, without confirmation.
 
@@ -1264,7 +1284,7 @@ The marker or enabled question_tuning suppresses it. To re-enable, remove
 ## Section self-check (before you finish)
 
 List the applicable Section index entries and confirm each Read. If you worked from
-memory, STOP, Read the section and redo that step. Use `gstack-version-bump`, never
+memory, STOP, Read the section and redo that step. In-branch: use `gstack-version-bump`, never
 hand-roll VERSION/package.json writes.
 
 ---
@@ -1274,6 +1294,6 @@ hand-roll VERSION/package.json writes.
 Follow the numbered gates and their explicit exceptions.
 
 - **Never force push.** Use regular `git push` only.
-- **Use the configured version file's format** (4-digit for VERSION); under NO_VERSION,
+- **In-branch: use the configured version file's format** (4-digit for VERSION); under NO_VERSION,
   never invent one.
 - **Step 7 generates coverage tests.** They must pass before committing. Never commit failing tests.
