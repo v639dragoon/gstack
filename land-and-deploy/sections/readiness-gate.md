@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 3.5: Pre-merge readiness gate
 
+Post-merge: find the single added fragment (`git diff --name-only --diff-filter=A <base>...HEAD -- changelog.d/`) as `FRAGMENT_PATH`; report missing or multiple fragments.
+
 **This is the critical safety check before an irreversible merge.** The merge cannot
 be undone without a revert commit. Gather ALL evidence, build a readiness report,
 and get explicit user confirmation before proceeding.
@@ -122,7 +124,10 @@ Set `TEST_COMMAND` to the project's exact test command from CLAUDE.md (default
 `bun test 2>&1`); use that same string in both check and run. Check the ledger:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd "$TEST_COMMAND" --max-age 24 --allow-paths CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
+ALLOW_PATHS=CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
+[ "$VERSION_MODE" = post-merge ] && ALLOW_PATHS=$FRAGMENT_PATH
+~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd "$TEST_COMMAND" --max-age 24 --allow-paths "$ALLOW_PATHS"
+
 ```
 
 (The `--expect-cmd` string must be the exact command the recorded run used —
@@ -195,7 +200,7 @@ git log --oneline "$BASE_SHA..$PR_HEAD" | head -20
 Compare the PR body against the actual commits. Check for:
 1. **Missing features** — commits that add significant functionality not mentioned in the PR
 2. **Stale descriptions** — PR body mentions things that were later changed or reverted
-3. **Wrong version** — PR title or body references a version that doesn't match VERSION file
+3. **Wrong version (in-branch only):** PR title or body references a version that doesn't match VERSION file. In post-merge mode, skip this check and verify that the body names the bump and fragment path instead.
 
 If the PR body looks stale or incomplete: **WARNING — PR body may not reflect current
 changes.** List what's missing or stale.
@@ -210,10 +215,10 @@ git log --oneline --all-match --grep="docs:" "$BASE_SHA..$PR_HEAD" | head -5
 
 Also check if key doc files were modified:
 ```bash
-git diff --name-only "$BASE_SHA...$PR_HEAD" -- README.md CHANGELOG.md ARCHITECTURE.md CONTRIBUTING.md CLAUDE.md VERSION
+git diff --name-only "$BASE_SHA...$PR_HEAD" -- README.md CHANGELOG.md ARCHITECTURE.md CONTRIBUTING.md CLAUDE.md VERSION changelog.d/
 ```
 
-If CHANGELOG.md and VERSION were NOT modified on this branch and the diff includes
+In post-merge mode, check that `FRAGMENT_PATH` exists and is the single added fragment in the PR diff. Mark a missing fragment as **WARNING: changelog fragment missing**. Do not require CHANGELOG.md or VERSION changes. In in-branch mode, if CHANGELOG.md and VERSION were NOT modified on this branch and the diff includes
 new features (new files, new commands, new skills): **WARNING — /document-release
 likely not run. CHANGELOG and VERSION not updated despite new features.**
 
@@ -265,14 +270,15 @@ Build the full readiness report:
 ║  ├─ E2E tests:     52/52 pass (25 min ago) / NOT RUN     ║
 ║  └─ LLM evals:     PASS / NOT RUN                        ║
 ║  DOCUMENTATION                                           ║
-║  ├─ CHANGELOG:     Updated / NOT UPDATED (warning)       ║
-║  ├─ VERSION:       0.9.8.0 / NOT BUMPED (warning)        ║
+║  ├─ Release notes: Updated / MISSING (warning)           ║
 ║  └─ Doc release:   Run / NOT RUN (warning)               ║
 ║  PR BODY                                                 ║
 ║  └─ Accuracy:      Current / STALE (warning)             ║
 ║  WARNINGS: N  |  BLOCKERS: N                             ║
 ╚══════════════════════════════════════════════════════════╝
 ```
+
+In-branch: show CHANGELOG and VERSION rows. Post-merge: show `Fragment: <FRAGMENT_PATH> present / MISSING`.
 
 If there are BLOCKERS (including failing free tests): show the report and **STOP**
 with repair instructions. Do not offer A or C with blockers.

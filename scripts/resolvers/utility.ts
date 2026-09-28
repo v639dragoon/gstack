@@ -359,6 +359,19 @@ export function generateSetupCommand(ctx: TemplateContext): string {
 export function generateChangelogWorkflow(ctx: TemplateContext): string {
   return `## Step 13: CHANGELOG (auto-generate)
 
+**Post-merge:** Write or refresh exactly one fragment, \`changelog.d/<slug>.md\`, and leave CHANGELOG.md unchanged. Derive \`<slug>\` from the current branch by replacing each \`/\` with \`-\` and dropping every character outside \`[A-Za-z0-9._-]\`. Before choosing a path, find this branch's added fragment with \`git diff --name-only --diff-filter=A <base>...HEAD -- changelog.d/\`. If one exists, rewrite it in place on every rerun; if more than one exists, stop and reconcile to one. Otherwise use the slug path. Save the exact relative path as \`FRAGMENT_PATH\` for later gates. Use the diff and commit checklist in steps 2-4 and the voice rules in step 5. Write exactly:
+
+   \`\`\`markdown
+   ---
+   bump: micro | patch | minor | major
+   ---
+   <lead paragraph, then applicable ### Fixed / ### Changed / ### Added sections>
+   \`\`\`
+
+Replace the displayed alternatives with the lowercase \`BUMP_LEVEL\` value; the frontmatter has exactly one key, \`bump\`. The body has no \`# \` or \`## \` heading and no version/date header. Cross-check every substantive commit against the fragment. The fragment is the only release file in this PR. Skip the in-branch instructions below.
+
+**In-branch only:**
+
 1. Read \`CHANGELOG.md\` header to know the format.
 
 2. **First, enumerate every commit on the branch:**

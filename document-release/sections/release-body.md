@@ -83,6 +83,10 @@ Apply approved changes immediately after each answer.
 
 ## Step 5: CHANGELOG Voice Polish
 
+Set `VERSION_MODE=$(~/.claude/skills/gstack/bin/gstack-version-mode)` for Steps 5-9.
+
+**Post-merge:** Find the single added fragment with `git diff --name-only --diff-filter=A <diff-base>...HEAD -- changelog.d/`. Polish its body with exact edits; preserve `bump` and facts. Never edit CHANGELOG.md or version files. If absent or ambiguous, report and skip. Below is in-branch only.
+
 **CRITICAL — NEVER CLOBBER CHANGELOG ENTRIES.**
 
 This step polishes voice. It does NOT rewrite, replace, or regenerate CHANGELOG content.
@@ -122,7 +126,7 @@ After auditing each file individually, do a cross-doc consistency pass:
 
 1. Does the README's feature/capability list match what CLAUDE.md (or project instructions) describes?
 2. Does ARCHITECTURE's component list match CONTRIBUTING's project structure description?
-3. Does CHANGELOG's latest version match the VERSION file?
+3. In-branch only: does CHANGELOG's latest version match the VERSION file? In post-merge mode, confirm the fragment bump and body agree with the PR diff instead.
 4. **Discoverability:** Is every documentation file reachable from README.md or CLAUDE.md? If
    ARCHITECTURE.md exists but neither README nor CLAUDE.md links to it, flag it. Every doc
    should be discoverable from one of the two entry-point files.
@@ -158,6 +162,8 @@ If TODOS.md does not exist, skip this step.
 ---
 
 ## Step 8: VERSION Bump Question
+
+**Post-merge:** Skip this entire question. The target release job assigns VERSION after merge. Continue to Step 9 with date-only completion stamps.
 
 **CRITICAL — NEVER BUMP VERSION WITHOUT ASKING.**
 
@@ -400,7 +406,7 @@ Continue to Step 9 to commit and publish the approved documentation edits.
 
 ## Step 9: Commit & Output
 
-First finalize Step 7's completion stamps using Step 8's final VERSION (or date only).
+Finalize Step 7 stamps using Step 8's VERSION in-branch or the date only post-merge.
 All approved cross-model doc fixes above are included in this commit, push, and summary.
 
 **Empty check first:** Run `git status` (never use `-uall`). If no documentation files were
@@ -409,7 +415,7 @@ modified by this run (including approved VERSION/manifest updates), skip commit/
 **Commit:**
 
 1. Stage only files changed by this run by name, including any approved version files (never `git add -A` or `git add .`). Leave pre-existing user changes unstaged.
-2. Create a single commit, substituting the final VERSION. If VERSION is absent, omit `for vX.Y.Z.W`:
+2. Create a single commit, substituting final VERSION in-branch. Post-merge uses `docs: update project documentation` with no version:
 
 ```bash
 git commit -m "$(cat <<'EOF'
@@ -556,6 +562,8 @@ rmdir "<run-dir>"
 
 **PR/MR title sync (idempotent, always-on):**
 
+Post-merge mode skips this entire title-sync block. Its PR title is `<type>: <summary>` with no version prefix. The block below is in-branch only.
+
 PR titles must always start with `v<VERSION>` — same rule as `/ship`. If Step 8 bumped VERSION after `/ship` had already created the PR, the title is now stale. This sub-step fixes it.
 
 Run this entire block in one shell, substituting `github` or `gitlab` for `<platform>` from Step 0. No variables cross tool calls. Missing VERSION or PR/MR skips title sync; an update failure warns and continues.
@@ -593,6 +601,8 @@ Documentation health:
   TODOS.md        [status] ([details])
   VERSION         [status] ([details])
 ```
+
+In post-merge mode, replace the CHANGELOG.md and VERSION rows with `FRAGMENT_PATH [status] ([details])`.
 
 Where status is one of:
 - Updated — with description of what changed

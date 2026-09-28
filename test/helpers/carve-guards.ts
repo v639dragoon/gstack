@@ -153,7 +153,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     },
     behavioral: 'external',
     externalTest: 'test/skill-e2e-ship-section-loading.test.ts',
-    maxSkeletonBytes: 79_300, // + v2.0 {{ASIDE_RESEARCH}} (Aside first, WebSearch fallback); measured 78_275
+    maxSkeletonBytes: 83_300, // upstream 78,373 + fork governor/D2 binding/post-merge guards 4,880 = 83,253 (v1.91.9); pinned behavior retained.
     minUnionBytes: 181_000, // token-reduction Phases 1-2 (v1.69.x branch); measured union 201,464
     mustContain: ['VERSION', 'CHANGELOG', 'review', 'merge', 'PR'],
     // v1.58.5.0: pre-push-guard install (#2077) stacks on the shared first-run-guidance preamble.
@@ -481,7 +481,7 @@ do not launch the downstream skill or open a browser.`,
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 74_881, // Shared-code identity/skip/action rules + critical-severity validation; measured 74,493 (2026-09-17). + v1.91.12.0 merge of #2999 (review clarity repairs: await reads, research alongside dispatch, /review deadline and setup authority, findings sources) with #3002 (guarded state-root lines, plan-check checkpoints); each fit alone; measured 74,881 (2026-10-01).
+    maxSkeletonBytes: 75_700, // upstream 74,078 + fork governor/model/queue guards 1,542 = 75,620 (v1.91.9); pinned behavior retained.
     minUnionBytes: 88_000, // review governor removed the LOC/adversarial prose (phase0-pr-gating); measured union 88,719 over v1.79
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
     maxSizeRatio: 1.185, // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors. + v1.91.12.0 merge of #2999 (above, plus plan-completion fallback intent and specialist checklist-by-path) with #3002; measured 1.1843 (2026-10-01).

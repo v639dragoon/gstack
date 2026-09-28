@@ -124,7 +124,7 @@ describe('pre-publication documentation lifecycle', () => {
   test('PR creation and reruns keep current and blocked audits visible', () => {
     const body = read('ship/sections/pr-body.md.tmpl');
     expect(body).toContain("Use Step 18's `NEW_TITLE`");
-    expect(body).toContain('`NEW_TITLE` unchanged; its version prefix is already present');
+    expect(body).toContain('`NEW_TITLE` unchanged; its value is mode-specific, with the version prefix already present in-branch');
     expect(body).toContain('printf \'%s\' "$NEW_TITLE" |');
     expect(body).toContain('gh pr create --base <base> --title "$NEW_TITLE"');
     expect(body).toContain('gh pr edit --title "$NEW_TITLE"');
