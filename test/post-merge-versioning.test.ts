@@ -12,14 +12,14 @@ describe('gstack-version-mode', () => {
   test('selects mode from current checkout and --repo, including a path with spaces', () => {
     const repo = mkdtempSync(join(tmpdir(), 'version mode '));
     try {
-      const run = (args: string[] = []) => execFileSync('bash', [helper, ...args], { cwd: repo, encoding: 'utf8' }).trim();
+      const run = (args: string[] = []) => execFileSync('bash', [helper, ...args], { cwd: repo, encoding: 'utf8', timeout: 30_000 }).trim();
       expect(run()).toBe('in-branch');
       expect(run(['--repo', repo])).toBe('in-branch');
       mkdirSync(join(repo, 'changelog.d'));
       writeFileSync(join(repo, 'changelog.d/README.md'), 'opt in\n');
       expect(run()).toBe('post-merge');
       expect(run(['--repo', repo])).toBe('post-merge');
-      expect(spawnSync('bash', [helper, '--repo'], { encoding: 'utf8' }).status).toBe(2);
+      expect(spawnSync('bash', [helper, '--repo'], { encoding: 'utf8', timeout: 30_000 }).status).toBe(2);
     } finally { rmSync(repo, { recursive: true, force: true }); }
   });
 });
