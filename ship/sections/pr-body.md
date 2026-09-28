@@ -35,6 +35,10 @@ Write the text into each printed file with your file-write tool (Claude Code's W
    `gstack-plain-title check --branch "$(git branch --show-current)" --mode warn` and print its last line;
    a pushed branch is never renamed.
 
+**Post-merge:** replaces items 1-3: write `<type>: <summary>` into the same title
+file, stripping any stale version prefix. Do not run the version rewrite helper.
+For the title self-check, in-branch it must start with `v$NEW_VERSION `, and post-merge it must have no version prefix.
+
 Save the title file name for Step 19.
 
 ---
@@ -91,7 +95,7 @@ gate lines and every other machine-read line go only in the closing Agent notes 
 ## Summary
 <Open with the problem in the user's words (what they hit, saw or asked), then the fix
 and what they get now; themes from `git log origin/<base>..HEAD --oneline` after that,
-minus VERSION/CHANGELOG bookkeeping. Never an inventory or a commit list. BAD: "Adds
+minus release metadata (VERSION/CHANGELOG in-branch or the fragment post-merge). Never an inventory or a commit list. BAD: "Adds
 gstack-prose-lint, wires Steps 13 and 19, refreshes the goldens." GOOD: "Nobody reads a
 CHANGELOG entry twice, so autopilot words shipped every release. /ship now lints the entry
 before the commit and names each line to rewrite.">

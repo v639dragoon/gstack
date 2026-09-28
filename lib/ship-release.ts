@@ -38,7 +38,7 @@ import { finishPlan } from './plan-record';
 import { PREPUSH_CHECK_IDS } from './pregate/index';
 import { checkBranch, loadPlainTitlePolicy, type PlainFinding } from './plain-title';
 import { buildRunCheck } from './pregate/run-check';
-import { bin, carryLane, carryNoneLines, evidenceExempt, firstLine, flagReader, fragmentPath, gh, git, hostedOrigin, laneLine, lanes, mappedLanes, recordCiTimeout, releasePaths, Report, runLanes, sh, shipPolicy, shipRunMarker, short, stampedFiles } from './ship-bin-common';
+import { bin, carryLane, carryNoneLines, evidenceExempt, firstLine, flagReader, fragmentPath, gh, git, hostedOrigin, laneLine, lanes, mappedLanes, recordCiTimeout, postMergeMode, releasePaths, Report, runLanes, sh, shipPolicy, shipRunMarker, short, stampedFiles } from './ship-bin-common';
 
 export const RELEASE_HELP = `gstack-ship-release — /ship Steps 12 and 15-17 (ship/SKILL.md)
 
@@ -98,6 +98,12 @@ export function version(argv: readonly string[], cwd: string): Report {
   const r = new Report();
   const policy = shipPolicy(cwd, base);
   const fragment = fragmentPath(policy, cwd);
+  if (postMergeMode(cwd)) {
+    const level = flag('--bump');
+    if (!LEVELS.includes(level as Bump)) return r.stop('BUMP_LEVEL needed (post-merge): choose micro|patch|minor|major from Step 12 item 2, including its MINOR/MAJOR questions; rerun with --bump');
+    return r.add(`VERSION: skipped (post-merge; BUMP_LEVEL=${level}; VERSION, CHANGELOG.md and manifest versions stay untouched)`)
+      .next(`Step 13: write or refresh ${fragment} with exactly one frontmatter key, bump: ${level}; save FRAGMENT_PATH; no version/date heading; leave VERSION, CHANGELOG.md and manifest versions untouched`);
+  }
   if (policy?.queue_mode === 'stamp-at-merge' || fragment) return r.add(`VERSION: skipped (policy: ${fragment ? 'changelog_fragments' : 'queue_mode stamp-at-merge'} replaces Step 12 items 1-4; the merge stamps it)`).next(fragment ? `Step 13: write the entry as ${fragment} (entry text only, no heading), never an [Unreleased] section` : 'Step 13: write the CHANGELOG entry under ## [Unreleased]');
   let c = classify(cwd, base);
   if (c.error) return r.stop(`a configured version file is missing, empty, unreadable or malformed: ${c.error}; fix it or its pin, then rerun (never substitute 0.0.0.0)`);

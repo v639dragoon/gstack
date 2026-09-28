@@ -109,6 +109,7 @@ export function versionOnlyEdit(cwd: string, ref: string, p: string): boolean {
 export function releasePaths(policy: Record<string, any> | null, cwd: string, ref: string, base: string, stampOnly = false): string[] {
   const list = (v: unknown) => (Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : []);
   const fragment = fragmentPath(policy, cwd);
+  if (postMergeMode(cwd)) return ['TODOS.md', fragment!];
   const declared = [...list(policy?.release_outputs), ...list(policy?.stamp_paths)];
   return [...new Set(['VERSION', 'CHANGELOG.md', 'TODOS.md', 'agents-digest/gstack-AGENTS.md', ...VERSIONED_MANIFESTS.filter(p => versionOnlyEdit(cwd, ref, p)),
     ...(typeof policy?.changelog === 'string' ? [policy.changelog] : []), ...(fragment ? [fragment] : []), ...(stampOnly ? [] : declared),
@@ -144,8 +145,12 @@ export function stampedFiles(policy: Record<string, any> | null, cwd: string, re
     f.hunks.every(h => h.removed.length === h.added.length && h.removed.every((line, i) => stamp(f.path, line, h.added[i]!, h.removedAt[i]!)))).map(f => f.path);
 }
 
+export const postMergeMode = (cwd: string): boolean => bin(cwd, 'gstack-version-mode', [], 30_000).stdout.trim() === 'post-merge';
+
 /** Under `changelog_fragments`, the branch's own Step 13 entry `<dir>/<branch-slug>.md` (docs/ship-policy.md#changelog-fragments); null without the key. */
 export function fragmentPath(policy: Record<string, any> | null, cwd: string): string | null {
+  const branch = git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']).stdout.trim();
+  if (postMergeMode(cwd)) return `changelog.d/${branch.replaceAll('/', '-').replace(/[^A-Za-z0-9._-]/g, '')}.md`;
   const dir = policy?.changelog_fragments?.dir;
   if (typeof dir !== 'string') return null;
   return `${dir.replace(/\/+$/, '')}/${fragmentSlug(git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']).stdout.trim())}.md`;
