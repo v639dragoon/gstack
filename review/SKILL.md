@@ -578,6 +578,8 @@ Remember the printed start token as REVIEW_START for this pass. Capture it befor
 
 ## Step 3.4: Workspace-aware queue status (advisory)
 
+Set `VERSION_MODE=$(~/.claude/skills/gstack/bin/gstack-version-mode)`. In post-merge mode, skip this advisory: the PR claims no VERSION or queue slot. The rest of Step 3.4 is in-branch only.
+
 Check whether this PR's claimed VERSION still points at a free slot in the queue. Advisory only — never blocks review; just informs the reviewer about landing-order risk.
 
 ```bash

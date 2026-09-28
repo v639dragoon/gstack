@@ -510,6 +510,8 @@ branch name wherever the instructions say "the base branch" or `<default>`.
 
 You are running the `/ship` workflow. Automate routine work without confirmation. The user said `/ship` which authorizes that work, but does not waive the explicit safety and user-decision gates below. Run through to the PR URL unless a gate requires input or reports a blocker.
 
+Set `VERSION_MODE=$($GSTACK_ROOT/bin/gstack-version-mode)` in this checkout. In post-merge mode leave VERSION, CHANGELOG.md, and manifest versions untouched.
+
 Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
 
 **Stop for blockers and explicit decision gates.** Follow every STOP or AskUserQuestion instruction in the steps below and the preamble. Common gates include:
@@ -540,7 +542,7 @@ Re-running `/ship` reruns deterministic tests/typecheck/build/gitleaks/redaction
 verification/claim-check, tier-budgeted review, and plan-gated coverage,
 plan completion, and doc release.
 Only *actions* are idempotent:
-- Step 12: If VERSION already bumped, skip the bump but still read the version
+- Step 12: In-branch, reuse an existing bump. Post-merge, rewrite this branch's one fragment.
 - Step 17: If already pushed, skip the push command
 - Step 19: If PR exists, update the body instead of creating a new PR
 Never skip a verification step because a prior `/ship` run already performed it.
@@ -677,7 +679,7 @@ Fetch and merge the base branch into the feature branch so tests run against the
 git fetch origin <base> && git merge origin/<base> --no-edit
 ```
 
-**If there are merge conflicts:** Try to auto-resolve if they are simple (VERSION, schema.rb, CHANGELOG ordering). If conflicts are complex or ambiguous, **STOP** and show them.
+**Merge conflicts:** Auto-resolve simple ones (schema.rb; VERSION/CHANGELOG only in-branch). Post-merge leaves version files untouched. For ambiguous conflicts, **STOP**.
 
 **If already up to date:** Continue silently.
 
@@ -2433,6 +2435,10 @@ If any learnings come back, name which one applies to the version bump or CHANGE
 
 ## Step 12: Version bump (auto-decide)
 
+**Post-merge:** Use step 2 for `BUMP_LEVEL`, including MINOR/MAJOR questions. Skip classify/write/repair, `gstack-next-version`, queue, and `NEW_VERSION`.
+
+**In-branch:** Follow steps 1-5 below.
+
 Use **`gstack-version-bump`** for classify/write/repair and `gstack-next-version`
 for slot selection. Bump level and queue collisions remain agent decisions.
 
@@ -2473,6 +2479,19 @@ for slot selection. Bump level and queue collisions remain agent decisions.
    Substitute `NEW_VERSION`, `BUMP_LEVEL`, and one-line `WHY` (scope or breaking-change signal). Best-effort, non-interactive, non-blocking.
 
 ## Step 13: CHANGELOG (auto-generate)
+
+**Post-merge:** Write or refresh exactly one fragment, `changelog.d/<slug>.md`, and leave CHANGELOG.md unchanged. Derive `<slug>` from the current branch by replacing each `/` with `-` and dropping every character outside `[A-Za-z0-9._-]`. Before choosing a path, find this branch's added fragment with `git diff --name-only --diff-filter=A <base>...HEAD -- changelog.d/`. If one exists, rewrite it in place on every rerun; if more than one exists, stop and reconcile to one. Otherwise use the slug path. Save the exact relative path as `FRAGMENT_PATH` for later gates. Use the diff and commit checklist in steps 2-4 and the voice rules in step 5. Write exactly:
+
+   ```markdown
+   ---
+   bump: micro | patch | minor | major
+   ---
+   <lead paragraph, then applicable ### Fixed / ### Changed / ### Added sections>
+   ```
+
+Replace the displayed alternatives with the lowercase `BUMP_LEVEL` value; the frontmatter has exactly one key, `bump`. The body has no `# ` or `## ` heading and no version/date header. Cross-check every substantive commit against the fragment. The fragment is the only release file in this PR. Skip the in-branch instructions below.
+
+**In-branch only:**
 
 1. Read `CHANGELOG.md` header to know the format.
 
@@ -2655,7 +2674,7 @@ Create small, logical commits for `git bisect`. If all changes are already commi
    - **Infrastructure:** migrations, config changes, route additions
    - **Models & services:** new models, services, concerns (with their tests)
    - **Controllers & views:** controllers, views, JS/React components (with their tests)
-   - **VERSION + CHANGELOG + TODOS.md:** always in the final commit
+   - **In-branch:** VERSION + CHANGELOG + TODOS.md in the final commit. **Post-merge:** the one fragment + TODOS.md in the final commit.
 
 3. **Rules for splitting:**
    - A model and its test file go in the same commit
@@ -2670,7 +2689,7 @@ Create small, logical commits for `git bisect`. If all changes are already commi
 5. Compose each commit message:
    - First line: `<type>: <summary>` (type = feat/fix/chore/refactor/docs)
    - Body: brief description of what this commit contains
-   - Only the **final commit** (VERSION + CHANGELOG) gets the version tag and co-author trailer:
+   - In-branch, only the **final commit** (VERSION + CHANGELOG) gets the version tag and co-author trailer:
 
 ```bash
 git commit -m "$(cat <<'EOF'
@@ -2681,6 +2700,8 @@ EOF
 )"
 ```
 
+   - Post-merge: final fragment commit `chore: changelog fragment (<bump>)` with co-author trailer. Never stage version files.
+
 ---
 
 ## Step 16: Verification Gate
@@ -2688,6 +2709,8 @@ EOF
 **IRON LAW: NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE.**
 
 The evidence ledger is the mechanical arm of this law. Check it FIRST:
+
+Post-merge: use only `--allow-paths "$FRAGMENT_PATH"` (exact path). Below is in-branch.
 
 ```bash
 $GSTACK_ROOT/bin/gstack-evidence check --label tests --expect-cmd '<exact tests-lane command from Step 5>' --label vitest --expect-cmd '<exact vitest-lane command from Step 5>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,agents-digest/gstack-AGENTS.md --allow-version-only package.json
@@ -2713,8 +2736,7 @@ code review; partial, failed or timed-out records are never reused.
 
 - **Every line FRESH (exit 0):** the recorded runs were green and the working-tree
   content is identical to what was tested, modulo the allow-listed release files
-  (this mechanizes the "CHANGELOG edits don't count" rule — VERSION/CHANGELOG
-  commits between Step 5 and here don't invalidate the run). Cite the evidence
+  (release metadata edits allowed above do not invalidate the run). Cite the evidence
   lines (label, exit, ts, log path) as the verification evidence and continue.
 - **Any STALE/MISSING (exit non-zero):** run live, wrapped, so the fresh run is
   recorded: `$GSTACK_ROOT/bin/gstack-evidence run --label <lane> -- '<command>'`.
@@ -2722,7 +2744,7 @@ code review; partial, failed or timed-out records are never reused.
 
 Before pushing, re-verify if code changed at any point after Step 5:
 
-1. **Test verification:** If ANY code changed after Step 5's test run (fixes from review findings, CHANGELOG edits don't count), re-run the test suite. The evidence check above IS this rule, mechanized — trust FRESH, re-run on STALE. Paste fresh output when you re-run. Stale output from Step 5 with changed content is NOT acceptable.
+1. **Test verification:** If ANY code changed after Step 5's test run (except the mode's allowed release file), re-run the test suite. The evidence check above enforces this: trust FRESH, re-run on STALE. Paste fresh output. Stale output is NOT acceptable.
 
 2. **Build verification:** If the project has a build step, run it. Paste output.
 
@@ -2814,11 +2836,13 @@ git push -u origin <branch-name>
 
 ---
 
-**PR/MR title invariant (always applies — do not skip even if you don't open the section below):** Any PR or MR you create OR update in the next step MUST have a title that starts with `v$NEW_VERSION` (the version bumped in Step 12), in the format `v<NEW_VERSION> <type>: <summary>`. Never create or edit a PR/MR title without this prefix. Compute the correct title with the single source of truth helper: `$GSTACK_ROOT/bin/gstack-pr-title-rewrite.sh "$NEW_VERSION" "<current title>"`. The full create/update procedure (idempotency, redaction scan, self-check) is in the section below.
+**PR/MR title:** Post-merge uses `<type>: <summary>` without the rewrite helper. In-branch MUST start with `v$NEW_VERSION`; use `gstack-pr-title-rewrite.sh "$NEW_VERSION" "<current title>"`. See Step 19.
 
 **Doc-sync invariant (always applies — do not skip reading the section below):** Step 18 dispatches the /document-release subagent to sync docs BEFORE Step 19 only when `DOC_RELEASE=true`; otherwise it records `skipped:no-doc-impact`. A failed subagent is non-blocking.
 
 ## Step 18: Documentation sync (via subagent, before PR creation)
+
+In post-merge mode, include this scope instruction in the dispatch prompt: polish only `FRAGMENT_PATH` for release-note voice; never edit CHANGELOG.md, VERSION, or a manifest version. Skip the document-release VERSION question. The fragment is the release-note source for this PR.
 
 Dispatch iff `DOC_RELEASE=true`. Otherwise print `Doc release: no doc-impact
 match on intermediate slice — skipped`, append a gate record with
@@ -2861,7 +2885,7 @@ for widening the skip.
 >
 > Decision gates: at EVERY decision point in the workflow (risky doc updates, CHANGELOG fixes and voice rewrites, narrative contradictions, TODO updates, the VERSION-bump question, doc-review apply decisions), do NOT call AskUserQuestion and do NOT stop to render a prose decision brief — auto-choose the RECOMMENDED option and continue; where the skill says "always use AskUserQuestion", that resolves to auto-choosing the recommendation in this spawned session. If no option is marked recommended, take the most conservative choice (skip/defer). Never auto-choose a destructive or irreversible option — take the conservative non-destructive choice instead. Never end your response waiting for an answer. Record each auto-chosen decision as one line in the `decisions` array of the final JSON — and ONLY there, never inside `documentation_section` (that string becomes public PR markdown).
 >
-> Scope guard — docs sync ONLY: you are updating documentation, nothing else. Do NOT merge or pull the base branch, do NOT renumber versions or resolve version collisions, and do NOT change VERSION: at the workflow's VERSION gates (Step 8), choose the Skip / leave-as-is option regardless of the stated recommendation — /ship owns VERSION and derives the PR title from it; record what you would have flagged in `decisions` instead. Leave CHANGELOG.md entirely alone — the parent authored the release entry this run: skip Step 5 (voice polish) and resolve any CHANGELOG-touching gate to its leave-as-is option. Skip the "Codex Documentation Review" section entirely — the parent /ship run owns review passes. If `git push` is rejected because the remote moved (non-fast-forward), do NOT pull, merge, rebase, or force-push: leave the docs commit local, set `"pushed":false` in the final JSON, and note the rejection in `decisions` — the parent will handle it.
+> Scope guard: docs sync ONLY: you are updating documentation, nothing else. Do NOT merge or pull the base branch, do NOT renumber versions or resolve version collisions, and do NOT change VERSION: in in-branch mode, at Step 8 choose Skip / leave-as-is and leave CHANGELOG.md alone, skipping Step 5. In post-merge mode, skip Step 8, leave CHANGELOG.md and manifest versions alone, and polish only `FRAGMENT_PATH` at Step 5. Skip the "Codex Documentation Review" section entirely: the parent /ship run owns review passes. If `git push` is rejected because the remote moved (non-fast-forward), do NOT pull, merge, rebase, or force-push: leave the docs commit local, set `"pushed":false` in the final JSON, and note the rejection in `decisions`: the parent will handle it.
 >
 > After completing the workflow, include the skill's doc health summary in your response body, then output a single JSON object on the LAST LINE of your response (no other text after it):
 > `{"files_updated":["README.md","AGENTS.md",...],"commit_sha":"abc1234","pushed":true,"documentation_section":"<markdown block for PR body's ## Documentation section>","decisions":["<one line per auto-chosen gate>"]}`
@@ -2918,7 +2942,7 @@ The PR/MR body should contain these sections (never reuse a prior run's body):
 ```
 ## Summary
 <Summarize ALL changes being shipped. Run `git log <base>..HEAD --oneline` to enumerate
-every commit. Exclude the VERSION/CHANGELOG metadata commit (that's this PR's bookkeeping,
+every commit. Exclude the release metadata commit (VERSION/CHANGELOG in-branch or the fragment in post-merge; that's this PR's bookkeeping,
 not a substantive change). Group the remaining commits into logical sections (e.g.,
 "**Performance**", "**Dead Code Removal**", "**Infrastructure**"). Every substantive commit
 must appear in at least one section. If a commit's work isn't reflected in the summary,
@@ -3020,7 +3044,9 @@ sections in tool-attributed fences (` ```codex-review ` / ` ```greptile `) so th
 engine WARN-degrades the example credentials those tools quote instead of blocking
 the PR (a live-format credential inside the fence still blocks).
 
-**Always update the PR title to start with `v$NEW_VERSION`.** For an existing PR,
+**Post-merge:** Set `NEW_TITLE="<type>: <summary>"` for both existing and new PRs. Strip any stale version prefix from an existing title. Do not call `gstack-pr-title-rewrite.sh`. In the body, name the bump level and `FRAGMENT_PATH`, without claiming an assigned version. Self-check that the title equals `NEW_TITLE` and has no version prefix. The version-prefix instructions below apply only in in-branch mode.
+
+**In-branch:** Always update the PR title to start with `v$NEW_VERSION`. For an existing PR,
 read `CURRENT=$(gh pr view --json title -q .title)` (or `glab mr view -F json | jq -r .title`)
 and compute `NEW_TITLE=$($GSTACK_ROOT/bin/gstack-pr-title-rewrite.sh "$NEW_VERSION" "$CURRENT")`.
 For a new PR, compose `v<NEW_VERSION> <type>: <summary>`. Use that final value below.
@@ -3040,7 +3066,7 @@ case $? in
 esac
 # Set NEW_TITLE to the final title before scanning. For an existing PR, use
 # gstack-pr-title-rewrite.sh with NEW_VERSION and the current title.
-NEW_TITLE="<final vNEW_VERSION type: summary>"
+NEW_TITLE="<post-merge: type: summary | in-branch: final vNEW_VERSION type: summary>"
 printf '%s' "$NEW_TITLE" | $GSTACK_ROOT/bin/gstack-redact --repo-visibility "$REDACT_VIS" --json
 ```
 
@@ -3053,14 +3079,14 @@ Update the title with the same scanned `NEW_TITLE`: `gh pr edit --title "$NEW_TI
 
 **REST fallback (#1079):** if `gh pr edit` fails with the `repository.pullRequest.projectCards` GraphQL deprecation, do not re-ask for auth. Use the SAME scanned file: `PR_NUMBER=$(gh pr view --json number -q .number)`, then `gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" -X PATCH -F body=@"$PR_BODY_FILE"`; for the title use `gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" -X PATCH -f title="$NEW_TITLE"`.
 
-**Self-check:** re-fetch the title and assert it starts with `v$NEW_VERSION `. Retry once if wrong, then surface any failure. Print the existing URL and continue to Step 20; do not run the create commands below.
+**Self-check:** re-fetch the title and assert it equals the mode-specific `NEW_TITLE`; in-branch it must start with `v$NEW_VERSION `, and post-merge it must have no version prefix. Retry once if wrong, then surface any failure. Print the existing URL and continue to Step 20; do not run the create commands below.
 
 **No open PR/MR, GitHub:** create from the SCANNED file (exact bytes scanned = bytes sent).
 `$PR_BODY_FILE` comes from the scan block above — restate it in this shell if
 blocks ran separately, and never proceed with an empty file:
 
 ```bash
-# PR title MUST start with v$NEW_VERSION — enforced on every run, no exceptions.
+# In-branch PR titles start with v$NEW_VERSION; post-merge titles use type: summary.
 # (See Step 19 idempotency block + bin/gstack-pr-title-rewrite.sh for the rule.)
 [ -s "$PR_BODY_FILE" ] || { echo "ERROR: scanned body file missing/empty — re-run the scan block." >&2; exit 1; }
 gh pr create --base <base> --title "$NEW_TITLE" --body-file "$PR_BODY_FILE"
@@ -3070,7 +3096,7 @@ rm -f "$PR_BODY_FILE"
 **No open PR/MR, GitLab:**
 
 ```bash
-# MR title MUST start with v$NEW_VERSION — enforced on every run, no exceptions.
+# In-branch MR titles start with v$NEW_VERSION; post-merge titles use type: summary.
 # (See Step 19 idempotency block + bin/gstack-pr-title-rewrite.sh for the rule.)
 # Send the SCANNED file's bytes — scan-at-sink means never re-render the body
 # from a fresh heredoc (that reopens the scan-vs-send gap). $PR_BODY_FILE comes
@@ -3109,7 +3135,7 @@ Substitute from earlier steps:
 - **PLAN_TOTAL**: total plan items extracted in Step 8 (0 if no plan file)
 - **PLAN_DONE**: count of DONE + CHANGED items from Step 8 (0 if no plan file)
 - **VERIFY_RESULT**: "pass", "fail", or "skipped" from Step 8.1
-- **VERSION**: from the VERSION file
+- **VERSION**: in-branch, from the VERSION file; post-merge, use the literal `post-merge:<BUMP_LEVEL>` as a pre-release metric, never an assigned version
 
 The branch name is filled in by the shell — there is no `BRANCH` placeholder to
 substitute.
@@ -3155,7 +3181,7 @@ no-op. The marker guarantees at-most-once per machine. To re-enable:
 You ran a carved skill. For your situation, list every section the Section index
 named as applying, and confirm you issued a Read for each one. If you executed any
 of those steps from memory without reading its section, you skipped the source of
-truth — STOP, Read it now, and redo that step. Deterministic version work goes
+truth: STOP, Read it now, and redo that step. In-branch version work goes
 through `gstack-version-bump`; never hand-roll the VERSION/package.json write.
 
 ---
@@ -3166,8 +3192,7 @@ through `gstack-version-bump`; never hand-roll the VERSION/package.json write.
 - **Never skip the pre-landing review.** If checklist.md is unreadable, stop.
 - **Never force push.** Use regular `git push` only.
 - **Never ask for trivial confirmations** (e.g., "ready to push?", "create PR?"). DO stop for: version bumps (MINOR/MAJOR), BLOCKING review findings, and Codex structured review [P1] findings when routed by the plan.
-- **Always use the 4-digit version format** from the VERSION file.
-- **Date format in CHANGELOG:** `YYYY-MM-DD`
+- **In-branch:** use the VERSION file's 4-digit format and `YYYY-MM-DD` in CHANGELOG.
 - **Split commits for bisectability** — each commit = one logical change.
 - **TODOS.md completion detection must be conservative.** Only mark items as completed when the diff clearly shows the work is done.
 - **Use Greptile reply templates from greptile-triage.md.** Every reply includes evidence (inline diff, code references, re-rank suggestion). Never post vague replies.

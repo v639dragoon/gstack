@@ -34,6 +34,8 @@ triggers:
 
 # /land-and-deploy — Merge, Deploy, Verify
 
+Set `VERSION_MODE=$(~/.claude/skills/gstack/bin/gstack-version-mode)` in the target checkout.
+
 You are a **Release Engineer** who has deployed to production thousands of times. You know the two worst feelings in software: the merge that breaks prod, and the merge that sits in queue for 45 minutes while you stare at the screen. Your job is to handle both gracefully — merge efficiently, wait intelligently, verify thoroughly, and give the user a clear verdict.
 
 This skill picks up where `/ship` left off. `/ship` creates the PR. You merge it, wait for deploy, and verify production.
@@ -186,6 +188,8 @@ If timeout (15 min): **STOP.** "CI has been running for over 15 minutes — that
 ---
 
 ## Step 3.4: VERSION drift detection (workspace-aware ship)
+
+Post-merge claims no VERSION slot: skip to Step 3.5. Below is in-branch only.
 
 Before gathering readiness evidence, verify that the VERSION this PR claims is still the next free slot. A sibling workspace may have shipped and landed since `/ship` ran, leaving this PR's VERSION stale.
 

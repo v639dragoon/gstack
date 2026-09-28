@@ -1,5 +1,7 @@
 ## Step 18: Documentation sync (via subagent, before PR creation)
 
+In post-merge mode, include this scope instruction in the dispatch prompt: polish only `FRAGMENT_PATH` for release-note voice; never edit CHANGELOG.md, VERSION, or a manifest version. Skip the document-release VERSION question. The fragment is the release-note source for this PR.
+
 Dispatch iff `DOC_RELEASE=true`. Otherwise print `Doc release: no doc-impact
 match on intermediate slice — skipped`, append a gate record with
 `verdict:"skipped:no-doc-impact"`, and continue to Step 19.
@@ -41,7 +43,7 @@ for widening the skip.
 >
 > Decision gates: at EVERY decision point in the workflow (risky doc updates, CHANGELOG fixes and voice rewrites, narrative contradictions, TODO updates, the VERSION-bump question, doc-review apply decisions), do NOT call AskUserQuestion and do NOT stop to render a prose decision brief — auto-choose the RECOMMENDED option and continue; where the skill says "always use AskUserQuestion", that resolves to auto-choosing the recommendation in this spawned session. If no option is marked recommended, take the most conservative choice (skip/defer). Never auto-choose a destructive or irreversible option — take the conservative non-destructive choice instead. Never end your response waiting for an answer. Record each auto-chosen decision as one line in the `decisions` array of the final JSON — and ONLY there, never inside `documentation_section` (that string becomes public PR markdown).
 >
-> Scope guard — docs sync ONLY: you are updating documentation, nothing else. Do NOT merge or pull the base branch, do NOT renumber versions or resolve version collisions, and do NOT change VERSION: at the workflow's VERSION gates (Step 8), choose the Skip / leave-as-is option regardless of the stated recommendation — /ship owns VERSION and derives the PR title from it; record what you would have flagged in `decisions` instead. Leave CHANGELOG.md entirely alone — the parent authored the release entry this run: skip Step 5 (voice polish) and resolve any CHANGELOG-touching gate to its leave-as-is option. Skip the "Codex Documentation Review" section entirely — the parent /ship run owns review passes. If `git push` is rejected because the remote moved (non-fast-forward), do NOT pull, merge, rebase, or force-push: leave the docs commit local, set `"pushed":false` in the final JSON, and note the rejection in `decisions` — the parent will handle it.
+> Scope guard: docs sync ONLY: you are updating documentation, nothing else. Do NOT merge or pull the base branch, do NOT renumber versions or resolve version collisions, and do NOT change VERSION: in in-branch mode, at Step 8 choose Skip / leave-as-is and leave CHANGELOG.md alone, skipping Step 5. In post-merge mode, skip Step 8, leave CHANGELOG.md and manifest versions alone, and polish only `FRAGMENT_PATH` at Step 5. Skip the "Codex Documentation Review" section entirely: the parent /ship run owns review passes. If `git push` is rejected because the remote moved (non-fast-forward), do NOT pull, merge, rebase, or force-push: leave the docs commit local, set `"pushed":false` in the final JSON, and note the rejection in `decisions`: the parent will handle it.
 >
 > After completing the workflow, include the skill's doc health summary in your response body, then output a single JSON object on the LAST LINE of your response (no other text after it):
 > `{"files_updated":["README.md","CLAUDE.md",...],"commit_sha":"abc1234","pushed":true,"documentation_section":"<markdown block for PR body's ## Documentation section>","decisions":["<one line per auto-chosen gate>"]}`
@@ -98,7 +100,7 @@ The PR/MR body should contain these sections (never reuse a prior run's body):
 ```
 ## Summary
 <Summarize ALL changes being shipped. Run `git log <base>..HEAD --oneline` to enumerate
-every commit. Exclude the VERSION/CHANGELOG metadata commit (that's this PR's bookkeeping,
+every commit. Exclude the release metadata commit (VERSION/CHANGELOG in-branch or the fragment in post-merge; that's this PR's bookkeeping,
 not a substantive change). Group the remaining commits into logical sections (e.g.,
 "**Performance**", "**Dead Code Removal**", "**Infrastructure**"). Every substantive commit
 must appear in at least one section. If a commit's work isn't reflected in the summary,
@@ -200,7 +202,9 @@ sections in tool-attributed fences (` ```codex-review ` / ` ```greptile `) so th
 engine WARN-degrades the example credentials those tools quote instead of blocking
 the PR (a live-format credential inside the fence still blocks).
 
-**Always update the PR title to start with `v$NEW_VERSION`.** For an existing PR,
+**Post-merge:** Set `NEW_TITLE="<type>: <summary>"` for both existing and new PRs. Strip any stale version prefix from an existing title. Do not call `gstack-pr-title-rewrite.sh`. In the body, name the bump level and `FRAGMENT_PATH`, without claiming an assigned version. Self-check that the title equals `NEW_TITLE` and has no version prefix. The version-prefix instructions below apply only in in-branch mode.
+
+**In-branch:** Always update the PR title to start with `v$NEW_VERSION`. For an existing PR,
 read `CURRENT=$(gh pr view --json title -q .title)` (or `glab mr view -F json | jq -r .title`)
 and compute `NEW_TITLE=$(~/.claude/skills/gstack/bin/gstack-pr-title-rewrite.sh "$NEW_VERSION" "$CURRENT")`.
 For a new PR, compose `v<NEW_VERSION> <type>: <summary>`. Use that final value below.
@@ -220,7 +224,7 @@ case $? in
 esac
 # Set NEW_TITLE to the final title before scanning. For an existing PR, use
 # gstack-pr-title-rewrite.sh with NEW_VERSION and the current title.
-NEW_TITLE="<final vNEW_VERSION type: summary>"
+NEW_TITLE="<post-merge: type: summary | in-branch: final vNEW_VERSION type: summary>"
 printf '%s' "$NEW_TITLE" | ~/.claude/skills/gstack/bin/gstack-redact --repo-visibility "$REDACT_VIS" --json
 ```
 
@@ -233,14 +237,14 @@ Update the title with the same scanned `NEW_TITLE`: `gh pr edit --title "$NEW_TI
 
 **REST fallback (#1079):** if `gh pr edit` fails with the `repository.pullRequest.projectCards` GraphQL deprecation, do not re-ask for auth. Use the SAME scanned file: `PR_NUMBER=$(gh pr view --json number -q .number)`, then `gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" -X PATCH -F body=@"$PR_BODY_FILE"`; for the title use `gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" -X PATCH -f title="$NEW_TITLE"`.
 
-**Self-check:** re-fetch the title and assert it starts with `v$NEW_VERSION `. Retry once if wrong, then surface any failure. Print the existing URL and continue to Step 20; do not run the create commands below.
+**Self-check:** re-fetch the title and assert it equals the mode-specific `NEW_TITLE`; in-branch it must start with `v$NEW_VERSION `, and post-merge it must have no version prefix. Retry once if wrong, then surface any failure. Print the existing URL and continue to Step 20; do not run the create commands below.
 
 **No open PR/MR, GitHub:** create from the SCANNED file (exact bytes scanned = bytes sent).
 `$PR_BODY_FILE` comes from the scan block above — restate it in this shell if
 blocks ran separately, and never proceed with an empty file:
 
 ```bash
-# PR title MUST start with v$NEW_VERSION — enforced on every run, no exceptions.
+# In-branch PR titles start with v$NEW_VERSION; post-merge titles use type: summary.
 # (See Step 19 idempotency block + bin/gstack-pr-title-rewrite.sh for the rule.)
 [ -s "$PR_BODY_FILE" ] || { echo "ERROR: scanned body file missing/empty — re-run the scan block." >&2; exit 1; }
 gh pr create --base <base> --title "$NEW_TITLE" --body-file "$PR_BODY_FILE"
@@ -250,7 +254,7 @@ rm -f "$PR_BODY_FILE"
 **No open PR/MR, GitLab:**
 
 ```bash
-# MR title MUST start with v$NEW_VERSION — enforced on every run, no exceptions.
+# In-branch MR titles start with v$NEW_VERSION; post-merge titles use type: summary.
 # (See Step 19 idempotency block + bin/gstack-pr-title-rewrite.sh for the rule.)
 # Send the SCANNED file's bytes — scan-at-sink means never re-render the body
 # from a fresh heredoc (that reopens the scan-vs-send gap). $PR_BODY_FILE comes

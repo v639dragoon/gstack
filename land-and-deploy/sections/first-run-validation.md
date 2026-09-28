@@ -164,9 +164,9 @@ Preview the readiness checks that will run at Step 3.5 (without re-running tests
 ```
 
 Show a summary of review status: which reviews have been run, how stale they are.
-Also check if CHANGELOG.md and VERSION have been updated.
+In post-merge mode check the PR fragment; in in-branch mode check CHANGELOG.md and VERSION.
 
-Explain in plain English: "When I merge, I'll check: has the code been reviewed recently? Do the tests pass? Is the CHANGELOG updated? Is the PR description accurate? If anything looks off, I'll flag it before merging."
+Explain in plain English: "When I merge, I'll check: has the code been reviewed recently? Do the tests pass? Are the release notes present? Is the PR description accurate? If anything looks off, I'll flag it before merging."
 
 ### 1.5e: Dry-run confirmation
 
