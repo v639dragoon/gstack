@@ -13,6 +13,9 @@ type Policy = {
   version?: number;
   auth_surfaces?: string[];
   d_surfaces?: string[];
+  d_surface_exceptions?: string[];
+  c_surfaces?: string[];
+  env_surfaces?: string[];
   load_bearing_docs?: string[];
   doc_impact_map?: DocImpactRule[];
 };
@@ -126,7 +129,7 @@ const filePaths = files.map((f) => f.path);
 // ---- shadow verdicts (LOGGED ONLY — nothing routes on these in Phase 0) ----
 const authGlob = scope.auth === true;
 const authPolicy = pol ? filePaths.some((p) => matchAny(p, pol!.auth_surfaces ?? [])) : null;
-const dSurfaceMatches = pol ? filePaths.filter((p) => matchAny(p, pol!.d_surfaces ?? [])) : [];
+const dSurfaceMatches = pol ? filePaths.filter((p) => matchAny(p, pol!.d_surfaces ?? []) && !(pol!.d_surface_exceptions ?? []).includes(p)) : [];
 const loadBearingMatches = pol
   ? filePaths.filter((p) => matchAny(p, pol!.load_bearing_docs ?? []))
   : [];
@@ -153,6 +156,9 @@ if (pol) {
   if (dSurfaceMatches.length) {
     tier = 'D';
     tierRule = `d_surface:${dSurfaceMatches[0]}`;
+  } else if (filePaths.some(p => matchAny(p, pol!.c_surfaces ?? []))) {
+    tier = 'C';
+    tierRule = `c_surface:${filePaths.find(p => matchAny(p, pol!.c_surfaces ?? []))}`;
   } else if (files.length === 0) {
     tier = 'C';
     tierRule = 'empty-file-list (fail-upward)';
