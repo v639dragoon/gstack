@@ -22,7 +22,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 
-const SCRIPT = join(import.meta.dir, '..', 'bin', 'gstack-diff-manifest');
+const SCRIPT = join(import.meta.dir, '..', 'bin/gstack-diff-manifest');
 
 // Isolate every git call from user/system config (see header).
 const GIT_ENV = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' };

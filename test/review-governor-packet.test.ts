@@ -4,8 +4,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 const root = join(import.meta.dir, '..'),
-  budget = join(root, 'bin', 'gstack-review-budget'),
-  packet = join(root, 'bin', 'gstack-review-packet');
+  budget = join(root, 'bin/gstack-review-budget'),
+  packet = join(root, 'bin/gstack-review-packet');
 describe('review packet', () => {
   test('writes ordered sections, matching rules, diff and unknown CI', () => {
     const d = mkdtempSync(join(tmpdir(), 'packet-repo-')),

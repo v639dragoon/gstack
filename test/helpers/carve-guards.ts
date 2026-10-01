@@ -153,7 +153,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     },
     behavioral: 'external',
     externalTest: 'test/skill-e2e-ship-section-loading.test.ts',
-    maxSkeletonBytes: 83_300, // upstream 78,373 + fork governor/D2 binding/post-merge guards 4,880 = 83,253 (v1.91.9); pinned behavior retained.
+    maxSkeletonBytes: 83_300, // D4: upstream 78,373 + retained governor/binding/post-merge guards 4,487 = 82,860 (v1.91.9); pinned behavior retained.
     minUnionBytes: 181_000, // token-reduction Phases 1-2 (v1.69.x branch); measured union 201,464
     mustContain: ['VERSION', 'CHANGELOG', 'review', 'merge', 'PR'],
     // v1.58.5.0: pre-push-guard install (#2077) stacks on the shared first-run-guidance preamble.
@@ -166,7 +166,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // wave's headline capability) grows the union to 1.195x. Deliberate:
     // the section is on-demand (loads only for Apple store targets), so
     // per-invocation cost for non-iOS ships is one manifest line.
-    maxSizeRatio: 1.404, // Shared advisory identity/dedup + critical-severity validation: 248,065 union bytes / 187,706 baseline = 1.3216 (2026-09-17). + test value bar in the lazy Step 7 section (value cards, weak paths, gate table, base control, machine checks; ~13.6KB): measured 1.396 (2026-09-29). + W1 guarded state-root resolution (`eval gstack-paths; : "${GSTACK_STATE_ROOT:?…}"`) in the Context Recovery preamble, the eureka log and each state-writing bash block; measured 1.401 (2026-09-30). + the shared QA review step's plan-check timing rule (plan checks and their revalidation run on --timeout-ms after smoke expiry); measured 1.4022 (2026-09-30).
+    maxSizeRatio: 1.576, // D4: upstream 261,958 + retained governor/routing/D1 telemetry 33,792 = 295,750 / 187,706 baseline = 1.5756 (2026-09-30). Previous cap/comment: // Shared advisory identity/dedup + critical-severity validation: 248,065 union bytes / 187,706 baseline = 1.3216 (2026-09-17). + test value bar in the lazy Step 7 section (value cards, weak paths, gate table, base control, machine checks; ~13.6KB): measured 1.396 (2026-09-29).
   },
   'plan-ceo-review': {
     skill: 'plan-ceo-review',
@@ -221,7 +221,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // 1.08 → 1.10: the scope-gate exceptions block (+ its adversarial-review
     // hardening: host-anchored mode signal, precedence, passing-mention
     // guards) and the plan-mode preamble reword land the union at 1.092.
-    maxSizeRatio: 1.175, // + clarity rules for saved decisions/setup gates + the Aside probe's failure reason; measured 1.1504. + test value bar and Tests to Retire in the lazy Test review section (~2.6KB); measured 1.168 + W1 guarded state-root resolution (`eval gstack-paths; : "${GSTACK_STATE_ROOT:?…}"`) in the Context Recovery preamble, the eureka log and each state-writing bash block; measured 1.173 (2026-09-30). + v1.91.12.0 merge of #2999 (headless rule: a disallowed question tool never qualifies) with #3002; measured 1.1741 (2026-10-01).
+    maxSizeRatio: 1.176, // D4 shared resolver: upstream 145,545 + routing 848 = 146,393 / 124,597 baseline = 1.1749 (2026-09-30). Previous cap/comment: // upstream union 145,545 + fork routed voice/completion delta 453 = 145,998; measured 1.171 (v1.91.9).
   },
   'plan-design-review': {
     skill: 'plan-design-review',
@@ -474,17 +474,17 @@ do not launch the downstream skill or open a browser.`,
       mustPrecedeStop: ['## Step 0: Detect platform and base branch'],
       mustMoveToSection: [
         'Plan File Discovery',
-        'Before EACH specialist or red-team Agent call',
-        'specialist-critical:<fingerprint>',
+        'MULTI-SPECIALIST CONFIRMED',
+        'Cross-model synthesis',
         'codex review --base',
       ],
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 75_700, // upstream 74,078 + fork governor/model/queue guards 1,542 = 75,620 (v1.91.9); pinned behavior retained.
-    minUnionBytes: 88_000, // review governor removed the LOC/adversarial prose (phase0-pr-gating); measured union 88,719 over v1.79
+    maxSkeletonBytes: 75_700, // D4: upstream 74,078 + retained governor/model/queue guards 970 = 75,048 (v1.91.9); pinned behavior retained.
+    minUnionBytes: 89_000, // Upstream floor restored under D4; measured union 148,957 (v1.91.9)
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
-    maxSizeRatio: 1.185, // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors. + v1.91.12.0 merge of #2999 (above, plus plan-completion fallback intent and specialist checklist-by-path) with #3002; measured 1.1843 (2026-10-01).
+    maxSizeRatio: 1.374, // D4: upstream 127,057 + retained governor/routing 21,900 = 148,957 / 108,523 baseline = 1.3726 (2026-09-30). Previous cap/comment: // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors.
   },
   codex: {
     skill: 'codex',
