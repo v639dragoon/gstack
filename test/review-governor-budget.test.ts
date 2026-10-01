@@ -581,4 +581,4 @@ test('D4 native and upstream reviewer accounting cannot substitute for routed sl
   writeFileSync(file, JSON.stringify(raw));
   expect(run(d, s, ['plan', file]).status).toBe(0);
   expect(run(d, s, ['complete', 'd4', '--require-native']).status).toBe(2);
-});
+}, 30_000); // 37 isolated CLI calls; measured beyond Bun's 5s default in this sandbox (also at 55fdfd86).
