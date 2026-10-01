@@ -125,7 +125,8 @@ export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOp
     ? `source "${bin}/gstack-codex-probe" && _gstack_codex_select_model ${opts.structuredBase ? 'review' : 'exec'} || exit 1
 _gstack_codex_sandbox_preflight >/dev/null || exit 1
 _gstack_codex_first_use_notice
-eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort})" || exit 1
+_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort}) || exit 1
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
 _OUTSIDE_EXIT=0
 _gstack_codex_timeout_wrapper ${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
