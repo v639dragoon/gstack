@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 10: Address Greptile review comments (if PR exists)
 
+When `GREPTILE=false`, skip this pass: no Agent, comment fetch/reply or fix queue; continue to Step 11.
+
 Dispatch a subagent through Agent with `subagent_type: "general-purpose"` , `model: "sonnet"` and
 `run_in_background: false`, using Step 7's shared foreground-dispatch rule.
 It fetches and classifies all Greptile comments,

@@ -153,7 +153,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     },
     behavioral: 'external',
     externalTest: 'test/skill-e2e-ship-section-loading.test.ts',
-    maxSkeletonBytes: 83_300, // D4: upstream 78,373 + retained governor/binding/post-merge guards 4,487 = 82,860 (v1.91.9); pinned behavior retained.
+    maxSkeletonBytes: 83_950, // D3: 82,860 + 1,073 gating bytes = 83,933; D4: upstream 78,373 + retained governor/binding/post-merge guards 4,487 = 82,860 (v1.91.9); pinned behavior retained.
     minUnionBytes: 181_000, // token-reduction Phases 1-2 (v1.69.x branch); measured union 201,464
     mustContain: ['VERSION', 'CHANGELOG', 'review', 'merge', 'PR'],
     // v1.58.5.0: pre-push-guard install (#2077) stacks on the shared first-run-guidance preamble.
@@ -166,7 +166,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // wave's headline capability) grows the union to 1.195x. Deliberate:
     // the section is on-demand (loads only for Apple store targets), so
     // per-invocation cost for non-iOS ships is one manifest line.
-    maxSizeRatio: 1.576, // D4: upstream 261,958 + retained governor/routing/D1 telemetry 33,792 = 295,750 / 187,706 baseline = 1.5756 (2026-09-30). Previous cap/comment: // Shared advisory identity/dedup + critical-severity validation: 248,065 union bytes / 187,706 baseline = 1.3216 (2026-09-17). + test value bar in the lazy Step 7 section (value cards, weak paths, gate table, base control, machine checks; ~13.6KB): measured 1.396 (2026-09-29).
+    maxSizeRatio: 1.613, // D3: D4 295,750 + 6,983 policy-gating bytes = 302,733 / 187,706 = 1.6128. D4: upstream 261,958 + retained governor/routing/D1 telemetry 33,792 = 295,750 / 187,706 baseline = 1.5756 (2026-09-30). Previous cap/comment: // Shared advisory identity/dedup + critical-severity validation: 248,065 union bytes / 187,706 baseline = 1.3216 (2026-09-17). + test value bar in the lazy Step 7 section (value cards, weak paths, gate table, base control, machine checks; ~13.6KB): measured 1.396 (2026-09-29).
   },
   'plan-ceo-review': {
     skill: 'plan-ceo-review',
@@ -481,10 +481,10 @@ do not launch the downstream skill or open a browser.`,
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 75_700, // D4: upstream 74,078 + retained governor/model/queue guards 970 = 75,048 (v1.91.9); pinned behavior retained.
+    maxSkeletonBytes: 76_600, // D3: 75,048 + 1,547 policy-gating bytes = 76,595; D4: upstream 74,078 + retained governor/model/queue guards 970 = 75,048 (v1.91.9); pinned behavior retained.
     minUnionBytes: 89_000, // Upstream floor restored under D4; measured union 148,957 (v1.91.9)
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
-    maxSizeRatio: 1.374, // D4: upstream 127,057 + retained governor/routing 21,900 = 148,957 / 108,523 baseline = 1.3726 (2026-09-30). Previous cap/comment: // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors.
+    maxSizeRatio: 1.405, // D3: D4 148,957 + 3,468 policy-gating bytes = 152,425 / 108,523 = 1.40454. D4: upstream 127,057 + retained governor/routing 21,900 = 148,957 / 108,523 baseline = 1.3726 (2026-09-30). Previous cap/comment: // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors.
   },
   codex: {
     skill: 'codex',

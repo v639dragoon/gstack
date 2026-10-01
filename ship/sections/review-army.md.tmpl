@@ -43,6 +43,8 @@ distinct defects stay separate and neither pass substitutes for the other.
 
 ## Step 9.4: Fix-First and persistence
 
+When `AUTOFIX_INFORMATIONAL=false`, override the heuristic below: BLOCKING means severity in `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`; everything else is ADVISORY. ADVISORY findings are NEVER fixed: no AUTO-FIX and no ASK. List at most `MAX_ADVISORIES`, sorted by confidence, under `## Advisories (not fixed)`. Advisory test stubs are listed, never asked. Only BLOCKING findings enter the normal fix/ASK and regression flow below.
+
 Before edits, inspect every dispatched reader/writer's handle. Wait for return
 or confirm termination; otherwise log incomplete through items 5–6 and STOP
 without edits. After terminal failure, independent evidence may support fixes,

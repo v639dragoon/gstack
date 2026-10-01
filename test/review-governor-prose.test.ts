@@ -47,12 +47,14 @@ describe('review governor rendered prose', () => {
     expect(text).toContain('rerun-check');
   });
 
-  test('upstream AUTO-FIX and ASK advice handling wins over governor classification', () => {
+  test('D3 advisory policy overrides retained upstream AUTO-FIX and ASK defaults', () => {
     const text = union();
     expect(text).toContain('Auto-fix all AUTO-FIX');
     expect(text).toContain('advice ASK-only');
     expect(text).toContain("policy's BLOCKING/ADVISORY metadata never overrides upstream AUTO-FIX/ASK");
-    expect(text).not.toContain('ADVISORY findings are NEVER fixed');
+    expect(text).toContain('ADVISORY findings are NEVER fixed');
+    expect(text).toContain('AUTOFIX_INFORMATIONAL=false');
+    expect(text).toContain('## Advisories (not fixed)');
   });
 
   test('native completion is mandatory alongside all routed reviewers', () => {

@@ -226,6 +226,8 @@ export function generateQAReviewPreflight(ctx: TemplateContext): string {
   sectionPath(ctx, 'qa', 'exploratory');
   return `> **STOP.** Before any probe, including plan checks, complete the ordered scope/method Reads below and await them. Templates cannot replace them.
 ${ctx.skillName === 'review' ? 'Step 4 is read-only: defer charters, setup and probes to Step 4.7.\n' : ''}
+Read \`${ctx.paths.binDir}/gstack-review-budget policy-flags <base>\` now and carry \`QA_SMOKE\`; this is manifest-free and precedes the Step ${ctx.skillName === 'ship' ? '9.1' : '4.5'} plan.
+
 {{QA_RESOURCE:exploratory}}
 
 Resolve QA's \`sections/...\` and \`templates/...\` paths from that installed QA SKILL.md directory, not the caller or product directory.`;
@@ -235,6 +237,8 @@ export function generateQAReview(ctx: TemplateContext): string {
   const ship = ctx.skillName === 'ship';
   if (!ship) sectionPath(ctx, 'qa', 'browser-setup');
   return `### ${ship ? 'Step 9.2.1' : 'Step 4.7'}: Exploratory QA (before Fix-First)
+
+When \`QA_SMOKE=false\`, skip this pass's exploratory smoke, setup and guard only; required plan checks still run with their methods/preflight. Report smoke as policy-skipped, never a not-run required probe; it does not block the parent completion gate.
 
 Only the parent runs report-only discovery.
 Never overwrite another run's reports. Batch only independent Reads.

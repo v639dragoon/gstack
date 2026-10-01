@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 7: Test Coverage Audit
 
+When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied: reuse the saved validated report and gate decisions; do not launch a child or consume generation allowance. Supply `--inputs-hash <hash>` to dispatch for any supplied external audit inputs; changed inputs require a new audit. All other blocked outcomes retain their existing handling.
+
 Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
 intermediate slice {SLICE_KIND}` and append a gate record with
 `verdict:"skipped:intermediate-slice"`.
@@ -159,7 +161,7 @@ Value card: `Value: protects=<...>; fails_when=<...>; why_new=<...>; seam=none` 
 Example: Value: protects=refundPayment rejects an empty reason; fails_when=the reason guard is removed or inverted; why_new=billing.test.ts covers processPayment only; seam=none
 Rejected (covered_elsewhere): "checkout renders"; checkout.e2e.ts:15 covers it, so extend that test.
 
-Weak tests (★ smoke/existence/trivial, gate-failing or unrated) never count as coverage. X = paths with a ★★/★★★ test / total paths (value-weighted; the gate uses X); Y = paths with any test / total paths. Total paths = the diff's codepath trace, max 30; zero skips the gate. A path with only weak tests is uncovered in X, covered in Y, and goes to `weak_gaps` (reason `star_one|gate_failed|unrated`), not `gaps`. Rate stars only for tests reachable from changed paths.
+Weak tests (★ smoke/existence/trivial, gate-failing or unrated) never count as coverage. X = paths with a ★★/★★★ test / total paths (value-weighted; the gate uses X); Y = paths with any test / total paths. Total paths = the diff's codepath trace, max 30; zero skips the gate. A path with only weak tests is uncovered in X, covered in Y, and goes to `weak_gaps` (reason `star_one|gate_failed|unrated`), not `gaps`. Rate stars only for tests reachable from changed paths. With policy COVERAGE_RATING=false, the parent uses coverage_pct via Star rating: off and skips the second rating dispatch.
 
 Retention bar: keep a test that independently enforces a public API, protocol, config, migration, storage, security, platform, default, prompt-byte, generated-output (golden), package, release or architecture contract; static or slow is no reason to delete.
 
@@ -343,6 +345,8 @@ verdict (`--require-audits`).
 
 **Parent processing:**
 
+When `COVERAGE_RATING=false`, skip item 4's rating dispatch; take the existing `Star rating: off` gate path from the policy (overriding CLAUDE.md), using `coverage_pct`. Carry this flag into the audit prompt; keep gaps, rejected tests and value cards.
+
 1. Read the subagent's final output. Parse the LAST line as JSON.
 2. Store `coverage_pct`, `coverage_pct_value`, `gaps`, `weak_gaps`, `tests_added`,
    `tests_extended`, `tests_rejected` and `regression_proof`. A missing new key counts
@@ -392,6 +396,8 @@ and test-only rules. Preserve partial results as incomplete, not passing coverag
 
 
 **7. Coverage gate:**
+
+When `COVERAGE_RATING=false`, skip rating: use the `Star rating: off` row below regardless of CLAUDE.md. Coverage audit/generation, machine checks and remaining gap decisions still apply.
 
 The parent owns this gate, including after inline fallback. Generated tests stay uncommitted until Step 15. The gate only asks; it never hard-fails. Use Step 7's remaining generation allowance; supply it and the remaining gaps to the same audit prompt. At the cap, omit A's generation pass and recommend stopping; A then only lists proposals and the listed risk choices remain available.
 

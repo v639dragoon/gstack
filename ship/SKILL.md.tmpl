@@ -201,9 +201,9 @@ Otherwise continue to Step 4 directly.
 
 ### Governed audit accounting
 
-Before Steps 7–8 read their flags, run `gstack-diff-manifest <base>` and
+Before Steps 7–8 read their flags, reuse Step 5's RUN_ID; refresh with `gstack-diff-manifest <base> "$RUN_ID"` and
 `gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host {{HOST_ID}}` from the installed bin directory.
-Carry RUN_ID, CYCLE, COVERAGE_AUDIT, PLAN_COMPLETION and REPAIR_CYCLES_MAX as literals.
+Carry all plan literals, including GREPTILE, COVERAGE_RATING, AUDIT_REUSE, FULL_LANES_REQUIRED and CI_BACKSTOP.
 Step 9.1 refreshes this same run after audit writes; never mint a replacement run
 or reset the invocation's audit attempts or repair counts.
 
@@ -218,6 +218,8 @@ or reset the invocation's audit attempts or repair counts.
 {{SECTION:adversarial}}
 
 ## Step 11.5: Bind the reviews
+
+When `ADVERSARIAL_CLAUDE=false`, skip native selection/comparison in items 1–2: bind the core and governor records to the same reviewed tree/SHA; native receipt absence is intentional. Governor completion below still requires every planned slot and required enabled registration. Its CLI honours the native-off plan even with `--require-native`; deterministic gates remain required.
 
 1. **Select the two reviews.** Run `~/.claude/skills/gstack/bin/gstack-review-read`.
    Select this invocation's final Step 9.4 record (`skill:"review"`, `via:"ship"`)
@@ -400,6 +402,8 @@ all five stages before Step 17. Content-preserving commits keep valid evidence.
 
 ### 1. Finish writers and prepare outputs
 
+Run the project's Local lanes always; Full lanes only when `FULL_LANES_REQUIRED=true`. When `FULL_LANES_REQUIRED=false`, skip the full suite/build and record `build: DEFERRED to CI check {CI_BACKSTOP}` in output and PR. Run declared generators and local typecheck/test checks; a deferred build never counts as passing.
+
 Inspect writer handles, including the docs child. Confirm terminal completion or termination
 before another writer runs. Timeout or cancellation acknowledgment alone means
 STOP until confirmed.
@@ -434,6 +438,8 @@ Classify the comparison in this order:
    without a new code review.
 
 ### 3. Resolve documentation freshness
+
+When `DOC_RELEASE=false`, skip this freshness gate and use the table row `Documentation: skipped (tier A/B, no doc-impact) | Continue to stage 4`. When `AUDIT_REUSE=true`, a metadata-only carry with `reason=reused` is satisfied; retain the validated report and audit scope, without Blocked recovery.
 
 Compare the base and hashes of the selected release paths, generated
 outputs and docs/templates with Step 14.5's saved values. A prior invocation's

@@ -209,6 +209,8 @@ git diff <diff-base> HEAD -- VERSION
 
 ## Codex Documentation Review (default-on)
 
+Read `gstack-review-budget policy-flags <base>` from the installed bin and retain `CODEX_DOC_VOICE`. When `CODEX_DOC_VOICE=false`, skip this pass: no outside invocation or fallback Agent; continue to Step 9. Omitted policy keys retain the default-on behavior below.
+
 After the documentation updates above are written, run an independent cross-model pass that
 checks the docs against what actually shipped. This is a standard part of /document-release,
 not an opt-in. The user turns it off only by asking explicitly

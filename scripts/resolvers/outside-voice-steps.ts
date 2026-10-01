@@ -123,6 +123,8 @@ If A: revise the premise and note the revision. If B: proceed (and note that the
 function adversarialNativePass(ctx: TemplateContext, isShip: boolean): string {
   return `### ${outsideVoiceFor(ctx).nativeLabel} adversarial subagent (always runs)
 
+When \`ADVERSARIAL_CLAUDE=false\`, skip this pass: no Agent, registration or PASS_START. Continue to the enabled outside passes and governor slot.
+
 ${ctx.host === 'codex' && !isShip ? generateGovernorPlan(ctx) : ''}
 
 Before dispatch, run \`~/.claude/skills/gstack/bin/gstack-review-log --start adversarial-review\`
@@ -158,6 +160,8 @@ The upstream one-corrected-attempt recovery applies; terminal failure never cert
 function adversarialOutsideChallenge(ctx: TemplateContext, isShip: boolean): string {
   return `### ${outsideVoiceFor(ctx).label} adversarial challenge (runs whenever \`CODEX_MODE: ready\`)
 
+When \`CODEX_CHALLENGE=false\`, skip this pass: no outside invocation or registration; continue to structured review.
+
 If \`CODEX_MODE\` is \`ready\`:
 
 Before launch, register \`upstream-outside:challenge --optional\` and dispatch it
@@ -187,6 +191,8 @@ For non-ready modes, retain the native pass above; do not dispatch it again.
 
 function adversarialStructuredReview(ctx: TemplateContext, isShip: boolean): string {
   return `### ${outsideVoiceFor(ctx).label} structured review (large diffs only, 200+ lines)
+
+When \`UPSTREAM_STRUCTURED=false\`, skip this pass even for large diffs or user force selection. The separate governor codex-structured slot still runs when planned.
 
 If \`CODEX_MODE\` is \`ready\` and either \`DIFF_TOTAL >= 200\` or the user requested the override above:
 
@@ -278,6 +284,8 @@ export function generateAdversarialStep(ctx: TemplateContext): string {
 
   return `## Step ${stepNum}: Adversarial review (always-on)
 
+The carried plan literals govern the passes below. When \`ADVERSARIAL_CLAUDE=false\`, skip the native pass, its registration, receipt and native-completion requirement. When \`CODEX_CHALLENGE=false\` or \`UPSTREAM_STRUCTURED=false\`, skip that upstream outside pass; if both are false skip this section's outside preflight too. The governor codex-structured slot retains its own required routing and preflight.
+
 Every diff gets the ${outsideVoiceFor(ctx).nativeLabel} adversarial pass. Upstream outside adversarial calls request \`model_reasoning_effort="high"\`; policy routing resolves and records the actual effort. Add ${outsideVoiceFor(ctx).label} when its preflight is ready; unavailable or disabled outside coverage stays explicit.
 
 **Detect diff size:**
@@ -332,6 +340,8 @@ High-confidence findings (agreed on by multiple sources) should be prioritized f
 ${ctx.host !== 'codex' ? generateGovernorStructured(ctx) : ''}
 
 ${isShip ? `### Finish the adversarial phase
+
+When \`ADVERSARIAL_CLAUDE=false\`, skip the native-incomplete decision below. Use governor completion for required reviewer coverage; enabled passes and supported findings retain the remaining fix/completion decisions.
 
 Apply Step 9.3's matching procedure before testing the actionable fix queue below.
 Only unmatched or reopened findings remain queued. Unvalidated historical Skips
@@ -710,6 +720,8 @@ ${outsideVoiceProvenance(ctx, 'plan-review')}
 export function generateCodexDocReview(ctx: TemplateContext): string {
 
   return `## ${outsideVoiceFor(ctx).label} Documentation Review (default-on)
+
+Read \`gstack-review-budget policy-flags <base>\` from the installed bin and retain \`CODEX_DOC_VOICE\`. When \`CODEX_DOC_VOICE=false\`, skip this pass: no outside invocation or fallback Agent; continue to Step 9. Omitted policy keys retain the default-on behavior below.
 
 After the documentation updates above are written, run an independent cross-model pass that
 checks the docs against what actually shipped. This is a standard part of /document-release,

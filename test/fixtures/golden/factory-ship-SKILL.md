@@ -908,6 +908,8 @@ Only commit if there are changes. Stage all bootstrap files (config, test direct
 
 ## Step 5: Run tests (on merged code)
 
+Read TESTING.md's `Local lanes` and `Full lanes`. Before selecting lanes, run `gstack-diff-manifest <base>` and `gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host factory` from the installed bin; retain RUN_ID and all printed literals. Run Local lanes always. When `FULL_LANES_REQUIRED=false`, skip Full lanes (full suite/build) and record `build: DEFERRED to CI check {CI_BACKSTOP}`; never a silent pass. When true, run Full lanes too. Repos without policy lanes retain every applicable suite below.
+
 Use the project's test commands discovered in Step 4 or documented in CLAUDE.md/AGENTS.md. Run every applicable suite; do not assume Rails or Vitest. The commands below are examples only for repositories that actually provide them. Use the same lane labels and exact commands again in Step 16.
 
 **If no applicable test suite exists:** Name the untested scope. AskUserQuestion:
@@ -1117,13 +1119,15 @@ satisfy coverage.
 
 ### Governed audit accounting
 
-Before Steps 7–8 read their flags, run `gstack-diff-manifest <base>` and
+Before Steps 7–8 read their flags, reuse Step 5's RUN_ID; refresh with `gstack-diff-manifest <base> "$RUN_ID"` and
 `gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host factory` from the installed bin directory.
-Carry RUN_ID, CYCLE, COVERAGE_AUDIT, PLAN_COMPLETION and REPAIR_CYCLES_MAX as literals.
+Carry all plan literals, including GREPTILE, COVERAGE_RATING, AUDIT_REUSE, FULL_LANES_REQUIRED and CI_BACKSTOP.
 Step 9.1 refreshes this same run after audit writes; never mint a replacement run
 or reset the invocation's audit attempts or repair counts.
 
 ## Step 7: Test Coverage Audit
+
+When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied: reuse the saved validated report and gate decisions; do not launch a child or consume generation allowance. Supply `--inputs-hash <hash>` to dispatch for any supplied external audit inputs; changed inputs require a new audit. All other blocked outcomes retain their existing handling.
 
 Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
 intermediate slice {SLICE_KIND}` and append a gate record with
@@ -1282,7 +1286,7 @@ Value card: `Value: protects=<...>; fails_when=<...>; why_new=<...>; seam=none` 
 Example: Value: protects=refundPayment rejects an empty reason; fails_when=the reason guard is removed or inverted; why_new=billing.test.ts covers processPayment only; seam=none
 Rejected (covered_elsewhere): "checkout renders"; checkout.e2e.ts:15 covers it, so extend that test.
 
-Weak tests (★ smoke/existence/trivial, gate-failing or unrated) never count as coverage. X = paths with a ★★/★★★ test / total paths (value-weighted; the gate uses X); Y = paths with any test / total paths. Total paths = the diff's codepath trace, max 30; zero skips the gate. A path with only weak tests is uncovered in X, covered in Y, and goes to `weak_gaps` (reason `star_one|gate_failed|unrated`), not `gaps`. Rate stars only for tests reachable from changed paths.
+Weak tests (★ smoke/existence/trivial, gate-failing or unrated) never count as coverage. X = paths with a ★★/★★★ test / total paths (value-weighted; the gate uses X); Y = paths with any test / total paths. Total paths = the diff's codepath trace, max 30; zero skips the gate. A path with only weak tests is uncovered in X, covered in Y, and goes to `weak_gaps` (reason `star_one|gate_failed|unrated`), not `gaps`. Rate stars only for tests reachable from changed paths. With policy COVERAGE_RATING=false, the parent uses coverage_pct via Star rating: off and skips the second rating dispatch.
 
 Retention bar: keep a test that independently enforces a public API, protocol, config, migration, storage, security, platform, default, prompt-byte, generated-output (golden), package, release or architecture contract; static or slow is no reason to delete.
 
@@ -1466,6 +1470,8 @@ verdict (`--require-audits`).
 
 **Parent processing:**
 
+When `COVERAGE_RATING=false`, skip item 4's rating dispatch; take the existing `Star rating: off` gate path from the policy (overriding CLAUDE.md), using `coverage_pct`. Carry this flag into the audit prompt; keep gaps, rejected tests and value cards.
+
 1. Read the subagent's final output. Parse the LAST line as JSON.
 2. Store `coverage_pct`, `coverage_pct_value`, `gaps`, `weak_gaps`, `tests_added`,
    `tests_extended`, `tests_rejected` and `regression_proof`. A missing new key counts
@@ -1516,6 +1522,8 @@ and test-only rules. Preserve partial results as incomplete, not passing coverag
 
 **7. Coverage gate:**
 
+When `COVERAGE_RATING=false`, skip rating: use the `Star rating: off` row below regardless of CLAUDE.md. Coverage audit/generation, machine checks and remaining gap decisions still apply.
+
 The parent owns this gate, including after inline fallback. Generated tests stay uncommitted until Step 15. The gate only asks; it never hard-fails. Use Step 7's remaining generation allowance; supply it and the remaining gaps to the same audit prompt. At the cap, omit A's generation pass and recommend stopping; A then only lists proposals and the listed risk choices remain available.
 
 Read CLAUDE.md's `## Test Coverage` section for `Minimum:` and `Target:`; otherwise use defaults: Minimum = 60%, Target = 80%. Also read the optional `Generation cap:` (tests per pass, default 5), `Base control:` (`auto` default, or `off`), `Base control budget:` (seconds per run, default 90) and `Star rating:` (`auto` default, or `off`). Missing keys use the defaults.
@@ -1561,6 +1569,8 @@ Y is `coverage_pct`; W is `weak_gaps.length`; N is `gaps`. Remaining slots = 2 �
 ---
 
 ## Step 8: Plan Completion Audit
+
+When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied: retain the saved report, counts, decisions and plan checks without another Agent. Supply `--inputs-hash <hash>` over the active external plan text and approved scope; changed inputs require a fresh audit. Continue Steps 8.1–8.2 and Prior Learnings.
 
 Run this step iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
 intermediate slice {SLICE_KIND}` and append a gate record with
@@ -2177,7 +2187,9 @@ $GSTACK_BIN/gstack-review-packet "$RUN_ID" <base>
 Carry these printed values as literals for the rest of the invocation:
 `RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `PASSES`, `REPAIR_CYCLES_MAX`,
 `COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
-`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, `CI_GREEN`, `REUSED` and `RERUN`.
+`CODEX_DOC_VOICE`, `UPSTREAM_SPECIALISTS`, `UPSTREAM_STRUCTURED`, `ADVERSARIAL_CLAUDE`,
+`CODEX_CHALLENGE`, `RED_TEAM_LOC_TRIGGER`, `GREPTILE`, `COVERAGE_RATING`,
+`AUDIT_REUSE`, `NON_CODE_DELTA`, `QA_SMOKE`, `FULL_LANES_REQUIRED`, `BUILD_GATE`, `CI_BACKSTOP`, `PACKET_PATH`, `DIFF_PATH`, `CI_GREEN`, `REUSED` and `RERUN`.
 
 `PASSES` is the whole-workflow accounting for this run: every AI pass it may
 dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
@@ -2233,6 +2245,8 @@ $GSTACK_BIN/gstack-specialist-stats 2>/dev/null || true
 ```
 
 ### Select specialists
+
+When `UPSTREAM_SPECIALISTS=false`, skip this pass: upstream scope/adaptive/force selection and fan-out. Instead dispatch only governor-planned `specialist:*` / `red-team` slots; the core review, merge and QA handoff still run. When true, use the upstream selection below.
 
 Based on the scope signals above, select which specialists to dispatch.
 
@@ -2341,6 +2355,8 @@ CHECKLIST:
 
 ### Step 9.2: Collect and merge findings
 
+When `AUTOFIX_INFORMATIONAL=false`, the policy overrides advice ASK-only below: BLOCKING is membership in `BLOCKING_SEVERITIES` OR `BLOCKING_CATEGORIES`; all other findings are ADVISORY. List at most `MAX_ADVISORIES` under `## Advisories (not fixed)`, never ASK or auto-fix advice. Preserve defect severity and evidence.
+
 Follow these stages in order. Validate core and specialist findings alike, but keep
 their source labels: specialist scoring is not the final review's defect count.
 
@@ -2448,6 +2464,8 @@ completion. Advice never permits edits while readers are active or replaces a re
 
 ### Red Team dispatch (conditional)
 
+When `RED_TEAM_LOC_TRIGGER=false`, skip LOC activation. When `UPSTREAM_SPECIALISTS=false`, skip all upstream Red Team activation (including findings/force triggers); planned `red-team` always runs. Label any upstream LOC registration `--trigger loc`.
+
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
 If activated, dispatch one more subagent via the Agent tool (pass `run_in_background: false` — foreground; subagents default to background since Claude Code v2.1.198).
@@ -2479,12 +2497,16 @@ If the Red Team fails or times out, confirm it stopped and record its review as 
 
 ### Step 9.2.1: Exploratory QA (before Fix-First)
 
+When `QA_SMOKE=false`, skip this pass's exploratory smoke, setup and guard only; required plan checks still run with their methods/preflight. Report smoke as policy-skipped, never a not-run required probe; it does not block the parent completion gate.
+
 Only the parent runs report-only discovery.
 Never overwrite another run's reports. Batch only independent Reads.
 
 **1. Load methods before any QA or explicit-verification probe.**
 
 > **STOP.** Before any probe, including plan checks, complete the ordered scope/method Reads below and await them. Templates cannot replace them.
+
+Read `$GSTACK_BIN/gstack-review-budget policy-flags <base>` now and carry `QA_SMOKE`; this is manifest-free and precedes the Step 9.1 plan.
 
 From the installed /ship SKILL.md's directory, Read `../gstack-qa/sections/exploratory.md` in full. Use this host's installation, never the product tree. If missing or unreadable, report a QA setup blocker and its affected probes as blocked; continue other safe probes (independent functional/static checks). Missing/unreadable assets block required QA.
 
@@ -2591,6 +2613,8 @@ GSTACK_SHARED_LIBS_REUSE_JSON
 
 ## Step 9.4: Fix-First and persistence
 
+When `AUTOFIX_INFORMATIONAL=false`, override the heuristic below: BLOCKING means severity in `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`; everything else is ADVISORY. ADVISORY findings are NEVER fixed: no AUTO-FIX and no ASK. List at most `MAX_ADVISORIES`, sorted by confidence, under `## Advisories (not fixed)`. Advisory test stubs are listed, never asked. Only BLOCKING findings enter the normal fix/ASK and regression flow below.
+
 Before edits, inspect every dispatched reader/writer's handle. Wait for return
 or confirm termination; otherwise log incomplete through items 5–6 and STOP
 without edits. After terminal failure, independent evidence may support fixes,
@@ -2692,6 +2716,8 @@ or independent test/security gates.
 
 ## Step 10: Address Greptile review comments (if PR exists)
 
+When `GREPTILE=false`, skip this pass: no Agent, comment fetch/reply or fix queue; continue to Step 11.
+
 Dispatch a subagent through Agent with `subagent_type: "general-purpose"` , `model: "sonnet"` and
 `run_in_background: false`, using Step 7's shared foreground-dispatch rule.
 It fetches and classifies all Greptile comments,
@@ -2757,6 +2783,8 @@ With no queued fixes, continue to Step 11.
 ---
 
 ## Step 11: Adversarial review (always-on)
+
+The carried plan literals govern the passes below. When `ADVERSARIAL_CLAUDE=false`, skip the native pass, its registration, receipt and native-completion requirement. When `CODEX_CHALLENGE=false` or `UPSTREAM_STRUCTURED=false`, skip that upstream outside pass; if both are false skip this section's outside preflight too. The governor codex-structured slot retains its own required routing and preflight.
 
 Every diff gets the factory (in-host) adversarial pass. Upstream outside adversarial calls request `model_reasoning_effort="high"`; policy routing resolves and records the actual effort. Add Codex when its preflight is ready; unavailable or disabled outside coverage stays explicit.
 
@@ -2832,6 +2860,8 @@ The factory (in-host) adversarial subagent always runs.
 
 ### factory (in-host) adversarial subagent (always runs)
 
+When `ADVERSARIAL_CLAUDE=false`, skip this pass: no Agent, registration or PASS_START. Continue to the enabled outside passes and governor slot.
+
 
 
 Before dispatch, run `$GSTACK_ROOT/bin/gstack-review-log --start adversarial-review`
@@ -2864,6 +2894,8 @@ The upstream one-corrected-attempt recovery applies; terminal failure never cert
 ---
 
 ### Codex adversarial challenge (runs whenever `CODEX_MODE: ready`)
+
+When `CODEX_CHALLENGE=false`, skip this pass: no outside invocation or registration; continue to structured review.
 
 If `CODEX_MODE` is `ready`:
 
@@ -2957,6 +2989,8 @@ For non-ready modes, retain the native pass above; do not dispatch it again.
 ---
 
 ### Codex structured review (large diffs only, 200+ lines)
+
+When `UPSTREAM_STRUCTURED=false`, skip this pass even for large diffs or user force selection. The separate governor codex-structured slot still runs when planned.
 
 If `CODEX_MODE` is `ready` and either `DIFF_TOTAL >= 200` or the user requested the override above:
 
@@ -3289,6 +3323,8 @@ governor completion gate at Step 11.5 uses `INCOMPLETE=` means STOP with a block
 
 ### Finish the adversarial phase
 
+When `ADVERSARIAL_CLAUDE=false`, skip the native-incomplete decision below. Use governor completion for required reviewer coverage; enabled passes and supported findings retain the remaining fix/completion decisions.
+
 Apply Step 9.3's matching procedure before testing the actionable fix queue below.
 Only unmatched or reopened findings remain queued. Unvalidated historical Skips
 stay unmatched for the full Step 9 repeat below; never jump to 9.3 or mint a late
@@ -3357,6 +3393,8 @@ Name an applicable learning and its effect on the version bump or CHANGELOG in
 one sentence. If none applies, continue without a reference.
 
 ## Step 11.5: Bind the reviews
+
+When `ADVERSARIAL_CLAUDE=false`, skip native selection/comparison in items 1–2: bind the core and governor records to the same reviewed tree/SHA; native receipt absence is intentional. Governor completion below still requires every planned slot and required enabled registration. Its CLI honours the native-off plan even with `--require-native`; deterministic gates remain required.
 
 1. **Select the two reviews.** Run `$GSTACK_ROOT/bin/gstack-review-read`.
    Select this invocation's final Step 9.4 record (`skill:"review"`, `via:"ship"`)
@@ -3553,6 +3591,8 @@ No edits means an executed audit, not a skip; report the section's verified outc
 
 # Documentation audit gate
 
+When `DOC_RELEASE=false`, skip this pass: print `Documentation: skipped (tier A/B, no doc-impact)` and carry that exact status to Step 16's stage-3 table and the PR body. Do not launch or consume an attempt. C/D and doc-impact matches retain this blocking pre-commit gate.
+
 Store-only releases audit `read-only` before distribution, without branch gates or source-write authority.
 
 **Attempt budget:** an initial audit plus ONE repair/re-audit in the invocation record,
@@ -3585,6 +3625,8 @@ Reentry never resets the count or authorizes a launch.
    Fill the prompt placeholders with literal candidate values.
 
 ## Launch the audit
+
+When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied, not Blocked recovery: reuse this invocation's validated audit, report and decisions without an attempt. Reuse on unchanged accepted hashes remains valid; release-metadata-only deltas may carry the governor verdict. All other deltas require the hash check/recovery below; never reconstruct or silently replace saved audit inputs.
 
 Before dispatch, run `$GSTACK_ROOT/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
 On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
@@ -3732,6 +3774,8 @@ all five stages before Step 17. Content-preserving commits keep valid evidence.
 
 ### 1. Finish writers and prepare outputs
 
+Run the project's Local lanes always; Full lanes only when `FULL_LANES_REQUIRED=true`. When `FULL_LANES_REQUIRED=false`, skip the full suite/build and record `build: DEFERRED to CI check {CI_BACKSTOP}` in output and PR. Run declared generators and local typecheck/test checks; a deferred build never counts as passing.
+
 Inspect writer handles, including the docs child. Confirm terminal completion or termination
 before another writer runs. Timeout or cancellation acknowledgment alone means
 STOP until confirmed.
@@ -3766,6 +3810,8 @@ Classify the comparison in this order:
    without a new code review.
 
 ### 3. Resolve documentation freshness
+
+When `DOC_RELEASE=false`, skip this freshness gate and use the table row `Documentation: skipped (tier A/B, no doc-impact) | Continue to stage 4`. When `AUDIT_REUSE=true`, a metadata-only carry with `reason=reused` is satisfied; retain the validated report and audit scope, without Blocked recovery.
 
 Compare the base and hashes of the selected release paths, generated
 outputs and docs/templates with Step 14.5's saved values. A prior invocation's
@@ -4075,10 +4121,14 @@ Unavailable/inconclusive is never PASS.>
 <If TODOS.md doesn't exist and user skipped: omit this section>
 
 ## Documentation
+
+<When DOC_RELEASE=false, print exactly `Documentation: skipped (tier A/B, no doc-impact)`. Existing PRs and docs-only changes follow the same rule. Never omit this section. Otherwise use the validated audit below.>
 <Embed Step 14.5's vetted nonempty `documentation_section` for this invocation.>
 <Always include the status and reviewed scope: updated, current, or blocked with the actual user's named risk exception. Never omit this section or reuse another invocation's audit.>
 
 ## Test plan
+
+<When FULL_LANES_REQUIRED=false: `build: DEFERRED to CI check {CI_BACKSTOP}`. List Local lanes' real receipts; never mark a deferred Full lane as passed.>
 - [x] <Each executed test lane's command>: <observed passing summary>
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

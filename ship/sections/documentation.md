@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 # Documentation audit gate
 
+When `DOC_RELEASE=false`, skip this pass: print `Documentation: skipped (tier A/B, no doc-impact)` and carry that exact status to Step 16's stage-3 table and the PR body. Do not launch or consume an attempt. C/D and doc-impact matches retain this blocking pre-commit gate.
+
 Store-only releases audit `read-only` before distribution, without branch gates or source-write authority.
 
 **Attempt budget:** an initial audit plus ONE repair/re-audit in the invocation record,
@@ -34,6 +36,8 @@ Reentry never resets the count or authorizes a launch.
    Fill the prompt placeholders with literal candidate values.
 
 ## Launch the audit
+
+When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied, not Blocked recovery: reuse this invocation's validated audit, report and decisions without an attempt. Reuse on unchanged accepted hashes remains valid; release-metadata-only deltas may carry the governor verdict. All other deltas require the hash check/recovery below; never reconstruct or silently replace saved audit inputs.
 
 Before dispatch, run `~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" doc-release --cycle <n>`.
 On exit 2 print its line and enter Blocked recovery; never silently skip the audit.
