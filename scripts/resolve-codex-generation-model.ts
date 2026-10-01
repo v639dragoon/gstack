@@ -94,11 +94,11 @@ export function resolveCodexGenerationModel(opts: {
   }
 
   // Sol is exact-only by design (Terra/Luna/dated snapshots must not inherit
-  // its profile), but a near-miss like 'gpt-6-sol-2026-09-01' silently
+  // its profile), but a near-miss like 'gpt-6.1-sol-2026-09-01' silently
   // family-mapping to generic gpt is unobservable — surface it.
   const configuredModel = parsed.model.trim();
   if (model === 'gpt' && SOL_PROFILE_MODELS.some(solModel => configuredModel.startsWith(solModel) && configuredModel !== solModel)) {
-    warnings.push(`Model '${sanitize(parsed.model)}' maps to the generic gpt profile — the Sol profile requires the exact ID 'gpt-5.6-sol' or 'gpt-6-sol'.`);
+    warnings.push(`Model '${sanitize(parsed.model)}' maps to the generic gpt profile — the Sol profile requires the exact ID 'gpt-5.6-sol' or 'gpt-6-sol' or 'gpt-6.1-sol'.`);
   }
 
   return { model, source: configPath, warnings };
