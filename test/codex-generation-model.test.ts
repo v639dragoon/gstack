@@ -121,6 +121,28 @@ model = "gpt-5.6-terra"
     expect(luna.warnings).toEqual([]);
   });
 
+  test('exact GPT-6.1 Sol config resolves without warning', () => {
+    const home = codexHome('model = "gpt-6.1-sol"\n');
+    expect(resolveCodexGenerationModel({ codexHome: home })).toEqual({
+      model: 'gpt-6.1-sol',
+      source: path.join(home, 'config.toml'),
+      warnings: [],
+    });
+  });
+
+  test('GPT-6.1 Sol near-miss warns and other GPT-6.1 variants remain generic', () => {
+    const nearMiss = resolveCodexGenerationModel({
+      codexHome: codexHome('model = "gpt-6.1-sol-2026-09-01"\n'),
+    });
+    expect(nearMiss.model).toBe('gpt');
+    expect(nearMiss.warnings).toHaveLength(1);
+    expect(nearMiss.warnings[0]).toContain("'gpt-6.1-sol'");
+
+    const luna = resolveCodexGenerationModel({ codexHome: codexHome('model = "gpt-6.1-luna"\n') });
+    expect(luna.model).toBe('gpt');
+    expect(luna.warnings).toEqual([]);
+  });
+
   test('warnings never carry control characters from config values', () => {
     // A TOML basic string parses \n and \t escapes — a hostile config value
     // must not inject fake lines into setup's terminal stderr.
