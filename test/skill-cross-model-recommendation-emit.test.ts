@@ -60,11 +60,12 @@ describe('cross-model synthesis emit instructions', () => {
 
   test('scripts/resolvers/outside-voice-steps.ts Codex adversarial command requires Recommendation', () => {
     const resolver = generateAdversarialStep({ host: 'claude', paths: HOST_PATHS.claude, skillName: 'review', tmplPath: 'review/SKILL.md.tmpl' });
-    // dohma fork: the review governor replaces the free-form Codex adversarial
-    // challenge on the claude host; the routed codex-structured packet reviewer
-    // is the Codex command, and its prompt must carry the emit instruction.
-    expect(resolver).not.toContain('Codex adversarial challenge');
-    expect(resolver).toMatch(/governor routed[\s\S]+?codex exec[\s\S]+?Recommendation:\s*<action>\s*because/);
+    // The codex exec command's prompt string must include the emit
+    // instruction. Match within the codex adversarial section.
+    expect(resolver).toMatch(/Codex adversarial challenge[\s\S]+?Recommendation:\s*<action>\s*because/);
+    // dohma fork (D4): the governor's routed codex-structured reviewer runs
+    // alongside upstream's pass, and its prompt carries the same instruction.
+    expect(resolver).toMatch(/### Governor codex-structured slot[\s\S]+?codex-structured reviewer for the gstack review governor[\s\S]+?Recommendation:\s*<action>\s*because/);
   });
 });
 
