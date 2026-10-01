@@ -150,16 +150,23 @@ describe('codex frontier model flag is present', () => {
     }
   });
 
-  test('rendered autoplan phase sections route the voice model at every inline site', () => {
-    // Fork: autoplan voices are routed (policy -> GSTACK_CODEX_MODEL -> project
-    // default) through gstack-codex-model, never the rendered frontier flag.
+  test('rendered autoplan phase sections resolve the model token at every inline site', () => {
+    // D4: the rendered autoplan bytes are upstream's; the fork routes the
+    // actual call inside _gstack_codex_timeout_wrapper (pinned below).
     for (const file of ['ceo-phase.md', 'design-phase.md', 'eng-phase.md', 'dx-phase.md']) {
       const rendered = fs.readFileSync(path.join(ROOT, 'autoplan', 'sections', file), 'utf-8');
-      expect(rendered, `${file} lost the routed model`).toContain(`gstack-codex-model" resolve --voice 'autoplan' --effort medium`);
-      expect(rendered).toContain('$CODEX_MODEL_EXEC_FLAGS');
-      expect(rendered).not.toContain(CODEX_MODEL_CONFIG_FLAG);
+      expect(rendered, `${file} lost the model flag`).toContain(CODEX_MODEL_CONFIG_FLAG);
       expect(rendered).not.toContain('{{CODEX_MODEL_CONFIG_FLAG}}');
+      expect(rendered, `${file} bypasses the routing wrapper`).toContain('_gstack_codex_timeout_wrapper 600 codex exec');
     }
+  });
+
+  test('the shared wrapper re-routes autoplan voices through gstack-codex-model at medium', () => {
+    // Fork: policy -> GSTACK_CODEX_MODEL -> project default, never the rendered frontier flag.
+    const probe = fs.readFileSync(path.join(ROOT, 'bin', 'gstack-codex-probe'), 'utf-8');
+    expect(probe).toContain('_voice="${GSTACK_OUTSIDE_VOICE:-autoplan}"');
+    expect(probe).toContain('gstack-codex-model" resolve --voice "$_voice" --effort medium');
+    expect(probe).toContain('model=*|review_model=*|model_reasoning_effort=*) continue');
   });
 });
 
