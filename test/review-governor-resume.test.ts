@@ -97,10 +97,17 @@ describe('resume', () => {
     run(d, s, ['verdict', 'old', 'specialist:api-contract', 'timeout', '--cycle', '0']);
     run(d, s, ['dispatch', 'old', 'coverage-audit', '--cycle', '0']);
     run(d, s, ['verdict', 'old', 'coverage-audit', 'clean', '--cycle', '0']);
+    run(d, s, ['dispatch', 'old', 'doc-release', '--cycle', '0']);
+    run(d, s, ['verdict', 'old', 'doc-release', 'clean', '--cycle', '0']);
     run(d, s, ['plan', manifest(d, 'new'), '--cycle', '0']);
     const r = run(d, s, ['resume', 'new']);
     expect(r.stdout).toContain('RESUME_SOURCE=old');
     expect(r.stdout).toContain('REUSED=codex-structured,coverage-audit');
+    expect(r.stdout).not.toContain('REUSED=codex-structured,coverage-audit,doc-release');
+    // D1: even identical content must get a new invocation's initial doc audit.
+    expect(run(d, s, ['dispatch', 'new', 'doc-release', '--cycle', '0']).status).toBe(0);
+    expect(run(d, s, ['complete', 'new', '--cycle', '0', '--final']).stdout).toContain('doc-release');
+    run(d, s, ['verdict', 'new', 'doc-release', 'clean', '--cycle', '0']);
     expect(r.stdout).toContain('RERUN=specialist:api-contract,plan-completion');
     const dup = run(d, s, ['dispatch', 'new', 'codex-structured', '--cycle', '0']);
     expect(dup.status).toBe(2);
