@@ -168,9 +168,9 @@ describe('GPT-5.6 Sol model profile', () => {
     expect(completeness).toContain('Complete coverage, minimal code.');
     expect(completeness).toContain('prefer the smaller diff');
     expectMentions(completeness, [['full coverage', 'requirement', 'error paths', 'no code beyond'], ['equal coverage', 'smaller diff'], ['no checks', 'impossible states'], ['unrelated', 'separate scope', 'never', 'gap']], 'default completeness section');
-    // Fork (harness pass 2026-09-15): the generic preamble is Bounded Completion.
-    expect(completeness).toContain('Bounded Completion');
-    expect(completeness).not.toContain('completeness cheap');
+    // D4 (round 2): the non-Sol preamble carries upstream's wording.
+    expect(completeness).toContain('Boil the Ocean');
+    expect(completeness).not.toContain('Boil the Ocean Within Scope');
     for (const model of ['gpt-6-luna', 'gpt-6-sol-2026-09-01', 'gpt-6.1-sol-2026-09-01', 'gpt-6.1-luna']) {
       expect(generateCompletenessSection(ctx(resolveModel(model)!))).toBe(completeness);
       expect(generateModelOverlay(ctx(resolveModel(model)!))).toBe(generic);
