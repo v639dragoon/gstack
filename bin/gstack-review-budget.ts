@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'child_process';
-import { policyFlags, FLAG_NAMES, surfaceFlags, readPolicy, globs, DEFAULT_ENV_SURFACES, DEFAULT_TEST_GLOBS, auditReusable, gitRead } from '../lib/review-policy';
+import { policyFlags, FLAG_NAMES, surfaceFlags, readPolicy, globs, DEFAULT_ENV_SURFACES, DEFAULT_TEST_GLOBS, auditReusable, gitRead, nonCodeReviewDelta } from '../lib/review-policy';
 
 const argv = process.argv.slice(2);
 const command = argv.shift() || '';
@@ -100,7 +101,7 @@ const priorRunFinished = (ledger: any[], plan: any): boolean => {
   )) return false;
   const findings = blockingFindings.filter((f) => f.cycle === cycle);
   const criticalByGateCycle = new Map<string, number>();
-  for (const verdict of ledger.filter((r) => r.record_type === 'verdict' && r.cycle <= cycle)) {
+  for (const verdict of ledger.filter((r) => r.record_type === 'verdict' && r.cycle <= cycle && !r.carry_forward)) {
     const key = JSON.stringify([verdict.cycle, verdict.gate]);
     criticalByGateCycle.set(key, (criticalByGateCycle.get(key) ?? 0) + (verdict.critical ?? 0));
   }
@@ -532,6 +533,7 @@ if (command === 'dispatch') {
       !upstreamGates(id, cycle).includes(r.gate) &&
       !r.verify_of &&
       !r.retry &&
+      !r.carry_forward &&
       inCycle(r),
   ).length;
   const gateDispatches = old.filter(
@@ -734,6 +736,10 @@ if (command === 'complete') {
   if (!id) fail('run id required');
   const cycle = requestedCycle();
   const p = cyclePlan(loadPlan(id), cycle);
+  if (p.nonCodeDelta && currentWtree() !== p.wtree) {
+    console.log('INCOMPLETE=working-tree-changed');
+    process.exit(2);
+  }
   const rs = records(id).filter(
     (r) => r.record_type === 'verdict' && Number(r.cycle ?? 0) === cycle,
   );
@@ -840,6 +846,68 @@ if (command === 'resume') {
   process.exit(0);
 }
 
+if (command === 'carry-forward') {
+  const id = argv[0];
+  if (!id) fail('run id required');
+  const root = loadPlan(id), cycle = requestedCycle(), p = cyclePlan(root, cycle);
+  const block = (reason: string) => { console.log(`CARRY_FORWARD=blocked reason=${reason}`); process.exit(2); };
+  if (p.nonCodeDelta !== true) block('policy-disabled');
+  if (cycle + (root.cyclePlans?.['0'] ?? root).carriedCycles > p.repairCyclesMax) block('repair-cycles-exhausted');
+  if (JSON.stringify(readPolicy(repoRoot)) !== JSON.stringify(p.policy)) block('policy-changed');
+  const branch = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoRoot, encoding: 'utf8', timeout: 10_000 });
+  if (branch.status !== 0 || branch.error || branch.stdout.trim() !== p.branch) block('branch-changed');
+  const current = currentWtree();
+  const delta = nonCodeReviewDelta(repoRoot, p.wtree, current!, p.policy);
+  if (!delta.allowed) block(delta.error || delta.triggers.join(',') || delta.reason);
+  const old = records(id), inCycle = (r: any) => Number(r.cycle ?? 0) === cycle;
+  const registrations = old.filter(r => r.record_type === 'upstream-reviewer' && inCycle(r) && !gateDisabled(p, r.gate));
+  const required = new Set([...p.reviewers.map((r: any) => r.gate),
+    ...registrations.filter(r => r.required !== false).map(r => r.gate)]);
+  // The absent native switch retains the full native requirement.
+  if (p.adversarialClaude !== false) required.add('native-adversarial');
+  const candidates = [...new Set([...required, ...registrations.map(r => r.gate)])];
+  const copies: { dispatch: any; verdict: any }[] = [];
+  for (const gate of candidates) {
+    const ds = old.filter(r => r.record_type === 'dispatch' && r.allowed && r.gate === gate && inCycle(r));
+    const vs = old.filter(r => r.record_type === 'verdict' && r.gate === gate && inCycle(r));
+    const dispatch = ds.at(-1), verdict = vs.at(-1);
+    const valid = dispatch && verdict && ds.length === vs.length &&
+      ['clean', 'issues_found'].includes(verdict.verdict) &&
+      [dispatch, verdict].every(r => r.wtree === p.wtree && r.reviewed_sha === p.head_sha);
+    if (!valid) { if (required.has(gate)) block(`incomplete:${gate}`); continue; }
+    if (verdict.critical > new Set(old.filter(r => r.record_type === 'finding' && r.blocking && r.gate === gate && inCycle(r)).map(r => r.fingerprint)).size)
+      block(`untracked-critical:${gate}`);
+    copies.push({ dispatch, verdict });
+  }
+  for (const f of old.filter(r => r.record_type === 'finding' && r.blocking)) {
+    const resolution = old.filter(r => r.record_type === 'resolved' && r.fingerprint === f.fingerprint).at(-1);
+    if (!['fixed', 'accepted', 'skipped'].includes(resolution?.action)) block(`unresolved:${f.fingerprint}`);
+  }
+  const sha = gitRead(repoRoot, ['rev-parse', 'HEAD']).trim();
+  const audit = { record_type: 'carry-forward', audit_id: randomUUID(), run_id: id, cycle,
+    old_wtree: p.wtree, new_wtree: current, old_sha: p.head_sha, new_sha: sha,
+    files: delta.files, reason: delta.reason, branch: p.branch,
+    branch_id: createHash('sha256').update(p.branch).digest('hex'),
+    policy_sha256: p.policy_sha256, base: p.base, local_lanes_only: true, ts: now() };
+  append(id, audit);
+  for (const { dispatch, verdict } of copies) {
+    const reuse = { run_id: id, cycle, wtree: current, reviewed_sha: sha,
+      reused_from: `${id}:${cycle}`, reused_ts: now(), carry_forward: audit };
+    append(id, { ...dispatch, ...reuse, reason: 'non-code-carry' });
+    append(id, { ...verdict, ...reuse });
+  }
+  // Same plan/slots/tiers: this is explicit proof of a permitted delta, never re-routing.
+  const next = { ...p, wtree: current, head_sha: sha, carryForward: audit, localLanesOnly: true };
+  root.cyclePlans = { ...(root.cyclePlans ?? {}), [String(cycle)]: next };
+  if (root.cycle === cycle) Object.assign(root, next);
+  fs.writeFileSync(planPath(id), JSON.stringify(root, null, 2) + '\n');
+  console.log('CARRY_FORWARD=true');
+  console.log(`TEST_ONLY=${delta.testOnly}`); console.log(`DOC_ONLY=${delta.docOnly}`);
+  console.log('LOCAL_LANES_ONLY=true');
+  console.log(`CARRY_AUDIT_ID=${audit.audit_id}`);
+  process.exit(0);
+}
+
 if (command === 'rerun-check') {
   const id = argv[0],
     explicitSince = opt('--since');
@@ -858,6 +926,34 @@ if (command === 'rerun-check') {
   if (!since) {
     console.log('RERUN_CHECK=blocked reason=unrecorded-since');
     process.exit(2);
+  }
+  if (p.nonCodeDelta === true) {
+    const current = currentWtree();
+    const delta = nonCodeReviewDelta(repoRoot, p.wtree, current!, p.policy);
+    const triggers = [...delta.triggers];
+    if (!delta.allowed && !delta.error) {
+      for (const f of delta.files) {
+        if (f.status !== 'A' && matchAny(f.path, p.testGlobs)) triggers.push(`modified-test:${f.path}`);
+        else if (f.status === 'A') triggers.push(`new-file:${f.path}`);
+        else triggers.push(`code-delta:${f.path}`);
+      }
+      if (delta.lines > 50) triggers.push('delta-lines>50');
+    }
+    if (JSON.stringify(readPolicy(repoRoot)) !== JSON.stringify(p.policy)) triggers.push('policy-changed');
+    const unique = [...new Set(triggers)], full = unique.length > 0;
+    const carried = (rootPlan.cyclePlans?.['0'] ?? rootPlan)?.carriedCycles ?? 0;
+    const effective = cycle + carried;
+    append(id, { record_type: 'rerun-check', run_id: id, full_rerun: full, triggers: unique,
+      fix_delta_lines: Number.isFinite(delta.lines) ? delta.lines : null, since, old_wtree: p.wtree, new_wtree: current,
+      test_only: delta.testOnly && !full, doc_only: delta.docOnly && !full,
+      local_lanes_only: delta.allowed && !full, cycle, carried_cycles: carried, effective_cycle: effective, ts: now() });
+    console.log(`FULL_RERUN=${full}`); console.log(`RERUN_TRIGGERS=${unique.length ? unique.join(',') : 'none'}`);
+    console.log(`TEST_ONLY=${delta.testOnly && !full}`); console.log(`DOC_ONLY=${delta.docOnly && !full}`);
+    console.log(`LOCAL_LANES_ONLY=${delta.allowed && !full}`);
+    console.log(`FIX_DELTA_LINES=${Number.isFinite(delta.lines) ? delta.lines : 'binary'}`);
+    console.log(`EFFECTIVE_REPAIR_CYCLE=${effective}`);
+    if (effective > p.repairCyclesMax) { console.log('REPAIR_CYCLES_EXHAUSTED=true'); process.exit(3); }
+    process.exit(0);
   }
   const r = spawnSync('git', ['diff', '--no-renames', '--numstat', since], {
     cwd: repoRoot,
@@ -920,6 +1016,9 @@ if (command === 'rerun-check') {
     effective_cycle: effective,
     ts: now(),
   });
+  console.log('TEST_ONLY=false');
+  console.log('DOC_ONLY=false');
+  console.log('LOCAL_LANES_ONLY=false');
   console.log(`FULL_RERUN=${full}`);
   console.log(`RERUN_TRIGGERS=${unique.length ? unique.join(',') : 'none'}`);
   console.log(`FIX_DELTA_LINES=${lines}`);
@@ -977,7 +1076,7 @@ if (command === 'report') {
   if (!id) fail('run id required');
   loadPlan(id);
   const rs = records(id);
-  const semantic = rs.filter((r) => r.record_type === 'dispatch' && r.allowed && r.semantic).length,
+  const semantic = rs.filter((r) => r.record_type === 'dispatch' && r.allowed && r.semantic && !r.carry_forward).length,
     blocked = rs.filter((r) => r.record_type === 'dispatch' && !r.allowed).length,
     escalations = rs.filter((r) => r.record_type === 'dispatch' && r.escalation).length,
     fulls = rs.filter((r) => r.record_type === 'rerun-check' && r.full_rerun),
@@ -992,6 +1091,7 @@ if (command === 'report') {
     `Review run ${id} dispatched ${semantic} semantic reviewer(s), blocked ${blocked}, used ${escalations} escalation(s), and required ${fulls.length} full rerun(s).`,
   );
   console.log(`SEMANTIC_DISPATCHES=${semantic}`);
+  console.log(`CARRY_FORWARDS=${rs.filter(r => r.record_type === 'carry-forward').length}`);
   console.log(`BLOCKED_DISPATCHES=${blocked}`);
   console.log(`ESCALATIONS=${escalations}`);
   console.log(`FULL_RERUNS=${fulls.length}`);
