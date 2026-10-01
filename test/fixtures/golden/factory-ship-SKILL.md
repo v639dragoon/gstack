@@ -940,6 +940,8 @@ all five stages before Step 17. Content-preserving commits keep valid evidence.
 
 ### 1. Finish writers and prepare outputs
 
+When `NON_CODE_DELTA=true`, first run `rerun-check` before choosing lanes. `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` sets `LOCAL_LANES_ONLY=true`: skip Full lanes even if originally required, retaining original results as STALE pending stage 2's carry proof. Generators still run; a later source/output change uses the full route at stage 2.
+
 Run the project's Local lanes always; Full lanes only when `FULL_LANES_REQUIRED=true`. When `FULL_LANES_REQUIRED=false`, skip the full suite/build and record `build: DEFERRED to CI check {CI_BACKSTOP}` in output and PR. Run declared generators and local typecheck/test checks; a deferred build never counts as passing.
 
 Inspect writer handles, including the docs child. Confirm terminal completion or termination
@@ -955,6 +957,8 @@ repair. Never invent a substitute command.
 to stage 2; treat any content repair as a behavioral change there.
 
 ### 2. Choose the change route
+
+When `NON_CODE_DELTA=true`, run `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>` before classification below. Only `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` permits `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>` and `gstack-review-log --carry-forward "$RUN_ID"`. Require success; save its audit and new reviewed tree, verify the delta and run Local lanes only for stale receipts, then proceed to stage 3 without re-entering review. Stage 4 refreshes Local receipts only for this route: Full receipts remain STALE, with original results plus the carry proof; never exempt docs or call stale evidence FRESH. All other triggers follow the full route below. `FULL_RERUN=true` requires route 1 even for paths shaped as docs. Carry-forward updates the existing plan; do not replan or mint another run for this exception.
 
 Capture the current tree with `$GSTACK_ROOT/bin/gstack-wtree`. Inspect
 `git diff <reviewed-tree> <current-tree>` against the snapshot saved before Step 12.
@@ -985,6 +989,7 @@ audit or risk decision never qualifies.
 
 | Outcome | Action |
 |---|---|
+| DOC_RELEASE=false | Documentation: skipped (tier A/B, no doc-impact). Continue to stage 4. |
 | This invocation's accepted audit matches all inputs | Continue to stage 4. |
 | User-accepted named documentation risk covers the same approved scope and exact content, and unwaivable gates clear | Continue to stage 4; retain `Documentation: blocked`, its reason and incomplete scope. |
 | Missing, stale or blocked | Use recovery below. Never silently refresh hashes. |
