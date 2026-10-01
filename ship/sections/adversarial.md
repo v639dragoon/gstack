@@ -66,6 +66,8 @@ The Claude adversarial subagent always runs.
 
 ### Claude adversarial subagent (always runs)
 
+When `NON_CODE_DELTA=true` and this native slot was carried by a successful `carry-forward`, reuse its audited receipt: do not register/dispatch another attempt or create a PASS_START. This exception never accepts missing native coverage.
+
 When `ADVERSARIAL_CLAUDE=false`, skip this pass: no Agent, registration or PASS_START. Continue to the enabled outside passes and governor slot.
 
 
@@ -101,7 +103,7 @@ The upstream one-corrected-attempt recovery applies; terminal failure never cert
 
 ### Codex adversarial challenge (runs whenever `CODEX_MODE: ready`)
 
-When `CODEX_CHALLENGE=false`, skip this pass: no outside invocation or registration; continue to structured review.
+When `CODEX_CHALLENGE=false`, skip this pass: no outside invocation or registration; continue to structured review. A successful NON_CODE_DELTA carry of upstream-outside:challenge also satisfies it; reuse the audited receipt without dispatch.
 
 If `CODEX_MODE` is `ready`:
 
@@ -184,7 +186,7 @@ For non-ready modes, retain the native pass above; do not dispatch it again.
 
 ### Codex structured review (large diffs only, 200+ lines)
 
-When `UPSTREAM_STRUCTURED=false`, skip this pass even for large diffs or user force selection. The separate governor codex-structured slot still runs when planned.
+When `UPSTREAM_STRUCTURED=false`, skip this pass even for large diffs or user force selection. A successful NON_CODE_DELTA carry of upstream-outside:structured also satisfies it without dispatch. The separate governor codex-structured slot still runs when planned.
 
 If `CODEX_MODE` is `ready` and either `DIFF_TOTAL >= 200` or the user requested the override above:
 
@@ -282,7 +284,7 @@ its original token. If it never started because it was unavailable, disabled or
 size-gated, omit `--finish PASS_START` and set completed/converged false.
 Do not create or borrow a token just to save a result.
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
 ```
 PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
 Fill fields from this attempt, not the parent's Step 9.4 result:
@@ -338,7 +340,7 @@ High-confidence findings (agreed on by multiple sources) should be prioritized f
 ### Governor codex-structured slot
 
 
-Run this additional slot only when codex-structured is planned and not in REUSED.
+Run this additional slot only when codex-structured is planned and not in REUSED. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
 It does not replace the required native pass, upstream outside challenge, or
 structured P1 decision. Record all of them separately.
 
@@ -483,7 +485,7 @@ aggregates; gate telemetry retains tokens (from the `tokens used` line in
 stderr when present), `fix_cycle`, `rerun_cause`, and `manifest_wtree`:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
 ~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 

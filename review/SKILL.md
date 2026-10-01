@@ -1033,6 +1033,16 @@ Before replying to any comment, run the **Escalation Detection** algorithm from 
 
 ---
 
+### Step 5e: Bounded repair verification
+
+When `NON_CODE_DELTA=false`, skip this carve-out and keep the full repeat below.
+After fixes run Local lanes, then `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+
+- `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false`: run `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>`, then `gstack-review-log --carry-forward "$RUN_ID"`. Require success. This audited exception carries the original reviewer verdicts, never launches reviewers. Save the new reviewed tree and audit id; verify the added tests/doc delta and refresh only Local lane receipts. Full receipts may remain STALE: retain their original results and the carry proof, never label them FRESH. Persist with the original REVIEW_START, `completed:true` only when all required checks pass and `converged:true` for this non-code exception; Step 5.8 does not repeat Steps 3–5.
+- `FULL_RERUN=false` without a non-code delta: re-dispatch ONLY each finding's reviewer after `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`; confirm the fix and quote its evidence. Never invent changed content.
+- `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log `rerun_cause:"scope-expansion:{triggers}"`, refresh the same run's manifest and plan for cycle <n+1>, then repeat the whole pass. Auth/d-surface/env/migration/api/git failure, modified tests and every source edit stay FULL. All calls carry the new cycle.
+- Exit 3: persist nonconvergence and STOP. Never exceed `REPAIR_CYCLES_MAX`.
+
 ## Step 5.8: Persist Eng Review result
 
 When `ADVERSARIAL_CLAUDE=false`, skip native receipt/completion requirements below; completed core and governor reviewers plus all required plan checks determine completion. Policy-skipped smoke is never a not-run required probe. When `AUTOFIX_INFORMATIONAL=false`, the Step 5a advisory override also controls persistence and action counts.
@@ -1102,7 +1112,7 @@ for the native result, or vice versa. Step 4.8's structured-review gate still ap
   suppressions; include this invocation's revalidated decisions.
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"COMMIT","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"COMMIT","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
 ```
 
 Use ISO 8601 `TIMESTAMP` and `git rev-parse --short HEAD` for `COMMIT`.

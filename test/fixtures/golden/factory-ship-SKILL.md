@@ -2613,6 +2613,8 @@ GSTACK_SHARED_LIBS_REUSE_JSON
 
 ## Step 9.4: Fix-First and persistence
 
+When `NON_CODE_DELTA=true`, after any fixes run `rerun-check` before persistence. Only `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` permits `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>` and `gstack-review-log --carry-forward "$RUN_ID"`. Require success, verify that delta and refresh Local lanes only; retain stale Full receipts and their original results explicitly. Then finish the original REVIEW_START with completed/converged true only when all required checks pass; skip the full Step 9 repeat and continue to the pending enabled Steps 10–11, reusing carried reviewer verdicts rather than dispatching again. Save the new reviewed tree/audit id. Every other edit keeps the full upstream repeat below.
+
 When `AUTOFIX_INFORMATIONAL=false`, override the heuristic below: BLOCKING means severity in `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`; everything else is ADVISORY. ADVISORY findings are NEVER fixed: no AUTO-FIX and no ASK. List at most `MAX_ADVISORIES`, sorted by confidence, under `## Advisories (not fixed)`. Advisory test stubs are listed, never asked. Only BLOCKING findings enter the normal fix/ASK and regression flow below.
 
 Before edits, inspect every dispatched reader/writer's handle. Wait for return
@@ -2656,7 +2658,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
 
 6. Persist the review result to the review log:
 ```bash
-$GSTACK_ROOT/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
+$GSTACK_ROOT/bin/gstack-review-log '{"skill":"review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
 ```
 - `TIMESTAMP`: ISO 8601. `STATUS`: `unavailable` for missing dispatched reviewer output;
   otherwise `clean` only for completed coverage with no
@@ -2683,7 +2685,7 @@ Save the review output — it goes into the PR body in Step 19.
 For each fixing cycle also run `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
 Retain fix_cycle and rerun_cause in gate rows and refresh manifest/plan before
 reviewing changed inputs. Governor REPAIR_CYCLES_MAX may stop earlier; never
-replace the full upstream review repeat with a delta-only check. On exit 3
+replace the full upstream review repeat with a delta-only check, except the policy-enabled NON_CODE_DELTA carry-forward for added tests or docs/release metadata. On exit 3
 persist `converged:false` and recurring findings before stopping.
 
 ### Decide whether to repeat Step 9
@@ -2860,6 +2862,8 @@ The factory (in-host) adversarial subagent always runs.
 
 ### factory (in-host) adversarial subagent (always runs)
 
+When `NON_CODE_DELTA=true` and this native slot was carried by a successful `carry-forward`, reuse its audited receipt: do not register/dispatch another attempt or create a PASS_START. This exception never accepts missing native coverage.
+
 When `ADVERSARIAL_CLAUDE=false`, skip this pass: no Agent, registration or PASS_START. Continue to the enabled outside passes and governor slot.
 
 
@@ -2895,7 +2899,7 @@ The upstream one-corrected-attempt recovery applies; terminal failure never cert
 
 ### Codex adversarial challenge (runs whenever `CODEX_MODE: ready`)
 
-When `CODEX_CHALLENGE=false`, skip this pass: no outside invocation or registration; continue to structured review.
+When `CODEX_CHALLENGE=false`, skip this pass: no outside invocation or registration; continue to structured review. A successful NON_CODE_DELTA carry of upstream-outside:challenge also satisfies it; reuse the audited receipt without dispatch.
 
 If `CODEX_MODE` is `ready`:
 
@@ -2990,7 +2994,7 @@ For non-ready modes, retain the native pass above; do not dispatch it again.
 
 ### Codex structured review (large diffs only, 200+ lines)
 
-When `UPSTREAM_STRUCTURED=false`, skip this pass even for large diffs or user force selection. The separate governor codex-structured slot still runs when planned.
+When `UPSTREAM_STRUCTURED=false`, skip this pass even for large diffs or user force selection. A successful NON_CODE_DELTA carry of upstream-outside:structured also satisfies it without dispatch. The separate governor codex-structured slot still runs when planned.
 
 If `CODEX_MODE` is `ready` and either `DIFF_TOTAL >= 200` or the user requested the override above:
 
@@ -3100,7 +3104,7 @@ its original token. If it never started because it was unavailable, disabled or
 size-gated, omit `--finish PASS_START` and set completed/converged false.
 Do not create or borrow a token just to save a result.
 ```bash
-$GSTACK_ROOT/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"factory","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+$GSTACK_ROOT/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"factory","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
 ```
 PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
 Fill fields from this attempt, not the parent's Step 9.4 result:
@@ -3156,7 +3160,7 @@ High-confidence findings (agreed on by multiple sources) should be prioritized f
 ### Governor codex-structured slot
 
 
-Run this additional slot only when codex-structured is planned and not in REUSED.
+Run this additional slot only when codex-structured is planned and not in REUSED. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
 It does not replace the required native pass, upstream outside challenge, or
 structured P1 decision. Record all of them separately.
 
@@ -3313,7 +3317,7 @@ aggregates; gate telemetry retains tokens (from the `tokens used` line in
 stderr when present), `fix_cycle`, `rerun_cause`, and `manifest_wtree`:
 
 ```bash
-$GSTACK_ROOT/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
+$GSTACK_ROOT/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
 $GSTACK_ROOT/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
@@ -3774,6 +3778,8 @@ all five stages before Step 17. Content-preserving commits keep valid evidence.
 
 ### 1. Finish writers and prepare outputs
 
+When `NON_CODE_DELTA=true`, first run `rerun-check` before choosing lanes. `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` sets `LOCAL_LANES_ONLY=true`: skip Full lanes even if originally required, retaining original results as STALE pending stage 2's carry proof. Generators still run; a later source/output change uses the full route at stage 2.
+
 Run the project's Local lanes always; Full lanes only when `FULL_LANES_REQUIRED=true`. When `FULL_LANES_REQUIRED=false`, skip the full suite/build and record `build: DEFERRED to CI check {CI_BACKSTOP}` in output and PR. Run declared generators and local typecheck/test checks; a deferred build never counts as passing.
 
 Inspect writer handles, including the docs child. Confirm terminal completion or termination
@@ -3789,6 +3795,8 @@ repair. Never invent a substitute command.
 to stage 2; treat any content repair as a behavioral change there.
 
 ### 2. Choose the change route
+
+When `NON_CODE_DELTA=true`, run `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>` before classification below. Only `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` permits `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>` and `gstack-review-log --carry-forward "$RUN_ID"`. Require success; save its audit and new reviewed tree, verify the delta and run Local lanes only for stale receipts, then proceed to stage 3 without re-entering review. Stage 4 refreshes Local receipts only for this route: Full receipts remain STALE, with original results plus the carry proof; never exempt docs or call stale evidence FRESH. All other triggers follow the full route below. `FULL_RERUN=true` requires route 1 even for paths shaped as docs. Carry-forward updates the existing plan; do not replan or mint another run for this exception.
 
 Capture the current tree with `$GSTACK_ROOT/bin/gstack-wtree`. Inspect
 `git diff <reviewed-tree> <current-tree>` against the snapshot saved before Step 12.
@@ -3819,6 +3827,7 @@ audit or risk decision never qualifies.
 
 | Outcome | Action |
 |---|---|
+| DOC_RELEASE=false | Documentation: skipped (tier A/B, no doc-impact). Continue to stage 4. |
 | This invocation's accepted audit matches all inputs | Continue to stage 4. |
 | User-accepted named documentation risk covers the same approved scope and exact content, and unwaivable gates clear | Continue to stage 4; retain `Documentation: blocked`, its reason and incomplete scope. |
 | Missing, stale or blocked | Use recovery below. Never silently refresh hashes. |
@@ -4127,6 +4136,8 @@ Unavailable/inconclusive is never PASS.>
 <Always include the status and reviewed scope: updated, current, or blocked with the actual user's named risk exception. Never omit this section or reuse another invocation's audit.>
 
 ## Test plan
+
+<When LOCAL_LANES_ONLY=true after non-code carry: cite the audit id/tree delta, original Full results with their STALE receipts, and refreshed Local results. Never label the original Full receipts FRESH.>
 
 <When FULL_LANES_REQUIRED=false: `build: DEFERRED to CI check {CI_BACKSTOP}`. List Local lanes' real receipts; never mark a deferred Full lane as passed.>
 - [x] <Each executed test lane's command>: <observed passing summary>

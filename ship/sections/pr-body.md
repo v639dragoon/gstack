@@ -100,6 +100,8 @@ Unavailable/inconclusive is never PASS.>
 
 ## Test plan
 
+<When LOCAL_LANES_ONLY=true after non-code carry: cite the audit id/tree delta, original Full results with their STALE receipts, and refreshed Local results. Never label the original Full receipts FRESH.>
+
 <When FULL_LANES_REQUIRED=false: `build: DEFERRED to CI check {CI_BACKSTOP}`. List Local lanes' real receipts; never mark a deferred Full lane as passed.>
 - [x] <Each executed test lane's command>: <observed passing summary>
 

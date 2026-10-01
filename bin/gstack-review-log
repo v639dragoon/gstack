@@ -63,8 +63,19 @@ if [ "$INPUT" = --check-shared-libs ] && [ "$#" -eq 2 ]; then
   '
   exit $?
 fi
+if [ "$INPUT" = --carry-forward ] && [ "$#" -eq 2 ]; then
+  GSTACK_REVIEW_RUN_ID="$2" bun -e '
+    const { carryReviewRecords } = await import(process.env.GSTACK_REVIEW_LIB);
+    const rows = carryReviewRecords(process.env.GSTACK_REVIEW_RUN_ID);
+    const { appendFileSync } = await import("node:fs");
+    for (const row of rows) appendFileSync(process.env.GSTACK_REVIEW_LOG, JSON.stringify(row) + "\n");
+    console.log(`CARRIED_REVIEWS=${rows.length}`);
+  '
+  "$SCRIPT_DIR/gstack-brain-enqueue" "projects/$SLUG/$BRANCH-reviews.jsonl" 2>/dev/null &
+  exit 0
+fi
 if [ "$#" -ne 1 ] && { [ "$#" -ne 3 ] || [ "${2:-}" != --finish ]; }; then
-  echo 'Usage: gstack-review-log JSON [--finish TOKEN] | --start SKILL | --check-shared-libs TOKEN < finding.json' >&2
+  echo 'Usage: gstack-review-log JSON [--finish TOKEN] | --start SKILL | --carry-forward RUN_ID | --check-shared-libs TOKEN < finding.json' >&2
   exit 1
 fi
 
