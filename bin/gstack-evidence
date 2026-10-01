@@ -488,6 +488,12 @@ function cmdCheck(argv: string[]): number {
     records = [];
   }
 
+  // package.json is a release exemption only for its top-level version.
+  // The upstream --allow-paths spelling must not exempt scripts/dependencies.
+  if (allowPaths.includes("package.json")) {
+    allowPaths = allowPaths.filter(p => p !== "package.json");
+    versionOnlyPaths = [...new Set([...versionOnlyPaths, "package.json"])];
+  }
   const labels = all
     ? [...new Set(records.map((r) => r.label))].map((label) => ({ label, expectCmd: undefined as string | undefined }))
     : wanted;

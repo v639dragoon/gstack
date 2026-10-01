@@ -947,9 +947,17 @@ cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 source "$HOME/.claude/skills/gstack/bin/gstack-codex-probe" && _gstack_codex_select_model exec || exit 1
 _gstack_codex_sandbox_preflight >/dev/null || exit 1
 _gstack_codex_first_use_notice
-_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'plan-review' --effort medium) || exit 1
-eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
+_ROUTE_EXIT=0
+_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" _gstack_codex_timeout_wrapper 300 "$GSTACK_BIN/gstack-codex-model" resolve --voice 'plan-review' --effort medium </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
+if [ "$_ROUTE_EXIT" -ne 0 ]; then
+  cat "$_OUTSIDE_TMP/route-error" >&2
+  cat "$_OUTSIDE_TMP/route-error"
+  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
+  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
+  exit "$_ROUTE_EXIT"
+fi
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_EXIT=0
 _gstack_codex_timeout_wrapper 300 codex exec - -C "$_REPO_ROOT" -s "${_GSTACK_CODEX_SANDBOX:?}" -c "model=\"${_GSTACK_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c "model_reasoning_effort=\"$CODEX_EFFORT\"" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"

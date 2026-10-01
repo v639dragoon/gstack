@@ -50,8 +50,9 @@ export const REVIEW_E2E_SECTIONS = [
   'Important Rules',
 ];
 
-/** Review governor E2E: core workflow + Scope Drift / Plan Completion Audit
- *  (delivery-audit test) + Step 4.5 plan-owned specialist dispatch. */
+/** Review Army E2E: core workflow + Scope Drift / Plan Completion Audit
+ *  (delivery-audit test) + Step 4.5 specialist dispatch (quality score,
+ *  JSON findings schema, MULTI-SPECIALIST consensus, Red Team). */
 export const REVIEW_ARMY_E2E_SECTIONS = [
   'When to invoke this skill',
   'Step 0: Detect platform and base branch',
@@ -62,7 +63,7 @@ export const REVIEW_ARMY_E2E_SECTIONS = [
   'Step 3: Get the diff',
   'Step 4: Critical pass (core review)',
   'Confidence Calibration',
-  'Step 4.5: Review governor — manifest, plan, packet',
+  'Step 4.5: Review Army — Specialist Dispatch',
   'Important Rules',
 ];
 

@@ -1,3 +1,4 @@
+import { generateGovernorPlan } from './review-army';
 /**
  * Cross-model review resolver
  *
@@ -70,6 +71,12 @@ On any ${outsideVoiceFor(ctx).label} error, fall back to the ${outsideVoiceFor(c
 
 **If preflight is not ready (or ${outsideVoiceFor(ctx).label} errored):**
 
+Register and dispatch the required native attempt before its Agent call:
+\`gstack-review-budget register-upstream "$RUN_ID" native-adversarial --cycle <n>\`,
+then \`gstack-review-budget dispatch "$RUN_ID" native-adversarial --cycle <n>\`.
+Registration records this upstream-required reviewer independently of routed slots.
+Every native call sets \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`.
+
 Dispatch via the Agent tool with \`run_in_background: false\` (subagents default to background since ${CC_BACKGROUND_DEFAULT_SINCE}; the findings must land before the workflow continues). The subagent has fresh context and no conversation bias — but it is the same harness; model identity stays unknown unless the runtime reports it; weigh its agreement accordingly.
 
 Subagent prompt: same mode-appropriate prompt as above (Startup or Builder variant).
@@ -117,6 +124,8 @@ If A: revise the premise and note the revision. If B: proceed (and note that the
 function adversarialNativePass(ctx: TemplateContext, isShip: boolean): string {
   return `### ${outsideVoiceFor(ctx).nativeLabel} adversarial subagent (always runs)
 
+${ctx.host === 'codex' && !isShip ? generateGovernorPlan(ctx) : ''}
+
 Before dispatch, run \`~/.claude/skills/gstack/bin/gstack-review-log --start adversarial-review\`
 and save the returned token for this native attempt. Do the same before each outside
 adversarial or structured pass reads its diff. Keep each token with that attempt;
@@ -137,6 +146,12 @@ Think like an attacker and a chaos engineer. Your job is to find ways this code 
 Present findings under an \`ADVERSARIAL REVIEW (${outsideVoiceFor(ctx).nativeLabel} subagent):\` header. **FIXABLE findings** ${isShip ? 'are queued for the parent; do not edit during Step 11' : "are queued for the parent's Fix-First handling at Step 5; do not edit during Step 4.8"}. **INVESTIGATE findings** are presented as informational.
 
 If the subagent fails or times out, record native coverage as incomplete. Continue independent passes and persistence, not release.
+Record \`gstack-review-budget verdict "$RUN_ID" native-adversarial <clean|issues_found|error|timeout> --cycle <n>\`
+and a best-effort \`gstack-gate-log\` row with gate native-adversarial, model sonnet,
+effort agent-default, effort_source routed, fix_cycle, rerun_cause and manifest_wtree.
+Keep its original PASS_START review-log record; Step ${isShip ? '11.5' : '5.8'} binds that native receipt.
+The upstream one-corrected-attempt recovery applies; terminal failure never certifies completion.
+
 
 ---`;
 }
@@ -146,11 +161,16 @@ function adversarialOutsideChallenge(ctx: TemplateContext, isShip: boolean): str
 
 If \`CODEX_MODE\` is \`ready\` or \`unverified\`:
 
+Before launch, register \`upstream-outside:challenge --optional\` and dispatch it
+with \`gstack-review-budget\`, carrying this run and cycle. Record the resolved
+model and effort, then its terminal verdict and gate-log row. This optional
+record preserves upstream's non-blocking failure contract.
+
 Outside prompt (supply repository context from the parent):
 
 "${CODEX_BOUNDARY}Review the changes on this branch against the base branch. Use the supplied branch diff. If it was not supplied and you have repository tools, run DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE". Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, resource leaks, failure modes, and silent data corruption paths. Be adversarial. Be thorough. No compliments — just the problems. End your output with ONE line in the canonical format \`Recommendation: <action> because <one-line reason naming the most exploitable finding>\`. Generic reasons like 'because it's safer' do not qualify; the reason must point to a specific finding or no-fix rationale."
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 540000, nativeAlreadyRequired: true, reasoningEffort: 'medium', voice: 'adversarial', diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 540000, nativeAlreadyRequired: true, reasoningEffort: 'high', voice: 'adversarial', diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
 
 Present the full output verbatim. ${isShip ? 'An unavailable outside challenge does not block shipping by itself; supported findings still enter Step 11, and the structured P0/P1 and non-convergence gates still apply.' : 'This outside challenge is informational; supported findings still enter Step 5 Fix-First, whose approval and convergence gates apply.'}
 
@@ -169,9 +189,14 @@ function adversarialStructuredReview(ctx: TemplateContext, isShip: boolean): str
 
 If \`CODEX_MODE\` is \`ready\` or \`unverified\` and either \`DIFF_TOTAL >= 200\` or the user requested the override above:
 
+Register \`upstream-outside:structured --optional\` and dispatch it with
+\`gstack-review-budget\` before launch. Record actual model/effort, terminal
+verdict and gate-log row separately from the governor's routed slot; the
+upstream structured decision and Finish the adversarial phase still govern it.
+
 Prepare a structured review prompt requesting severity-tagged findings ([P0]-[P3]) or an explicit NO_FINDINGS conclusion. Preserve the base-branch scope including committed changes and working-tree changes.
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 540000, nativeAlreadyRequired: true, reasoningEffort: 'medium', voice: 'adversarial', structuredBase: '<base>', gate: 'structured', diffCommand: 'DIFF_BASE=$(git merge-base <base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 540000, nativeAlreadyRequired: true, reasoningEffort: 'high', voice: 'adversarial', structuredBase: '<base>', gate: 'structured', diffCommand: 'DIFF_BASE=$(git merge-base <base> HEAD) && git diff "$DIFF_BASE"' })}
 
 ${outsideVoiceFor(ctx).id === 'codex' ? 'The Codex backend uses `codex review --base` without a positional prompt: those arguments are mutually exclusive. Never drop --base to resolve an argv error; prompt-only review changes the diff scope.' : 'The Claude Code backend receives the parent-captured base diff, including committed and working-tree changes, because review mode cannot execute git.'}
 
@@ -247,137 +272,12 @@ Telemetry is best-effort: failures never block.
 
 export function generateAdversarialStep(ctx: TemplateContext): string {
 
-  // dohma fork: the governor routes adversarial review only where the outside
-  // voice is Codex; the codex host keeps upstream's step (Claude Code voice).
-  const routedStep = ctx.skillName === 'ship' ? '11' : '4.8';
-  if (ctx.host !== 'codex') return `## Step ${routedStep}: Adversarial review — governor routed
-
-Print: \`Adversarial: routed to codex-structured per tier {TIER}\`.
-Do not run the Claude adversarial subagent or a free-form \`codex exec\`
-challenge. Semantic adversarial review exists only when
-\`codex-structured@medium\` or \`codex-structured@high\` is in \`REVIEWERS\`.
-
-This block is normally LAUNCHED from Step ${ctx.skillName === 'ship' ? '9.1' : '4.5'} as one background Bash
-call, concurrently with the specialist reviewers, against the same frozen
-snapshot; run it here only if it was not launched there (no other reviewer
-was planned) and skip it entirely when \`codex-structured\` is in \`REUSED\`.
-
-Before the structured review, run the shared Codex preflight. Nested Codex
-sessions must refuse another Codex spawn unless the explicit override is set:
-
-${outsideVoicePreflight(ctx, { disabledBehavior: 'codex-only' })}
-
-Only when \`CODEX_MODE: ready\`, run the budget dispatch:
-
-\`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle <n>
-\`\`\`
-
-On exit 2, print its line and do not run Codex. Otherwise resolve the slot's
-MODEL once, before the review starts. The plan carries \`CODEX_MODEL\` (empty
-= the client default; a policy \`routing.models\` entry names another, e.g.
-dohma routes \`gpt-6-astra\` on tiers C and D) and \`CODEX_MODEL_SOURCE\`. A
-named model runs only when the installed CLI and the signed-in account can
-run it (one minimal access check, cached); otherwise the slot keeps the
-default route and the substitution is logged. The model never changes the
-budget, the effort, the 540s cap, the retry rule or the completion rule, and
-a timed-out review stays incomplete: it never triggers an automatic
-second-model review.
-
-\`\`\`bash
-~/.claude/skills/gstack/bin/gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}"
-\`\`\`
-
-Carry its printed \`CODEX_MODEL\`, \`CODEX_MODEL_REQUESTED\`,
-\`CODEX_MODEL_SOURCE\`, \`CODEX_MODEL_SUBSTITUTED\`,
-\`CODEX_MODEL_SUBSTITUTION_REASON\`, \`CODEX_MODEL_EXEC_FLAGS\` and
-\`CODEX_MODEL_REVIEW_FLAGS\` as literals. Print
-\`Codex model: {CODEX_MODEL} ({CODEX_MODEL_SOURCE}; requested {CODEX_MODEL_REQUESTED})\`
-and, when substituted, one more line with the reason. Then run exactly one
-structured review at the suffix supplied by the plan. Branch on the packet's
-\`CI_GREEN\` (true only when the EXACT reviewed SHA is on a remote branch with
-every CI run completed and successful):
-
-**\`CI_GREEN=true\`: the read-only packet reviewer.** \`codex review --base\`
-re-runs the project's build and test suite inside its sandbox before it
-reviews; on a large tier-D diff that alone consumed the 540s cap (observed
-2026-09-03: three timeouts of four, zero findings returned). Fresh exact-SHA
-CI evidence makes that execution redundant, so skip it deliberately:
-
-\`\`\`bash
-TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
-_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-cd "$_REPO_ROOT"
-source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
-_CODEX_T0=$(date +%s)
-_gstack_codex_timeout_wrapper 540 codex exec {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s read-only --add-dir "$(dirname "{PACKET_PATH}")" -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' \${CODEX_WEB_SEARCH_FLAG} "You are the codex-structured reviewer for the gstack review governor, in READ-ONLY mode. CI_GREEN=true for the exact head SHA $(git rev-parse HEAD) (see the packet's CI evidence): do NOT run the build, the test suite, typecheck or any install; this is a SEMANTIC review of the diff only. Read the review packet at {PACKET_PATH} first, then read the diff at {DIFF_PATH} in ONE pass (cat the whole file once; never page it in chunks, paging a large diff is what runs past the cap), then open other worktree files only to answer a specific question, with read-only git. Do not re-derive the project. Findings already fixed and listed in the packet as resolved are not to be re-reported. Review for ways this code fails in production: SQL and data safety, race conditions, LLM trust boundary, enum completeness, security, reliability, data-migration ordering and rollback. Output one line per finding: [P1] or [P2] or [INFO] path:line — problem — fix — evidence: quoted line(s); a finding you cannot anchor to a quoted line is [INFO] at most; if nothing, exactly NO FINDINGS. End with ONE line: Recommendation: <action> because <one-line reason naming the most exploitable finding, or no exploitable finding>." < /dev/null 2>"$TMPERR"
-_CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
-\`\`\`
-
-**\`CI_GREEN=false\` or \`unknown\`: the CLI diff review.** Nothing has
-proven the tree green, so codex may run what it needs:
-
-\`\`\`bash
-TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
-_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
-cd "$_REPO_ROOT"
-source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
-_CODEX_T0=$(date +%s)
-_gstack_codex_timeout_wrapper 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' \${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
-_CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
-\`\`\`
-
-Either way the cap stays 540s. The effort is \`medium\` for tiers A/B/C and
-\`high\` for tier D. The model is the one \`gstack-codex-model\` resolved:
-\`{CODEX_MODEL_EXEC_FLAGS}\` / \`{CODEX_MODEL_REVIEW_FLAGS}\` are empty on the
-default route (the project's own Codex config then decides; no frontier
-model is rendered here, so an unrouted tier never inherits a premium model)
-and \`--model <slug>\` / \`-c model="<slug>" -c review_model="<slug>"\` on a routed one
-(\`codex review\` rejects \`-m\`). No prompt argument is allowed with
-\`--base\` (the read-only form takes the prompt because it uses
-\`codex exec\`). Read stderr before cleanup; keep the printed
-\`CODEX_ELAPSED_S\` for the gate row. Check for
-\`[P1]\` markers: found → \`GATE: FAIL\`, not found → \`GATE: PASS\`. FAIL →
-AskUserQuestion with A) investigate and fix now (recommended), B) continue.
-The [P1] gate semantics are unchanged.
-
-After Codex returns, record its terminal result immediately:
-
-\`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" codex-structured <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
-\`\`\`
-
-After an \`error\` or \`timeout\`, the same cycle-scoped dispatch may retry this
-planned slot ONCE; record the retry verdict too. A second failure stays
-incomplete and can never be logged as clean.
-
-A user request for "full review" permits ONE extra dispatch only:
-\`gstack-review-budget dispatch "$RUN_ID" codex-structured --escalation user-request:full-review --cycle <n>\`.
-This consumes the run's single escalation; no other escalation may dispatch
-afterward. It never enables the removed free-form challenge.
-
-Persist both logs. The review row and gate row must carry the plan's literal
-effort and \`effort_source:"routed"\`; the gate row also carries the resolved
-model, the requested model, whether it was substituted and why, and the wall time,
-so \`gstack-outcome-report\` can read a model change from the rows it already
-aggregates; gate telemetry retains tokens (from the \`tokens used\` line in
-stderr when present), \`fix_cycle\`, \`rerun_cause\`, and \`manifest_wtree\`:
-
-\`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-\`\`\`
-
-Failures and timeouts are missing coverage, never a clean result. Remove
-\`$TMPERR\` after reading it, then return to the Step ${ctx.skillName === 'ship' ? '9.2' : '4.6'}
-completion gate; exit 2 with \`INCOMPLETE=\` means STOP with a blocker report.`;
-
   const isShip = ctx.skillName === 'ship';
   const stepNum = isShip ? '11' : '4.8';
 
   return `## Step ${stepNum}: Adversarial review (always-on)
 
-Every diff gets the ${outsideVoiceFor(ctx).nativeLabel} adversarial pass. Add ${outsideVoiceFor(ctx).label} when its preflight is ready; unavailable or disabled outside coverage stays explicit.
+Every diff gets the ${outsideVoiceFor(ctx).nativeLabel} adversarial pass. Upstream outside adversarial calls request \`model_reasoning_effort="high"\`; policy routing resolves and records the actual effort. Add ${outsideVoiceFor(ctx).label} when its preflight is ready; unavailable or disabled outside coverage stays explicit.
 
 **Detect diff size:**
 
@@ -427,6 +327,8 @@ ADVERSARIAL REVIEW SYNTHESIS (always-on, N lines):
 \`\`\`
 
 High-confidence findings (agreed on by multiple sources) should be prioritized for fixes.
+
+${ctx.host !== 'codex' ? generateGovernorStructured(ctx) : ''}
 
 ${isShip ? `### Finish the adversarial phase
 
@@ -805,12 +707,12 @@ ${outsideVoiceProvenance(ctx, 'plan-review')}
 
 export function generateCodexDocReview(ctx: TemplateContext): string {
 
-  return `## ${outsideVoiceFor(ctx).label} Documentation Review (governor-gated)
+  return `## ${outsideVoiceFor(ctx).label} Documentation Review (default-on)
 
-Run this voice only when the environment contains exactly
-\`GSTACK_CODEX_DOC_VOICE=true\`. Otherwise print "Codex doc voice: skipped by
-review plan" and continue without preflight or any model dispatch. When true,
-run the independent cross-model pass after documentation updates are written.
+After the documentation updates above are written, run an independent cross-model pass that
+checks the docs against what actually shipped. This is a standard part of /document-release,
+not an opt-in. The user turns it off only by asking explicitly
+(\`gstack-config set codex_reviews disabled\`).
 
 **Spawned-session skip** (per the spawned-dispatch contract at the top of this skill): in a
 spawned session, skip this entire section — the dispatching workflow owns its own review
@@ -910,4 +812,131 @@ Substitute: STATUS = "clean" only if a reviewer completed and found no gaps; "is
 Continue to Step 9 to commit and publish the approved documentation edits.
 
 ---`;
+}
+
+function generateGovernorStructured(ctx: TemplateContext): string {
+
+  // dohma fork: the governor routes adversarial review only where the outside
+  // voice is Codex; the codex host keeps upstream's step (Claude Code voice).
+  const routedStep = ctx.skillName === 'ship' ? '11' : '4.8';
+  return `### Governor codex-structured slot
+
+
+Run this additional slot only when codex-structured is planned and not in REUSED.
+It does not replace the required native pass, upstream outside challenge, or
+structured P1 decision. Record all of them separately.
+
+Before the structured review, run the shared Codex preflight. Nested Codex
+sessions must refuse another Codex spawn unless the explicit override is set:
+
+${outsideVoicePreflight(ctx, { disabledBehavior: 'codex-only' })}
+
+Only when \`CODEX_MODE: ready\`, run the budget dispatch:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle <n>
+\`\`\`
+
+On exit 2, print its line and do not run Codex. Otherwise resolve the slot's
+MODEL once, before the review starts. The plan carries \`CODEX_MODEL\` (empty
+= the client default; a policy \`routing.models\` entry names another, e.g.
+dohma routes \`gpt-6-astra\` on tiers C and D) and \`CODEX_MODEL_SOURCE\`. A
+named model runs only when the installed CLI and the signed-in account can
+run it (one minimal access check, cached); otherwise the slot keeps the
+default route and the substitution is logged. The model never changes the
+budget, the effort, the 540s cap, the retry rule or the completion rule, and
+a timed-out review stays incomplete: it never triggers an automatic
+second-model review.
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}"
+\`\`\`
+
+Carry its printed \`CODEX_MODEL\`, \`CODEX_MODEL_REQUESTED\`,
+\`CODEX_MODEL_SOURCE\`, \`CODEX_MODEL_SUBSTITUTED\`,
+\`CODEX_MODEL_SUBSTITUTION_REASON\`, \`CODEX_MODEL_EXEC_FLAGS\` and
+\`CODEX_MODEL_REVIEW_FLAGS\` as literals. Print
+\`Codex model: {CODEX_MODEL} ({CODEX_MODEL_SOURCE}; requested {CODEX_MODEL_REQUESTED})\`
+and, when substituted, one more line with the reason. Then run exactly one
+structured review at the suffix supplied by the plan. Branch on the packet's
+\`CI_GREEN\` (true only when the EXACT reviewed SHA is on a remote branch with
+every CI run completed and successful):
+
+**\`CI_GREEN=true\`: the read-only packet reviewer.** \`codex review --base\`
+re-runs the project's build and test suite inside its sandbox before it
+reviews; on a large tier-D diff that alone consumed the 540s cap (observed
+2026-09-03: three timeouts of four, zero findings returned). Fresh exact-SHA
+CI evidence makes that execution redundant, so skip it deliberately:
+
+\`\`\`bash
+TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
+_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
+cd "$_REPO_ROOT"
+source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
+_CODEX_T0=$(date +%s)
+_gstack_codex_timeout_wrapper 540 codex exec {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s read-only --add-dir "$(dirname "{PACKET_PATH}")" -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' \${CODEX_WEB_SEARCH_FLAG} "You are the codex-structured reviewer for the gstack review governor, in READ-ONLY mode. CI_GREEN=true for the exact head SHA $(git rev-parse HEAD) (see the packet's CI evidence): do NOT run the build, the test suite, typecheck or any install; this is a SEMANTIC review of the diff only. Read the review packet at {PACKET_PATH} first, then read the diff at {DIFF_PATH} in ONE pass (cat the whole file once; never page it in chunks, paging a large diff is what runs past the cap), then open other worktree files only to answer a specific question, with read-only git. Do not re-derive the project. Findings already fixed and listed in the packet as resolved are not to be re-reported. Review for ways this code fails in production: SQL and data safety, race conditions, LLM trust boundary, enum completeness, security, reliability, data-migration ordering and rollback. Output one line per finding: [P1] or [P2] or [INFO] path:line — problem — fix — evidence: quoted line(s); a finding you cannot anchor to a quoted line is [INFO] at most; if nothing, exactly NO FINDINGS. End with ONE line: Recommendation: <action> because <one-line reason naming the most exploitable finding, or no exploitable finding>." < /dev/null 2>"$TMPERR"
+_CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
+\`\`\`
+
+**\`CI_GREEN=false\` or \`unknown\`: the CLI diff review.** Nothing has
+proven the tree green, so codex may run what it needs:
+
+\`\`\`bash
+TMPERR=$(mktemp /tmp/codex-review-XXXXXXXX)
+_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
+cd "$_REPO_ROOT"
+source ~/.claude/skills/gstack/bin/gstack-codex-probe 2>/dev/null || true
+_CODEX_T0=$(date +%s)
+_gstack_codex_timeout_wrapper 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c 'model_reasoning_effort="{medium|high from REVIEWERS suffix}"' \${CODEX_WEB_SEARCH_FLAG} < /dev/null 2>"$TMPERR"
+_CODEX_RC=$?; echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
+\`\`\`
+
+Either way the cap stays 540s. The effort is \`medium\` for tiers A/B/C and
+\`high\` for tier D. The model is the one \`gstack-codex-model\` resolved:
+\`{CODEX_MODEL_EXEC_FLAGS}\` / \`{CODEX_MODEL_REVIEW_FLAGS}\` are empty on the
+default route (the project's own Codex config then decides; no frontier
+model is rendered here, so an unrouted tier never inherits a premium model)
+and \`--model <slug>\` / \`-c model="<slug>" -c review_model="<slug>"\` on a routed one
+(\`codex review\` rejects \`-m\`). No prompt argument is allowed with
+\`--base\` (the read-only form takes the prompt because it uses
+\`codex exec\`). Read stderr before cleanup; keep the printed
+\`CODEX_ELAPSED_S\` for the gate row. Check for
+execution success and valid severity tags or an explicit NO FINDINGS conclusion
+first. Failure, refusal, empty output or missing markers → missing coverage and
+error/timeout, never clean/PASS. For a completed response, \`[P1]\` markers:
+found → \`GATE: FAIL\`, absent → \`GATE: PASS\`. FAIL →
+AskUserQuestion with A) investigate and fix now (recommended), B) continue.
+The [P1] gate semantics are unchanged.
+
+After Codex returns, record its terminal result immediately:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" codex-structured <clean|issues_found|error|timeout> --cycle <n> [--critical N --informational N]
+\`\`\`
+
+After an \`error\` or \`timeout\`, the same cycle-scoped dispatch may retry this
+planned slot ONCE; record the retry verdict too. A second failure stays
+incomplete and can never be logged as clean.
+
+A user request for "full review" permits ONE extra dispatch only:
+\`gstack-review-budget dispatch "$RUN_ID" codex-structured --escalation user-request:full-review --cycle <n>\`.
+This consumes the run's single escalation; no other escalation may dispatch
+afterward. It does not change upstream outside-review requirements.
+
+Persist both logs. The review row and gate row must carry the plan's literal
+effort and \`effort_source:"routed"\`; the gate row also carries the resolved
+model, the requested model, whether it was substituted and why, and the wall time,
+so \`gstack-outcome-report\` can read a model change from the rows it already
+aggregates; gate telemetry retains tokens (from the \`tokens used\` line in
+stderr when present), \`fix_cycle\`, \`rerun_cause\`, and \`manifest_wtree\`:
+
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+\`\`\`
+
+Failures and timeouts are missing coverage, never a clean result. Remove
+\`$TMPERR\` after reading it, then continue the upstream adversarial phase; the final
+governor completion gate at Step ${ctx.skillName === 'ship' ? '11.5' : '5.8'} uses \`INCOMPLETE=\` means STOP with a blocker report.`;
+
 }

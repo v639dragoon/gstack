@@ -2,7 +2,7 @@
  * Phase 0 effort routing — rendered-prose pins over every codex call site.
  *
  * The routing contract (audit §10 "stop using xhigh implicitly; route effort"):
- *  - Free-form adversarial challenge is gone. codex-structured is plan-routed
+ *  - D4 restores the upstream native and outside passes. The additional governor codex-structured is plan-routed
  *    at MEDIUM for A/B/C and HIGH for D.
  *  - Plan-stage voices (plan-{ceo,eng,devex,design}-review outside voice) and
  *    the doc-review voice inside /document-release route to MEDIUM.
@@ -52,11 +52,12 @@ function rowLine(content: string, skill: string): string {
 describe('effort routing (Phase 0)', () => {
   const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/SKILL.md'];
   for (const site of ADVERSARIAL_SITES) {
-    test(`${site}: only plan-routed codex-structured remains`, () => {
+    test(`${site}: upstream passes coexist with the plan-routed slot`, () => {
       const content = read(site);
-      expect(content).not.toContain('TMPERR_ADV');
-      expect(content).not.toContain('codex adversarial challenge');
-      const line = codexLineWith(content, 'codex review --base');
+      expect(content).toContain('adversarial subagent (always runs)');
+      expect(content).toContain('adversarial challenge');
+      expect(content).toContain('native-adversarial');
+      const line = codexLineWith(content, '{medium|high from REVIEWERS suffix}');
       expect(line).toContain('model_reasoning_effort=');
       expect(line).toContain('medium|high from REVIEWERS suffix');
     });
@@ -64,7 +65,8 @@ describe('effort routing (Phase 0)', () => {
     test(`${site}: the adversarial-review row records its effort`, () => {
       const content = read(site);
       expect(content).toContain('"skill":"adversarial-review"');
-      const row = rowLine(content, 'adversarial-review');
+      const row = content.split('\n').find(l => l.includes('gstack-review-log') && l.includes('{PLAN_EFFORT}'))!;
+      expect(row).toBeDefined();
       expect(row).toContain('"effort":"{PLAN_EFFORT}"');
       expect(row).toContain('"effort_source":"routed"');
     });

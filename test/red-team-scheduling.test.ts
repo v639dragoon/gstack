@@ -30,17 +30,15 @@ describe('Red Team scheduling (Phase 0)', () => {
   for (const site of RENDERED_SITES) {
     const content = fs.readFileSync(path.join(ROOT, site), 'utf-8');
 
-    test(`${site}: Red Team is plan-routed or a specialist-critical escalation`, () => {
-      expect(content).toContain('Red Team runs only when `red-team` occupies a plan slot');
-      expect(content).toContain('specialist-critical:<fingerprint>');
+    test(`${site}: upstream activation and planned Red Team both run under D4`, () => {
+      expect(content).toContain('DIFF_LINES > 200 OR any specialist produced a CRITICAL finding');
+      expect(content).toContain('A planned');
+      expect(content).toContain('red-team runs even without upstream activation');
+      expect(content).toContain('upstream-specialist:red-team');
+      expect(content).toContain('does not consume the single routed escalation');
     });
 
-    test(`${site}: LOC and Early Red Team routing are absent`, () => {
-      expect(content).not.toContain('DIFF_LINES > 200');
-      expect(content).not.toContain('Early Red Team');
-    });
-
-    test(`${site}: dispatch is budget-gated before the Agent call`, () => {
+    test(`${site}: dispatch is budget-gated before every Agent call`, () => {
       const gate = content.indexOf('gstack-review-budget dispatch "$RUN_ID" <gate>');
       const agent = content.indexOf('Every allowed Agent');
       expect(gate).toBeGreaterThanOrEqual(0);

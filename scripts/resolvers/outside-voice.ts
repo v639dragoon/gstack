@@ -125,9 +125,17 @@ export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOp
     ? `source "${bin}/gstack-codex-probe" && _gstack_codex_select_model ${opts.structuredBase ? 'review' : 'exec'} || exit 1
 _gstack_codex_sandbox_preflight >/dev/null || exit 1
 _gstack_codex_first_use_notice
-_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort}) || exit 1
-eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
+_ROUTE_EXIT=0
+_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" _gstack_codex_timeout_wrapper ${Math.ceil(opts.timeoutMs / 1000)} "$GSTACK_BIN/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort} </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
+if [ "$_ROUTE_EXIT" -ne 0 ]; then
+  cat "$_OUTSIDE_TMP/route-error" >&2
+  cat "$_OUTSIDE_TMP/route-error"
+  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
+  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
+  exit "$_ROUTE_EXIT"
+fi
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_EXIT=0
 _gstack_codex_timeout_wrapper ${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 ${opts.structuredBase ? 'cat "$_OUTSIDE_TMP/text"' : 'cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"'}`
@@ -247,3 +255,4 @@ export function generateOutsideVoiceRouting(ctx: TemplateContext): string {
   const v = outsideVoiceFor(ctx);
   return `Generic “second opinion”, “outside review”, or “cross-model review” requests use \`/${v.skillName}\` (namespaced: \`/gstack-${v.skillName}\`). This selection follows the **${ctx.host} harness**, independently of model configuration. Explicit provider requests take precedence: Codex means \`/codex\`; Claude Code means \`/claude-code\`. Never silently substitute another provider. If that provider is the current harness, report that no outside invocation ran and suggest the other wrapper only as a separate user choice. Wrapper availability: Claude Code installs only /codex; Codex installs only /claude-code; other harnesses install both. Repair stale installations with \`setup --host ${ctx.host}\`. There is no /claude compatibility alias.`;
 }
+
