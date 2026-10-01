@@ -81,6 +81,8 @@ The Claude adversarial subagent always runs.
 
 ### Claude adversarial subagent (always runs)
 
+
+
 Before dispatch, run `~/.claude/skills/gstack/bin/gstack-review-log --start adversarial-review`
 and save the returned token for this native attempt. Do the same before each outside
 adversarial or structured pass reads its diff. Keep each token with that attempt;
@@ -101,12 +103,23 @@ Think like an attacker and a chaos engineer. Your job is to find ways this code 
 Present findings under an `ADVERSARIAL REVIEW (Claude subagent):` header. **FIXABLE or `Blocks: yes` findings** are CRITICAL and are queued for the parent's Fix-First handling at Step 5; do not edit during Step 4.8. **Other INVESTIGATE findings** are informational; `Blocks: no` never lowers a FIXABLE one.
 
 If the subagent fails or times out, record native coverage as incomplete. Continue independent passes and persistence, not release.
+Record `gstack-review-budget verdict "$RUN_ID" native-adversarial <clean|issues_found|error|timeout> --cycle <n>`
+and a best-effort `gstack-gate-log` row with gate native-adversarial, model sonnet,
+effort agent-default, effort_source routed, fix_cycle, rerun_cause and manifest_wtree.
+Keep its original PASS_START review-log record; Step 5.8 binds that native receipt.
+The upstream one-corrected-attempt recovery applies; terminal failure never certifies completion.
+
 
 ---
 
 ### Codex adversarial challenge (runs whenever `CODEX_MODE` is `ready` or `unverified`)
 
 If `CODEX_MODE` is `ready` or `unverified`:
+
+Before launch, register `upstream-outside:challenge --optional` and dispatch it
+with `gstack-review-budget`, carrying this run and cycle. Record the resolved
+model and effort, then its terminal verdict and gate-log row. This optional
+record preserves upstream's non-blocking failure contract.
 
 Outside prompt (supply repository context from the parent):
 
@@ -137,9 +150,17 @@ _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" check-sandbox || exit 1
 "$_CODEX_PROBE" show-first-use-notice
-_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'adversarial' --effort medium) || exit 1
-eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
+_ROUTE_EXIT=0
+_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout 540 "$GSTACK_BIN/gstack-codex-model" resolve --voice 'adversarial' --effort medium </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
+if [ "$_ROUTE_EXIT" -ne 0 ]; then
+  cat "$_OUTSIDE_TMP/route-error" >&2
+  cat "$_OUTSIDE_TMP/route-error"
+  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
+  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
+  exit "$_ROUTE_EXIT"
+fi
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_EXIT=0
 "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
@@ -175,6 +196,11 @@ For other modes, retain the native pass above; do not dispatch it again.
 
 If `CODEX_MODE` is `ready` or `unverified` and either `DIFF_TOTAL >= 200` or the user requested the override above:
 
+Register `upstream-outside:structured --optional` and dispatch it with
+`gstack-review-budget` before launch. Record actual model/effort, terminal
+verdict and gate-log row separately from the governor's routed slot; the
+upstream structured decision and Finish the adversarial phase still govern it.
+
 Write the **complete prompt and context**, including actual plan/spec/source, to a private file. Substitute its shell-quoted path for `<prepared-prompt-file>`; never interpolate user text into shell source. Put the filesystem boundary first. Request [P0]-[P3] severity tags and `VERDICT: CLEAN` or `VERDICT: FINDINGS` as the last line.
 
 ```bash
@@ -201,9 +227,17 @@ _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" check-sandbox || exit 1
 "$_CODEX_PROBE" show-first-use-notice
-_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'adversarial' --effort medium) || exit 1
-eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
+_ROUTE_EXIT=0
+_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout 540 "$GSTACK_BIN/gstack-codex-model" resolve --voice 'adversarial' --effort high </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
+if [ "$_ROUTE_EXIT" -ne 0 ]; then
+  cat "$_OUTSIDE_TMP/route-error" >&2
+  cat "$_OUTSIDE_TMP/route-error"
+  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
+  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
+  exit "$_ROUTE_EXIT"
+fi
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_EXIT=0
 "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
@@ -308,21 +342,12 @@ ADVERSARIAL REVIEW SYNTHESIS (always-on, N lines):
 
 High-confidence findings (agreed on by multiple sources) should be prioritized for fixes.
 
-The native pass is required for Step 5.8 completion. Optional outside failures remain separately recorded, not completed by native coverage. Return all findings and structured-review decisions to Step 5; the parent owns fixes and the full rerun.
+### Governor codex-structured slot
 
----
 
-## Step 4.8: Adversarial review — governor routed
-
-Print: `Adversarial: routed to codex-structured per tier {TIER}`.
-Do not run the Claude adversarial subagent or a free-form `codex exec`
-challenge. Semantic adversarial review exists only when
-`codex-structured@medium` or `codex-structured@high` is in `REVIEWERS`.
-
-This block is normally LAUNCHED from Step 4.5 as one background Bash
-call, concurrently with the specialist reviewers, against the same frozen
-snapshot; run it here only if it was not launched there (no other reviewer
-was planned) and skip it entirely when `codex-structured` is in `REUSED`.
+Run this additional slot only when codex-structured is planned and not in REUSED.
+It does not replace the required native pass, upstream outside challenge, or
+structured P1 decision. Record all of them separately.
 
 Before the structured review, run the shared Codex preflight. Nested Codex
 sessions must refuse another Codex spawn unless the explicit override is set:
@@ -452,7 +477,10 @@ and `--model <slug>` / `-c model="<slug>" -c review_model="<slug>"` on a routed 
 `--base` (the read-only form takes the prompt because it uses
 `codex exec`). Read stderr before cleanup; keep the printed
 `CODEX_ELAPSED_S` for the gate row. Check for
-`[P1]` markers: found → `GATE: FAIL`, not found → `GATE: PASS`. FAIL →
+execution success and valid severity tags or an explicit NO FINDINGS conclusion
+first. Failure, refusal, empty output or missing markers → missing coverage and
+error/timeout, never clean/PASS. For a completed response, `[P1]` markers:
+found → `GATE: FAIL`, absent → `GATE: PASS`. FAIL →
 AskUserQuestion with A) investigate and fix now (recommended), B) continue.
 The [P1] gate semantics are unchanged.
 
@@ -469,7 +497,7 @@ incomplete and can never be logged as clean.
 A user request for "full review" permits ONE extra dispatch only:
 `gstack-review-budget dispatch "$RUN_ID" codex-structured --escalation user-request:full-review --cycle <n>`.
 This consumes the run's single escalation; no other escalation may dispatch
-afterward. It never enables the removed free-form challenge.
+afterward. It does not change upstream outside-review requirements.
 
 Persist both logs. The review row and gate row must carry the plan's literal
 effort and `effort_source:"routed"`; the gate row also carries the resolved
@@ -484,5 +512,9 @@ stderr when present), `fix_cycle`, `rerun_cause`, and `manifest_wtree`:
 ```
 
 Failures and timeouts are missing coverage, never a clean result. Remove
-`$TMPERR` after reading it, then return to the Step 4.6
-completion gate; exit 2 with `INCOMPLETE=` means STOP with a blocker report.
+`$TMPERR` after reading it, then continue the upstream adversarial phase; the final
+governor completion gate at Step 5.8 uses `INCOMPLETE=` means STOP with a blocker report.
+
+The native pass is required for Step 5.8 completion. Optional outside failures remain separately recorded, not completed by native coverage. Return all findings and structured-review decisions to Step 5; the parent owns fixes and the full rerun.
+
+---

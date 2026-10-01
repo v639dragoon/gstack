@@ -25,42 +25,44 @@ describe('review governor rendered prose', () => {
       expect(['sonnet', 'haiku']).toContain(model[1]);
   });
 
-  test('LOC triggers and removed adversarial pass are absent', () => {
+  test('upstream dispatch, merge, QA and native adversarial contracts survive D4', () => {
     const text = union();
-    expect(text).not.toContain('DIFF_LINES > 200');
-    expect(text).not.toContain('DIFF_LINES < 50');
-    expect(text).not.toContain('Early Red Team');
+    expect(text).toContain('DIFF_LINES < 50');
+    expect(text).toContain('DIFF_LINES > 200');
+    expect(text).toContain('Collect and merge findings');
+    expect(text).toContain('#### 7. Hand off to Fix-First');
+    expect(text).toContain('adversarial subagent (always runs)');
+    expect(text).toContain('Finish the adversarial phase');
+    expect(text).toContain('upstream-specialist:<name>');
+    expect(text).toContain('register-upstream "$RUN_ID" native-adversarial');
   });
 
-  test('all governed dispatches name their budget gate first', () => {
+  test('upstream and routed dispatches remain accounted and snapshot-bound', () => {
     const text = union();
-    expect(text).toContain('gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>');
-    for (const gate of ['codex-structured', 'coverage-audit', 'plan-completion', 'doc-release']) {
+    for (const gate of ['codex-structured', 'coverage-audit', 'plan-completion', 'doc-release', 'native-adversarial'])
       expect(text).toContain(`gstack-review-budget dispatch "$RUN_ID" ${gate}`);
-    }
-  });
-
-  test('advisories and bounded delta repair are explicit', () => {
-    const text = union();
-    expect(text).toContain('ADVISORY findings are NEVER fixed');
-    expect(text).toContain('MAX_ADVISORIES');
-    expect(text).toContain('## Advisories (not fixed)');
+    expect(text).toContain('manifest_wtree');
+    expect(text).toContain('head_sha');
     expect(text).toContain('REPAIR_CYCLES_MAX');
     expect(text).toContain('rerun-check');
-    expect(text).toContain('--verify-of <fingerprint>');
-    expect(text).not.toContain('<sha-before-fixes>');
-    expect(text).toContain('BLOCKING_CATEGORIES');
   });
 
-  test('reviewer verdicts and completion fail closed in ship and review', () => {
+  test('upstream AUTO-FIX and ASK advice handling wins over governor classification', () => {
+    const text = union();
+    expect(text).toContain('Auto-fix all AUTO-FIX');
+    expect(text).toContain('advice ASK-only');
+    expect(text).toContain("policy's BLOCKING/ADVISORY metadata never overrides upstream AUTO-FIX/ASK");
+    expect(text).not.toContain('ADVISORY findings are NEVER fixed');
+  });
+
+  test('native completion is mandatory alongside all routed reviewers', () => {
     for (const root of ['ship', 'review']) {
       const text = [read(`${root}/SKILL.md`), ...fs.readdirSync(path.join(ROOT, root, 'sections'))
         .filter(f => f.endsWith('.md')).map(f => read(`${root}/sections/${f}`))].join('\n');
-      expect(text).toContain('gstack-review-budget verdict "$RUN_ID"');
       expect(text).toContain('gstack-review-budget complete "$RUN_ID" --cycle <n>');
+      expect(text).toContain('--require-native');
       expect(text).toContain('INCOMPLETE=');
-      expect(text).toMatch(/INCOMPLETE=[\s\S]{0,180}STOP with a blocker report/);
-      expect(text).toContain('--cycle <n>');
+      expect(text).toContain('STOP with a blocker report');
     }
   });
 

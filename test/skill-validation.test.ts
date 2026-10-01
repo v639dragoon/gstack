@@ -935,17 +935,17 @@ describe('Enum & Value Completeness in review checklist', () => {
     expect(enumLine!.trimStart().startsWith('├─') || enumLine!.trimStart().startsWith('└─')).toBe(true);
   });
 
-  test('Fix-First checklist remains, while review + ship never fix advisories', () => {
+  test('Fix-First Heuristic exists in checklist and is referenced by review + ship', () => {
     expect(checklist).toContain('## Fix-First Heuristic');
     expect(checklist).toContain('AUTO-FIX');
     expect(checklist).toContain('ASK');
 
     const reviewSkill = fs.readFileSync(path.join(ROOT, 'review/SKILL.md'), 'utf-8');
     const shipSkill = readShipUnion();
-    expect(reviewSkill).toContain('ADVISORY findings are NEVER fixed');
-    expect(reviewSkill).toContain('MAX_ADVISORIES');
-    expect(shipSkill).toContain('ADVISORY findings are NEVER fixed');
-    expect(shipSkill).toContain('MAX_ADVISORIES');
+    expect(reviewSkill).toContain('AUTO-FIX');
+    expect(reviewSkill).toContain('[AUTO-FIXED]');
+    expect(shipSkill).toContain('AUTO-FIX');
+    expect(shipSkill).toContain('[AUTO-FIXED]');
   });
 });
 
@@ -970,9 +970,7 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     test(`${skill} contains Completeness Principle section`, () => {
       const content = readSkillStartup(path.join(ROOT, skill));
       expect(content).toContain('Completeness Principle');
-      // Fork (harness pass 2026-09-15): the default preamble is Bounded
-      // Completion; the gpt-5.6-sol overlay keeps its scoped Boil-the-Ocean text.
-      expect(content).toMatch(/Bounded Completion|Boil the Ocean/);
+      expect(content).toContain('Boil the Ocean');
     });
   }
 
@@ -980,7 +978,7 @@ describe('Completeness Principle in generated SKILL.md files', () => {
     // CSO is intentionally exempt; use a regular tier 2+ PREAMBLE consumer.
     const content = readSkillStartup(path.join(ROOT, 'review', 'SKILL.md'));
     expect(content).toContain('Completeness: X/10');
-    expect(content).toContain('10 = every material in-scope case');
+    expect(content).toContain('10 = all edge cases');
     expect(content).toContain('Note: options differ in kind, not coverage');
     expect(content).toContain('Do not fabricate scores');
   });
@@ -1388,7 +1386,6 @@ describe('ship step numbering', () => {
     const unexpected = fractional.filter((n) => !ALLOWED_SUBSTEPS.has(n));
     expect(unexpected).toEqual([]);
     expect(headings.filter((n) => n === '11.5')).toHaveLength(1);
-    expect(headings.filter((n) => n === '6.5')).toHaveLength(1); // Governor flags exist before Steps 7–8.
   });
 
   test('review/SKILL.md step numbers unchanged (regression guard for resolver conditionals)', () => {
@@ -1399,7 +1396,7 @@ describe('ship step numbering', () => {
     // If the ship-side renumber accidentally touched the review-side of resolver conditionals,
     // these would vanish. This test catches that.
     expect(skill).toContain('## Step 1.5: Scope Drift Detection');
-    expect(skill).toContain('## Step 4.5: Review governor');
+    expect(skill).toContain('## Step 4.5: Review Army');
     expect(skill).toContain('## Step 4.8: Adversarial review');
   });
 });
@@ -1570,18 +1567,29 @@ describe('Codex skill', () => {
     }
   });
 
-  test('adversarial review in /review is routed to one structured Codex slot', () => {
-    // Carved skill: the Step 5.7 adversarial body lives in sections/adversarial.md.
+  test('adversarial review in /review always runs both passes', () => {
+    // Carved skill: the Step 4.8 adversarial body lives in sections/adversarial.md.
     const content = readSkillUnion('review');
-    expect(content).toContain('Adversarial review — governor routed');
-    expect(content).toContain('gstack-review-budget dispatch "$RUN_ID" codex-structured');
-    expect(content).toContain('codex review --base <base>');
-    expect(content).toContain('model_reasoning_effort="{medium|high from REVIEWERS suffix}"');
-    expect(content).not.toContain('Claude adversarial subagent (always runs)');
-    expect(content).not.toContain('Codex adversarial challenge (runs whenever');
+    expect(content).toContain('Adversarial review (always-on)');
+    // Always-on: both Claude and Codex adversarial
+    expect(content).toContain('Claude adversarial subagent (always runs)');
+    expect(content).toContain('Codex adversarial challenge (runs whenever');
+    // Claude adversarial subagent dispatch
+    expect(content).toContain('Agent tool');
+    expect(content).toContain('FIXABLE');
+    expect(content).toContain('INVESTIGATE');
+    // Probe-based availability via the shared codexPreflight() (install + auth)
+    expect(content).toContain('CODEX_MODE');
+    expect(content).toContain('command -v codex'); // install check kept literal
+    // codex_reviews=disabled gates Codex passes only; Claude adversarial still runs
+    expect(content).toContain('skip the Codex passes ONLY');
+    // Review log
     expect(content).toContain('adversarial-review');
-    expect(content).toContain('effort_source:"routed"');
-    expect(content).toContain('[P1]');
+    expect(content).toContain('reasoning_effort="high"');
+    expect(content).toContain('ADVERSARIAL REVIEW SYNTHESIS');
+    // Large diff structured review still gated
+    expect(content).toContain('Codex structured review (large diffs only');
+    expect(content).toContain('200');
   });
 
   test('adversarial review in /ship runs the passes the review plan dispatches', () => {
@@ -1643,13 +1651,12 @@ describe('Codex skill', () => {
     }
   });
 
-  test('/document-release gates the Codex documentation voice on its environment flag', () => {
+  test('/document-release includes the default-on Codex documentation review', () => {
     // The doc-review renders into the carved release-body section (kept out of the
     // always-loaded skeleton to respect the skeleton-byte budget).
     const content = fs.readFileSync(
       path.join(ROOT, 'document-release', 'sections', 'release-body.md'), 'utf-8');
-    expect(content).toContain('Codex Documentation Review (governor-gated)');
-    expect(content).toContain('GSTACK_CODEX_DOC_VOICE=true');
+    expect(content).toContain('Codex Documentation Review (default-on)');
     expect(content).toContain('CODEX_MODE');
     expect(content).toContain('codex-doc-review');
   });
@@ -1703,7 +1710,7 @@ describe('Codex skill', () => {
     }
   });
 
-  test('prompted Codex modes carry the filesystem boundary (#1503/#1522 regression)', () => {
+  test('codex review prompts always carry the filesystem boundary (#1503/#1522 regression)', () => {
     // Pre-#1209, the bare `codex review --base` path stripped the filesystem
     // boundary instruction, letting Codex spend tokens reading skill files.
     // #1209's prompt rewrite restored the boundary by routing every default
@@ -1716,12 +1723,13 @@ describe('Codex skill', () => {
     // dropping the scope flag to make it parse silently reviews the wrong diff.
     const boundaryLine =
       /do not read or execute any files under ~\/\.claude\/, ~\/\.agents\/, \.claude\/skills\/, or agents\//i;
-    const content = readSkillUnion('codex');
-    expect(content).toMatch(boundaryLine);
-    // /ship and /review now use scoped `codex review --base` with no prompt;
-    // adding boundary prose as a positional prompt would break CLI parsing.
-    for (const routed of [readShipUnion(), readSkillUnion('review')])
-      expect(routed).toContain('codex review --base <base>');
+    for (const rel of ['codex/SKILL.md', 'review/SKILL.md', 'ship/SKILL.md']) {
+      // ship's AND review's codex/adversarial boundary lines moved into sections/adversarial.md.
+      const content = rel === 'ship/SKILL.md' ? readShipUnion()
+        : rel === 'review/SKILL.md' ? readSkillUnion('review')
+        : fs.readFileSync(path.join(ROOT, rel), 'utf-8');
+      expect(content).toMatch(boundaryLine);
+    }
   });
 
   test('/review persists a review-log entry for ship readiness', () => {

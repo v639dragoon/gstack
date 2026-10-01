@@ -259,9 +259,17 @@ _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" check-sandbox || exit 1
 "$_CODEX_PROBE" show-first-use-notice
-_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'design-review' --effort medium) || exit 1
-eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
+_ROUTE_EXIT=0
+_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout 300 "$GSTACK_BIN/gstack-codex-model" resolve --voice 'design-review' --effort medium </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
+if [ "$_ROUTE_EXIT" -ne 0 ]; then
+  cat "$_OUTSIDE_TMP/route-error" >&2
+  cat "$_OUTSIDE_TMP/route-error"
+  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
+  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
+  exit "$_ROUTE_EXIT"
+fi
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_EXIT=0
 "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
@@ -330,29 +338,17 @@ TEST_FW=""
 echo "TEST_FW: ${TEST_FW:-unknown}"
 ```
 
-### Shared diff/risk manifest (Phase 0)
+### Governor manifest, plan, packet
 
-```bash
-~/.claude/skills/gstack/bin/gstack-diff-manifest <base> 2>/dev/null || true
-date -u +%Y-%m-%dT%H:%M:%SZ
-```
-
-Carry the printed `RUN_ID`, `MANIFEST_PATH`, `MANIFEST_WTREE`, `DOC_FP`
-and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
-a fix cycle pass the earlier RUN_ID as arg 2 — one run, ONE run id. The
-manifest is an INDEX; it never replaces the raw diff.
-
-### Governor plan and packet
-
-Reuse RUN_ID from Step 6.5. After Steps 7–8 finish their writes, refresh
+Reuse RUN_ID from the governed audit accounting. After Steps 7–8 finish their writes, refresh
 that run's manifest and plan, preserving its audit verdicts and attempt counts.
 Then build the shared packet from the final reviewed content:
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-diff-manifest <base> "$RUN_ID"
-~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude
 ~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
-~/.claude/skills/gstack/bin/gstack-review-packet "$RUN_ID" <base>
+~/.claude/skills/gstack/bin/gstack-review-context "$RUN_ID" <base>
 ```
 
 Carry these printed values as literals for the rest of the invocation:
@@ -362,7 +358,7 @@ Carry these printed values as literals for the rest of the invocation:
 
 `PASSES` is the whole-workflow accounting for this run: every AI pass it may
 dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
-voice) with its model and effort; a pass absent from it never runs. `resume`
+voice) with its model and effort; Upstream-required passes join its accounting through register-upstream; a pass absent from either record never runs. `resume`
 carries forward the terminal verdicts of a PRIOR run whose content
 fingerprint, base, policy, tier, reviewer list and slice kind all equal this
 plan's (a matching commit with a dirty tree never qualifies): print
@@ -377,6 +373,8 @@ Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
 If `OUTCOME_MISSING=true`, print exactly:
 
 `Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: ~/.claude/skills/gstack/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]`.
+
+
 
 ### Read specialist hit rates (adaptive gating)
 
@@ -419,6 +417,23 @@ Print the selection:
 ---
 
 ### Dispatch specialists in parallel
+
+Union upstream-selected specialists with planned `specialist:*` slots, retaining
+source labels. The small-diff bypass skips upstream specialists only; execute any
+governor-planned slots separately, then the parent Exploratory QA handoff.
+Never dispatch the same specialist twice: one result may satisfy both sources
+only when both dispatch records name the same frozen tree/SHA.
+Register upstream-only selected specialists with
+`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>`;
+then run `gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>`
+before each Agent call. Every allowed Agent is accounted before launch. Every specialist
+Agent sets `model: "sonnet"`. Each prompt starts: "Read the review packet at {PACKET_PATH} and the diff at {DIFF_PATH} first." CI_GREEN=true
+means do not repeat builds/tests. Record each terminal verdict with `gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>` and a best-effort
+`gstack-gate-log` row with model sonnet, effort agent-default, effort_source routed,
+fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream
+settlement and missing-coverage rules; the budget allows one corrected attempt.
+Routed codex-structured remains an additional Step 11 slot.
+
 
 For each selected specialist, launch an independent subagent via the Agent tool.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
@@ -641,6 +656,12 @@ unchanged.
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
+Register upstream activation as `upstream-specialist:red-team` unless red-team
+already occupies a planned slot. Dispatch the chosen gate through review-budget
+before the Agent call; record its verdict and gate row afterward. A planned
+red-team runs even without upstream activation. Upstream-required activation is
+accounted separately and does not consume the single routed escalation.
+
 Two dispatch paths, ONE activation condition (the condition above is the whole trigger surface — the paths only change WHEN the dispatch happens):
 
 **EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
@@ -811,6 +832,10 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    Save each explicit Skip immediately in the invocation action list with its
    identity, scope and supporting source evidence; keep it across repeats.
 
+   Record fixes and explicit skips through `gstack-review-budget finding` and
+   `resolve`. Governor classification is telemetry; upstream AUTO-FIX/ASK governs
+   action and advice remains ASK-only.
+
    - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
 
    **Gate findings** (any finding with a `gate` tag) never take Fix/Skip. Ask
@@ -902,6 +927,12 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
   gate findings in a non-interactive session.
 Save the review output and `Gate edits:` line for Step 19's PR body; an `open` gate
 finding makes that PR a draft.
+
+For each fixing cycle also run `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+Retain fix_cycle and rerun_cause in gate rows and refresh manifest/plan before
+reviewing changed inputs. Governor REPAIR_CYCLES_MAX may stop earlier; never
+replace the full upstream review repeat with a delta-only check. On exit 3
+persist `converged:false` and recurring findings before stopping.
 
 ### Decide whether to repeat Step 9
 

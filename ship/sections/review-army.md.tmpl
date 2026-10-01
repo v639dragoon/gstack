@@ -139,6 +139,10 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    Save each explicit Skip immediately in the invocation action list with its
    identity, scope and supporting source evidence; keep it across repeats.
 
+   Record fixes and explicit skips through `gstack-review-budget finding` and
+   `resolve`. Governor classification is telemetry; upstream AUTO-FIX/ASK governs
+   action and advice remains ASK-only.
+
    - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
 
    **Gate findings** (any finding with a `gate` tag) never take Fix/Skip. Ask
@@ -230,6 +234,12 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
   gate findings in a non-interactive session.
 Save the review output and `Gate edits:` line for Step 19's PR body; an `open` gate
 finding makes that PR a draft.
+
+For each fixing cycle also run `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
+Retain fix_cycle and rerun_cause in gate rows and refresh manifest/plan before
+reviewing changed inputs. Governor REPAIR_CYCLES_MAX may stop earlier; never
+replace the full upstream review repeat with a delta-only check. On exit 3
+persist `converged:false` and recurring findings before stopping.
 
 ### Decide whether to repeat Step 9
 

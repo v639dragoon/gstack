@@ -143,7 +143,7 @@ source "$SCRIPT_DIR/gstack-codex-probe" 2>/dev/null || true
 _TEL=$("$SCRIPT_DIR/gstack-config" get telemetry 2>/dev/null || echo off)
 DEFAULT_NAME=$(default_model_name) || { echo "Codex default model resolution failed; repair project/user config before retrying." >&2; exit 1; }
 if [ -z "$MODEL" ]; then
-  CLI_VERSION=$(codex --version 2>/dev/null | head -1)
+  CLI_VERSION=$(_gstack_codex_timeout_wrapper 5 codex --version </dev/null 2>/dev/null | tee "${GSTACK_CODEX_PROBE_DIAGNOSTICS:-/dev/null}" | head -1)
   CLI_VERSION="${CLI_VERSION:-unavailable}"
   default_error() {
     echo "Codex default model '$DEFAULT_NAME' unavailable or unverified (codex --version: $CLI_VERSION): $1. No model substituted." >&2

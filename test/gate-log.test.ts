@@ -12,7 +12,7 @@ import * as os from 'os';
 // contract AND that reader isolation.
 
 const ROOT = path.resolve(import.meta.dir, '..');
-const BIN = path.join(ROOT, 'bin');
+const BIN = path.dirname(path.join(ROOT, 'bin/gstack-gate-log'));
 
 let tmpDir: string;
 let slugDir: string;

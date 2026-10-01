@@ -24,7 +24,7 @@ triggers:
 
 ## Shared preamble (load first)
 
-This skill follows gstack shared preamble `eaf8ffac6e67` (AskUserQuestion format, voice, writing, completeness and completion rules). If your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `~/.claude/skills/gstack/ship/sections/preamble.md` in full before the command below. A section or subsection here with a shared heading replaces the shared one.
+This skill follows gstack shared preamble `4e82fa4c839f` (AskUserQuestion format, voice, writing, completeness and completion rules). If your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `~/.claude/skills/gstack/ship/sections/preamble.md` in full before the command below. A section or subsection here with a shared heading replaces the shared one.
 
 ## Preamble (run first)
 
@@ -176,7 +176,7 @@ Set `VERSION_MODE=$(~/.claude/skills/gstack/bin/gstack-version-mode)` in this ch
 Governor-only Agent calls use the routed model; upstream packet reviewers retain the plan's model family and effort.
 
 **Routine work needs no confirmation:** include uncommitted changes, choose MICRO/PATCH
-under Step 12, draft CHANGELOG and commits, mark completed TODOs and retain advisories without fixes.
+under Step 12, draft CHANGELOG and commits, mark completed TODOs and auto-fix findings.
 When Step 7 coverage meets its target, report remaining gaps and verify generated
 tests without asking again. Step 15 commits those tests.
 
@@ -484,7 +484,7 @@ repeat Step 2 (decisions included) on the merged content, then Step 4.
 ### Plan the governed audits
 
 Before Steps 7–8 read their flags, run `gstack-diff-manifest <base>` and
-`gstack-review-budget plan "$MANIFEST_PATH" --cycle 0` from the installed bin directory.
+`gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude` from the installed bin directory.
 Carry RUN_ID, CYCLE, COVERAGE_AUDIT, PLAN_COMPLETION and REPAIR_CYCLES_MAX as literals.
 Step 9.1 refreshes this same run after audit writes; never mint a replacement run
 or reset the invocation's audit attempts or repair counts.
@@ -760,7 +760,7 @@ rerun. Cite the original command, result, timestamp and log; never resample. Man
 Post-merge: use only `--allow-paths "$FRAGMENT_PATH"` (exact path). Below is in-branch.
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,agents-digest/gstack-AGENTS.md --allow-version-only package.json
+~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
 ```
 
 `--allow-paths` exempts only release metadata (in `package.json`, only a version edit). Docs, TODO edits, new/generated tests and fixes
