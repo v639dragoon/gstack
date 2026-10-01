@@ -160,7 +160,7 @@ export function generateTestValueBar(ctx: TemplateContext, args?: string[]): str
   ];
   if (mode !== 'qa') parts.splice(2, 0, 'A test that breaks under a behavior-preserving refactor asserts implementation: rewrite it at the owning boundary, unless exact output is the declared contract (goldens, prompt bytes, wire formats).');
   if (mode === 'plan') parts.push(`${STAR_RULE} /ship computes them; here every proposed test needs a card.`, RETENTION_ONE_LINER);
-  if (mode === 'ship') parts.push(`${STAR_RULE} ${WEAK_PATH_RULE}`, RETENTION_ONE_LINER);
+  if (mode === 'ship') parts.push(`${STAR_RULE} ${WEAK_PATH_RULE} With policy COVERAGE_RATING=false, the parent uses coverage_pct via Star rating: off and skips the second rating dispatch.`, RETENTION_ONE_LINER);
   if (mode === 'ship' || mode === 'audit') parts.push(RED_PROOF);
   if (mode === 'audit') parts.push(auditSections());
   const rendered = parts.join('\n\n');

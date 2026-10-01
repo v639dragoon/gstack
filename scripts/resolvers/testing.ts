@@ -573,6 +573,8 @@ Coverage line: \`Test Coverage Audit: N new code paths. M covered (Y% any test, 
     gate = `
 **7. Coverage gate:**
 
+When \`COVERAGE_RATING=false\`, skip rating: use the \`Star rating: off\` row below regardless of CLAUDE.md. Coverage audit/generation, machine checks and remaining gap decisions still apply.
+
 The parent owns this gate, including after inline fallback. Generated tests stay uncommitted until Step 15. The gate only asks; it never hard-fails. Use Step 7's remaining generation allowance; supply it and the remaining gaps to the same audit prompt. At the cap, omit A's generation pass and recommend stopping; A then only lists proposals and the listed risk choices remain available.
 
 Read CLAUDE.md's \`## Test Coverage\` section for \`Minimum:\` and \`Target:\`; otherwise use defaults: Minimum = 60%, Target = 80%. Also read the optional \`Generation cap:\` (tests per pass, default 5), \`Base control:\` (\`auto\` default, or \`off\`), \`Base control budget:\` (seconds per run, default 90) and \`Star rating:\` (\`auto\` default, or \`off\`). Missing keys use the defaults.

@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 10: Address Greptile review comments (if PR exists)
 
+When `GREPTILE=false`, skip this pass: no Agent, comment fetch/reply or fix queue; continue to Step 11.
+
 Check for a PR first. Greptile reviews a PR, so with no PR, no `gh`, no `gh` login or
 a non-GitHub remote there is nothing to triage yet:
 

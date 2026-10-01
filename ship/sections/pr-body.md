@@ -94,6 +94,8 @@ Unavailable/inconclusive is never PASS.>
 <If TODOS.md doesn't exist and user skipped: omit this section>
 
 ## Documentation
+
+<When DOC_RELEASE=false, print exactly `Documentation: skipped (tier A/B, no doc-impact)`. Existing PRs and docs-only changes follow the same rule. Never omit this section. Otherwise use the validated audit below.>
 <Embed Step 14.5's vetted nonempty `documentation_section` for this invocation:
 its saved section file, inserted unchanged by the scan block's `DOCS_SECTION_FILE` lines.
 A blocked audit shipped under a user exception has no section file: state its
@@ -102,6 +104,8 @@ and its `cat -- "$DOCS_SECTION_FILE" && echo &&` step.>
 <Always include the status and reviewed scope: updated, current, or blocked with the actual user's named risk exception. Never omit this section or reuse another invocation's audit.>
 
 ## Test plan
+
+<When FULL_LANES_REQUIRED=false: `build: DEFERRED to CI check {CI_BACKSTOP}`. List Local lanes' real receipts; never mark a deferred Full lane as passed.>
 - [x] <Each executed test lane's command>: <observed passing summary>
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

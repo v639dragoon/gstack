@@ -1,5 +1,7 @@
 ## Step 7: Test Coverage Audit
 
+When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied: reuse the saved validated report and gate decisions; do not launch a child or consume generation allowance. Supply `--inputs-hash <hash>` to dispatch for any supplied external audit inputs; changed inputs require a new audit. All other blocked outcomes retain their existing handling.
+
 Run this step iff `COVERAGE_AUDIT=true`. Otherwise print `Skipped on
 intermediate slice {SLICE_KIND}` and append a gate record with
 `verdict:"skipped:intermediate-slice"`.
@@ -64,6 +66,8 @@ after the same cycle-scoped dispatch). Step 9.2's completion check owes this
 verdict (`--require-audits`).
 
 **Parent processing:**
+
+When `COVERAGE_RATING=false`, skip item 4's rating dispatch; take the existing `Star rating: off` gate path from the policy (overriding CLAUDE.md), using `coverage_pct`. Carry this flag into the audit prompt; keep gaps, rejected tests and value cards.
 
 1. Read the subagent's final output. Parse the LAST line as JSON.
 2. Store `coverage_pct`, `coverage_pct_value`, `gaps`, `weak_gaps`, `tests_added`,

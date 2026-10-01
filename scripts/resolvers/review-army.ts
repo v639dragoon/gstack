@@ -32,7 +32,9 @@ ${ctx.paths.binDir}/gstack-review-packet "$RUN_ID" <base>
 Carry these printed values as literals for the rest of the invocation:
 \`RUN_ID\`, \`CYCLE\`, \`TIER\`, \`SLICE_KIND\`, \`REVIEWERS\`, \`PASSES\`, \`REPAIR_CYCLES_MAX\`,
 \`COVERAGE_AUDIT\`, \`PLAN_COMPLETION\`, \`DOC_RELEASE\`,
-\`CODEX_DOC_VOICE\`, \`PACKET_PATH\`, \`DIFF_PATH\`, \`CI_GREEN\`, \`REUSED\` and \`RERUN\`.
+\`CODEX_DOC_VOICE\`, \`UPSTREAM_SPECIALISTS\`, \`UPSTREAM_STRUCTURED\`, \`ADVERSARIAL_CLAUDE\`,
+\`CODEX_CHALLENGE\`, \`RED_TEAM_LOC_TRIGGER\`, \`GREPTILE\`, \`COVERAGE_RATING\`,
+\`AUDIT_REUSE\`, \`NON_CODE_DELTA\`, \`QA_SMOKE\`, \`FULL_LANES_REQUIRED\`, \`BUILD_GATE\`, \`CI_BACKSTOP\`, \`PACKET_PATH\`, \`DIFF_PATH\`, \`CI_GREEN\`, \`REUSED\` and \`RERUN\`.
 
 \`PASSES\` is the whole-workflow accounting for this run: every AI pass it may
 dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
@@ -98,6 +100,8 @@ ${ctx.paths.binDir}/gstack-specialist-stats 2>/dev/null || true
 \`\`\`
 
 ### Select specialists
+
+When \`UPSTREAM_SPECIALISTS=false\`, skip this pass: upstream scope/adaptive/force selection and fan-out. Instead dispatch only governor-planned \`specialist:*\` / \`red-team\` slots; the core review, merge and QA handoff still run. When true, use the upstream selection below.
 
 Based on the scope signals above, select which specialists to dispatch.
 
@@ -211,6 +215,8 @@ function generateFindingsMerge(ctx: TemplateContext): string {
   const persistRef = isShip ? 'the review-log persist' : 'the review-log entry in Step 5.8';
   return `### Step ${stepMerge}: Collect and merge findings
 
+When \`AUTOFIX_INFORMATIONAL=false\`, the policy overrides advice ASK-only below: BLOCKING is membership in \`BLOCKING_SEVERITIES\` OR \`BLOCKING_CATEGORIES\`; all other findings are ADVISORY. List at most \`MAX_ADVISORIES\` under \`## Advisories (not fixed)\`, never ASK or auto-fix advice. Preserve defect severity and evidence.
+
 Follow these stages in order. Validate core and specialist findings alike, but keep
 their source labels: specialist scoring is not the final review's defect count.
 
@@ -320,6 +326,8 @@ function generateRedTeam(ctx: TemplateContext): string {
   const stepMerge = isShip ? '9.2' : '4.6';
   const fixFirstRef = isShip ? 'Step 9.3 dedup, then Step 9.4 Fix-First' : 'Step 5 Fix-First';
   return `### Red Team dispatch (conditional)
+
+When \`RED_TEAM_LOC_TRIGGER=false\`, skip LOC activation. When \`UPSTREAM_SPECIALISTS=false\`, skip all upstream Red Team activation (including findings/force triggers); planned \`red-team\` always runs. Label any upstream LOC registration \`--trigger loc\`.
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 

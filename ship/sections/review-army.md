@@ -254,7 +254,9 @@ Then build the shared packet from the final reviewed content:
 Carry these printed values as literals for the rest of the invocation:
 `RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `PASSES`, `REPAIR_CYCLES_MAX`,
 `COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
-`CODEX_DOC_VOICE`, `PACKET_PATH`, `DIFF_PATH`, `CI_GREEN`, `REUSED` and `RERUN`.
+`CODEX_DOC_VOICE`, `UPSTREAM_SPECIALISTS`, `UPSTREAM_STRUCTURED`, `ADVERSARIAL_CLAUDE`,
+`CODEX_CHALLENGE`, `RED_TEAM_LOC_TRIGGER`, `GREPTILE`, `COVERAGE_RATING`,
+`AUDIT_REUSE`, `NON_CODE_DELTA`, `QA_SMOKE`, `FULL_LANES_REQUIRED`, `BUILD_GATE`, `CI_BACKSTOP`, `PACKET_PATH`, `DIFF_PATH`, `CI_GREEN`, `REUSED` and `RERUN`.
 
 `PASSES` is the whole-workflow accounting for this run: every AI pass it may
 dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
@@ -310,6 +312,8 @@ echo "TEST_FW: ${TEST_FW:-unknown}"
 ```
 
 ### Select specialists
+
+When `UPSTREAM_SPECIALISTS=false`, skip this pass: upstream scope/adaptive/force selection and fan-out. Instead dispatch only governor-planned `specialist:*` / `red-team` slots; the core review, merge and QA handoff still run. When true, use the upstream selection below.
 
 Based on the scope signals above, select which specialists to dispatch.
 
@@ -418,6 +422,8 @@ CHECKLIST:
 
 ### Step 9.2: Collect and merge findings
 
+When `AUTOFIX_INFORMATIONAL=false`, the policy overrides advice ASK-only below: BLOCKING is membership in `BLOCKING_SEVERITIES` OR `BLOCKING_CATEGORIES`; all other findings are ADVISORY. List at most `MAX_ADVISORIES` under `## Advisories (not fixed)`, never ASK or auto-fix advice. Preserve defect severity and evidence.
+
 Follow these stages in order. Validate core and specialist findings alike, but keep
 their source labels: specialist scoring is not the final review's defect count.
 
@@ -525,6 +531,8 @@ completion. Advice never permits edits while readers are active or replaces a re
 
 ### Red Team dispatch (conditional)
 
+When `RED_TEAM_LOC_TRIGGER=false`, skip LOC activation. When `UPSTREAM_SPECIALISTS=false`, skip all upstream Red Team activation (including findings/force triggers); planned `red-team` always runs. Label any upstream LOC registration `--trigger loc`.
+
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
 If activated, dispatch one more subagent via the Agent tool (pass `run_in_background: false` — foreground; subagents default to background since Claude Code v2.1.198).
@@ -556,12 +564,16 @@ If the Red Team fails or times out, confirm it stopped and record its review as 
 
 ### Step 9.2.1: Exploratory QA (before Fix-First)
 
+When `QA_SMOKE=false`, skip this pass's exploratory smoke, setup and guard only; required plan checks still run with their methods/preflight. Report smoke as policy-skipped, never a not-run required probe; it does not block the parent completion gate.
+
 Only the parent runs report-only discovery.
 Never overwrite another run's reports. Batch only independent Reads.
 
 **1. Load methods before any QA or explicit-verification probe.**
 
 > **STOP.** Before any probe, including plan checks, complete the ordered scope/method Reads below and await them. Templates cannot replace them.
+
+Read `~/.claude/skills/gstack/bin/gstack-review-budget policy-flags <base>` now and carry `QA_SMOKE`; this is manifest-free and precedes the Step 9.1 plan.
 
 From the installed /ship SKILL.md's directory, Read `../qa/sections/exploratory.md` in full. If the caller directory is prefixed `gstack-ship`, use `../gstack-qa/sections/exploratory.md` instead. Use this host's installation, never the product tree. If missing or unreadable, report a QA setup blocker and its affected probes as blocked; continue other safe probes (independent functional/static checks). Missing/unreadable assets block required QA.
 Reading exploratory.md does not complete them: when it returns, Read the scope section and selected surface methods it lists, in order, and await them.
@@ -638,6 +650,8 @@ Apply this procedure to checklist, specialist, exploratory QA and queued Steps
 > in full. Do not work from memory — that section is the source of truth for this step.
 
 ## Step 9.4: Fix-First and persistence
+
+When `AUTOFIX_INFORMATIONAL=false`, override the heuristic below: BLOCKING means severity in `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`; everything else is ADVISORY. ADVISORY findings are NEVER fixed: no AUTO-FIX and no ASK. List at most `MAX_ADVISORIES`, sorted by confidence, under `## Advisories (not fixed)`. Advisory test stubs are listed, never asked. Only BLOCKING findings enter the normal fix/ASK and regression flow below.
 
 Before edits, inspect every dispatched reader/writer's handle. Wait for return
 or confirm termination; otherwise log incomplete through items 5–6 and STOP

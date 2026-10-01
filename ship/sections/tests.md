@@ -207,6 +207,8 @@ Only commit if there are changes. Stage the bootstrap's own files by name (confi
 
 ## Step 5: Run tests (on merged code)
 
+Read TESTING.md's `Local lanes` and `Full lanes`. Before selecting lanes, run `gstack-diff-manifest <base>` and `gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude` from the installed bin; retain RUN_ID and all printed literals. Run Local lanes always. When `FULL_LANES_REQUIRED=false`, skip Full lanes (full suite/build) and record `build: DEFERRED to CI check {CI_BACKSTOP}`; never a silent pass. When true, run Full lanes too. Repos without policy lanes retain every applicable suite below.
+
 Use the project's test commands discovered in Step 4 or documented in CLAUDE.md/AGENTS.md. Run every applicable suite; do not assume Rails or Vitest. The commands below are examples only for repositories that actually provide them. Use the same lane labels and exact commands again in Step 16.
 
 **If no applicable test suite exists:** Name the untested scope. AskUserQuestion:

@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 4.8: Adversarial review (always-on)
 
+The carried plan literals govern the passes below. When `ADVERSARIAL_CLAUDE=false`, skip the native pass, its registration, receipt and native-completion requirement. When `CODEX_CHALLENGE=false` or `UPSTREAM_STRUCTURED=false`, skip that upstream outside pass; if both are false skip this section's outside preflight too. The governor codex-structured slot retains its own required routing and preflight.
+
 Every diff gets the Claude adversarial pass. Upstream outside adversarial calls request `model_reasoning_effort="high"`; policy routing resolves and records the actual effort. Add Codex when its preflight is ready; unavailable or disabled outside coverage stays explicit.
 
 **Detect diff size:**
@@ -80,6 +82,8 @@ The Claude adversarial subagent always runs.
 
 ### Claude adversarial subagent (always runs)
 
+When `ADVERSARIAL_CLAUDE=false`, skip this pass: no Agent, registration or PASS_START. Continue to the enabled outside passes and governor slot.
+
 
 
 Before dispatch, run `~/.claude/skills/gstack/bin/gstack-review-log --start adversarial-review`
@@ -112,6 +116,8 @@ The upstream one-corrected-attempt recovery applies; terminal failure never cert
 ---
 
 ### Codex adversarial challenge (runs whenever `CODEX_MODE` is `ready` or `unverified`)
+
+When `CODEX_CHALLENGE=false`, skip this pass: no outside invocation or registration; continue to structured review.
 
 If `CODEX_MODE` is `ready` or `unverified`:
 
@@ -190,6 +196,8 @@ For other modes, retain the native pass above; do not dispatch it again.
 ---
 
 ### Codex structured review (large diffs only, 200+ lines)
+
+When `UPSTREAM_STRUCTURED=false`, skip this pass even for large diffs or user force selection. The separate governor codex-structured slot still runs when planned.
 
 If `CODEX_MODE` is `ready` or `unverified` and either `DIFF_TOTAL >= 200` or the user requested the override above:
 
