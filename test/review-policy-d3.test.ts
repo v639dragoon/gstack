@@ -88,6 +88,9 @@ test('D3 advisory policy: absent keeps upstream actions; opted-in classification
   for (const enabled of [true, false]) {
     const f = fixture(enabled ? {} : { routing: { passes: OFF } });
     expect(f.plan().autofixInformational).toBe(enabled);
+    expect(f.run('finding', 'run', JSON.stringify({ severity: 'P3', category: 'auth',
+      fingerprint: 'auth-advice', gate: 'codex-structured', summary: 'category stays blocking' })).status).toBe(0);
+    expect(f.ledger().find((r: any) => r.record_type === 'finding').blocking).toBe(!enabled);
   }
 });
 test('D3 doc-release tier/impact opt-in, absent every ship, skip is explicit', () => {
@@ -116,8 +119,14 @@ test('D3 smoke surfaces and Full lanes are opt-in; local lanes and build gate st
   expect(f.plan('B', 0, { files: [{ path: 'app/page.tsx' }] }).qaSmoke).toBe(true);
   expect(f.run('policy-flags', '--json').status).toBe(0);
   const bad = fixture({ lanes: { full_paths: [] } }); expect(bad.plan('B').buildGate).toBe('REQUIRED');
+  for (const lanes of [{ ci_backstop: 'Full CI' }, { full_paths: 'compiler/**', ci_backstop: 'Full CI' }])
+    expect(fixture({ lanes }).plan('B').buildGate).toBe('REQUIRED');
 });
 test('D3 env example: exact D exceptions + C floor; ordinary auth/migration/env stay fail-upward', () => {
+  const legacy = fixture(); legacy.write('.env.example', 'PUBLIC_X=1\n');
+  const lr = legacy.cmd(manifest, ['main', 'legacy-env']); expect(lr.status, lr.stderr).toBe(0);
+  const lm = lr.stdout.match(/^MANIFEST_PATH=(.+)$/m)![1];
+  expect(JSON.parse(readFileSync(lm, 'utf8')).routing.risk_tier).toBe('D');
   for (const opt of [false, true]) {
     const f = fixture({ d_surfaces: ['.env*', 'danger/**'], auth_surfaces: ['lib/auth/**'],
       ...(opt ? { d_surface_exceptions: ['.env.example'], c_surfaces: ['.env.example'], env_surfaces: ['lib/env/**'] } : {}) });

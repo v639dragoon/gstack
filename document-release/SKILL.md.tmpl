@@ -174,7 +174,7 @@ When significant gaps are found, suggest running `/document-generate` to fill th
 
 {{SECTION:release-body}}
 
-The Codex documentation voice follows the upstream default-on contract. Any fallback Agent dispatch must explicitly use
+The documentation voice reads `CODEX_DOC_VOICE` from `gstack-review-budget policy-flags <base>`; false skips that pass. Any fallback Agent dispatch must explicitly use
 `subagent_type: "general-purpose"`, `model: "sonnet"`, and
 `run_in_background: false`.
 

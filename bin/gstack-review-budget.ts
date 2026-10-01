@@ -948,7 +948,7 @@ if (command === 'finding') {
   const category = typeof f.category === 'string' ? f.category.toLowerCase() : null;
   const isBlocking =
     p.blockingSeverities.includes(f.severity.toUpperCase()) ||
-    (f.severity.toUpperCase() === 'INFORMATIONAL' &&
+    ((f.severity.toUpperCase() === 'INFORMATIONAL' || p.autofixInformational === false) &&
       !!category &&
       p.blockingCategories.includes(category));
   append(id, {

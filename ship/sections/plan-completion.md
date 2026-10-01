@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 8: Plan Completion Audit
 
+When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied: retain the saved report, counts, decisions and plan checks without another Agent. Supply `--inputs-hash <hash>` over the active external plan text and approved scope; changed inputs require a fresh audit. Continue Steps 8.1–8.2 and Prior Learnings.
+
 Before dispatch, run
 `~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
 On exit 2 print its line and do not dispatch.
