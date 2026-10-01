@@ -4,6 +4,7 @@ import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFi
 import { join } from 'node:path';
 import { deriveReviewStatus, isCriticalFinding, isOpenByAction, readJsonl } from './headless-artifacts';
 import { resultLine, type ResultCodeName } from './result-codes';
+import { readPolicy, policyFlags, nonCodeReviewDelta, gitRead } from './review-policy';
 
 const DIFF_REVIEWS = new Set(['review', 'review-fix-check', 'adversarial-review', 'codex-review', 'design-review-lite', 'ship']);
 const SHARED_LIBS_COVERAGE_VERSION = 1;
@@ -214,6 +215,59 @@ export function captureReviewStart(skill: string, env = process.env, fixRange = 
   return fixBase ? `${token}\nFIX_BASE=${fixBase}` : token;
 }
 
+/** Lookup and independently validate the governor's one carry mechanism. */
+function carriedAudit(runId: unknown, oldTree: string, env = process.env): Record<string, any> | undefined {
+  if (typeof runId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(runId) ||
+      !env.GSTACK_REVIEW_REPO || !env.GSTACK_REVIEW_DIR || !env.GSTACK_STAMP_WTREE) return;
+  const policy = readPolicy(env.GSTACK_REVIEW_REPO);
+  if (!policyFlags(policy).nonCodeDelta) return;
+  try {
+    const plan = JSON.parse(readFileSync(join(env.GSTACK_REVIEW_DIR, 'budgets', `${runId}.json`), 'utf8'));
+    if (JSON.stringify(plan.policy) !== JSON.stringify(policy)) return;
+    const rows = readFileSync(join(env.GSTACK_REVIEW_DIR, 'budgets', `${runId}.ledger.jsonl`), 'utf8').split('\n').filter(Boolean).map(JSON.parse);
+    const audit = rows.findLast(r => r.record_type === 'carry-forward' && r.run_id === runId &&
+      r.old_wtree === oldTree && r.new_wtree === env.GSTACK_STAMP_WTREE &&
+      r.branch_id === sha256(env.GSTACK_REVIEW_BRANCH || '') &&
+      r.policy_sha256 === plan.policy_sha256 && r.base === plan.base && r.new_sha === env.GSTACK_STAMP_COMMIT_FULL);
+    if (!audit) return;
+    const proof = nonCodeReviewDelta(env.GSTACK_REVIEW_REPO, oldTree, audit.new_wtree, policy);
+    if (!proof.allowed || proof.reason !== audit.reason || JSON.stringify(proof.files) !== JSON.stringify(audit.files)) return;
+    return audit;
+  } catch { return; }
+}
+
+/** Advice coverage proves unchanged supporting bytes, separately from the review carry. */
+function unchangedAdviceCoverage(repo: string, from: string, to: string, paths: unknown, env = process.env): string[] {
+  return sharedLibsSnapshotCoverage(repo, to, paths, env).filter(path => {
+    try { return gitRead(repo, ['ls-tree', '-z', from, '--', path]) === gitRead(repo, ['ls-tree', '-z', to, '--', path]); }
+    catch { return false; }
+  });
+}
+
+/** Carry only this invocation's already bound receipts; original rows remain intact. */
+export function carryReviewRecords(runId: string, env = process.env): Record<string, any>[] {
+  if (!env.GSTACK_REVIEW_LOG) return [];
+  let rows: Record<string, any>[];
+  try { rows = readFileSync(env.GSTACK_REVIEW_LOG, 'utf8').split('\n').filter(Boolean).map(JSON.parse); }
+  catch (error: any) { if (error.code === 'ENOENT') return []; throw error; }
+  const carried: Record<string, any>[] = [];
+  for (const [index, rec] of rows.entries()) {
+    if (rec.run_id !== runId || rec.skill === 'ship' || !DIFF_REVIEWS.has(rec.skill) ||
+        rec.completed !== true || rec.converged !== true || rec.review_binding?.state !== 'verified' ||
+        rec.review_binding.start_wtree !== rec.wtree || rec.review_binding.end_wtree !== rec.wtree) continue;
+    const audit = carriedAudit(runId, rec.wtree, env);
+    if (!audit || rows.some(r => r.carry_forward?.audit_id === audit.audit_id && r.reused_from === index + 1)) continue;
+    const findings = Array.isArray(rec.findings) ? rec.findings.map(f => record(f) && f.advisory === true
+      ? { ...f, snapshot_covered_paths: unchangedAdviceCoverage(env.GSTACK_REVIEW_REPO!, audit.old_wtree, audit.new_wtree, f.evidence_paths, env) } : f) : rec.findings;
+    carried.push({ ...rec, ...(findings ? { findings } : {}), wtree: audit.new_wtree, commit_full: env.GSTACK_STAMP_COMMIT_FULL,
+      tree: env.GSTACK_STAMP_TREE, dirty: env.GSTACK_STAMP_DIRTY === 'true',
+      review_binding: { ...rec.review_binding, start_wtree: audit.new_wtree, end_wtree: audit.new_wtree },
+      carry_forward: audit, original_binding: rec.review_binding, reused_from: index + 1,
+      carried_at: new Date().toISOString() });
+  }
+  return carried;
+}
+
 const GATE_ACTIONS = new Set(['kept', 'restored', 'open']);
 
 /**
@@ -264,7 +318,7 @@ export function deriveFromFindings(rec: Record<string, any>, findingsPath: strin
 }
 
 export function bindReview(rec: Record<string, any>, token: string, env = process.env, findingsPath?: string): Record<string, any> {
-  for (const key of ['commit_full', 'tree', 'wtree', 'dirty', 'review_binding', 'review_freshness', 'shared_libs_coverage_version', 'status_source', 'findings_total', 'findings_open', 'findings_resolved', 'findings_file', 'scope', 'fix_base']) delete rec[key];
+  for (const key of ['commit_full', 'tree', 'wtree', 'dirty', 'review_binding', 'review_freshness', 'shared_libs_coverage_version', 'status_source', 'findings_total', 'findings_open', 'findings_resolved', 'findings_file', 'scope', 'fix_base', 'carry_forward', 'original_binding']) delete rec[key];
   // The findings file is validated BEFORE the start token is consumed below:
   // a rejected row must leave the token for the retry.
   rec = findingsPath ? deriveFromFindings(rec, findingsPath, env.GSTACK_STAMP_SESSION_KIND) : { ...rec, status_source: 'claimed' };
@@ -303,8 +357,10 @@ export function bindReview(rec: Record<string, any>, token: string, env = proces
     }
   }
   const end = env.GSTACK_STAMP_WTREE;
+  const carry = start && start.scope !== 'fix-range' && start.fix_base === undefined && end && start.wtree !== end && rec.completed === true && rec.converged === true
+    ? carriedAudit(rec.run_id, start.wtree, env) : undefined;
   const state = !start || !end ? 'uncaptured'
-    : start.wtree !== end ? 'changed'
+    : start.wtree !== end && !carry ? 'changed'
     : rec.completed !== true || rec.converged !== true ? 'incomplete' : 'verified';
   const branchId = typeof start?.branch === 'string' && start.branch.length > 0 ? { branch_id: sha256(start.branch) } : {};
   const narrowed = start?.scope === 'fix-range' || start?.fix_base !== undefined;
@@ -316,9 +372,10 @@ export function bindReview(rec: Record<string, any>, token: string, env = proces
   // so Step 11.5 cannot bind it and it never becomes CURRENT; only a later full pass can.
   rec.review_binding = narrowed && (state === 'incomplete' || state === 'verified')
     ? { state: 'fix-range', fix_base: rec.fix_base, range_start_wtree: start.wtree, range_end_wtree: end, started_at: start.started_at, ...branchId }
-    : { state, start_wtree: start?.wtree, end_wtree: end, started_at: start?.started_at, ...branchId };
+    : { state, start_wtree: carry ? end : start?.wtree, end_wtree: end, started_at: start?.started_at, ...branchId };
   const verified = rec.review_binding.state === 'verified';
   if (verified) rec.wtree = end;
+  if (carry && verified) { rec.carry_forward = carry; rec.original_binding = { start_wtree: start.wtree, end_wtree: start.wtree }; }
   if (rec.skill === 'review' && Array.isArray(rec.findings)) {
     rec.shared_libs_coverage_version = SHARED_LIBS_COVERAGE_VERSION;
     for (const finding of rec.findings) {
@@ -329,7 +386,8 @@ export function bindReview(rec: Record<string, any>, token: string, env = proces
       if (!fingerprint) continue;
       finding.fingerprint = fingerprint;
       finding.snapshot_covered_paths = verified && finding.action === 'skipped'
-        ? sharedLibsSnapshotCoverage(env.GSTACK_REVIEW_REPO!, end!, finding.evidence_paths, env) : [];
+        ? carry ? unchangedAdviceCoverage(env.GSTACK_REVIEW_REPO!, carry.old_wtree, end!, finding.evidence_paths, env)
+          : sharedLibsSnapshotCoverage(env.GSTACK_REVIEW_REPO!, end!, finding.evidence_paths, env) : [];
     }
   }
   return rec;

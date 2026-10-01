@@ -121,3 +121,29 @@ export function auditReusable(repo: string, gate: string, verdict: string, from:
       gate === 'coverage-audit' && verdict === 'clean' && f.status === 'A' && matchAny(f.path, globs(policy.test_globs, DEFAULT_TEST_GLOBS));
   });
 }
+
+/** One conservative exception, shared by rerun accounting and binding. */
+export function nonCodeReviewDelta(repo: string, from: string, to: string, policy: any) {
+  const delta = treeDelta(repo, from, to);
+  const triggers = delta.error ? ['git-failure'] : sensitiveTriggers(delta.files, policy);
+  // diff-scope's built-in auth signals stay fail-upward in the exception too.
+  for (const f of delta.files) if (matchAny(f.path, ['**/*auth*', '**/*session*', '**/*jwt*', '**/*oauth*', '**/*permission*', '**/*role*']))
+    triggers.push(`auth:${f.path}`);
+  const tests = globs(policy?.test_globs, DEFAULT_TEST_GLOBS);
+  let ordinary = true;
+  try {
+    for (const f of delta.files) {
+      const mode = (tree: string) => gitRead(repo, ['ls-tree', '-z', tree, '--', f.path]).split(' ')[0];
+      const before = f.status === 'A' ? null : mode(from), after = f.status === 'D' ? null : mode(to);
+      if ([before, after].some(m => m !== null && !['100644', '100755'].includes(m)) ||
+        before && after && before !== after) ordinary = false;
+    }
+  } catch { triggers.push('git-failure'); ordinary = false; }
+  const safe = ordinary && triggers.length === 0;
+  const testOnly = safe && delta.files.length > 0 && delta.files.every(f => f.status === 'A' && matchAny(f.path, tests));
+  const docOnly = safe && delta.files.length > 0 && delta.files.every(f => !matchAny(f.path, tests) &&
+    (docPath(f.path) || releaseMetadata(repo, from, to, f.path)));
+  return { ...delta, testOnly, docOnly, allowed: testOnly || docOnly,
+    reason: testOnly ? 'added-tests' : docOnly ? 'docs-release-metadata' : 'code-or-sensitive-delta',
+    triggers: [...new Set(triggers)] };
+}
