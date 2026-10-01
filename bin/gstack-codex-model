@@ -37,7 +37,10 @@
 #   - Unavailable or inconclusive → the default route with the substitution
 #     logged (exit 0). A substitution never adds a reviewer, never changes the
 #     budget, the cap or the retry rule.
-#   - Never fails on network trouble; a missing CLI is reported as no-auth.
+#   - The DEFAULT route checks the effective configured model with the same
+#     cached catalog/access probe. Failure (including transient or missing
+#     config/auth/CLI) stops with the model and CLI version, without substitution.
+#   - Named-model fallback behavior is unchanged.
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cmd="${1:-}"; shift || true
@@ -82,18 +85,40 @@ case "$MODEL" in
 esac
 if [ -n "$MODEL" ] && [ "${#MODEL}" -gt 64 ]; then echo "gstack-codex-model: model slug too long" >&2; exit 1; fi
 
-# The default route's NAME, for the record only: the flags stay empty so the
-# client's own config layering (project .codex/config.toml over the user file)
-# decides, exactly as before this resolver existed.
+# Resolve only the config layers this invocation uses: no --profile or -c
+# model override is passed on the default route. Project layers load only in
+# a trusted project, from root to cwd (nearest wins). Parse TOML, not grep:
+# a model inside an unrelated table is not the client's top-level default.
 default_model_name() {
-  local root f m
+  local root
   root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  for f in "$root/.codex/config.toml" "${CODEX_HOME:-$HOME/.codex}/config.toml"; do
-    [ -f "$f" ] || continue
-    m=$(grep -E '^[[:space:]]*model[[:space:]]*=' "$f" 2>/dev/null | head -1 | sed -E 's/^[^=]*=[[:space:]]*"([^"]*)".*$/\1/')
-    if [ -n "$m" ]; then printf '%s' "$m"; return 0; fi
-  done
-  printf '%s' "client-default"
+  bun -e '
+    const fs = require("fs"), path = require("path");
+    const read = p => {
+      try { return Bun.TOML.parse(fs.readFileSync(p, "utf8")); }
+      catch (e) { if (e.code === "ENOENT") return {}; throw new Error("Could not parse/read Codex config: " + p); }
+    };
+    const rawRoot = process.argv[1], root = fs.realpathSync(rawRoot), cwd = fs.realpathSync(process.cwd());
+    const user = read(path.join(process.argv[2], "config.toml"));
+    let model = user.model;
+    const projects = Object.entries(user.projects ?? {}).filter(([p]) => {
+      try { return fs.realpathSync(p) === root; } catch { return false; }
+    });
+    if (projects.some(([,v]) => v?.trust_level === "trusted")) {
+      const dirs = [root];
+      const rel = path.relative(root, cwd);
+      if (rel && !rel.startsWith("..") && !path.isAbsolute(rel))
+        for (const part of rel.split(path.sep)) dirs.push(path.join(dirs.at(-1), part));
+      for (const dir of dirs) {
+        const c = read(path.join(dir, ".codex", "config.toml"));
+        if (Object.hasOwn(c, "model")) model = c.model;
+      }
+    }
+    if (model === undefined) process.stdout.write("client-default");
+    else if (typeof model !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(model))
+      throw new Error("Codex default model must be a valid model slug");
+    else process.stdout.write(model);
+  ' "$root" "${CODEX_HOME:-$HOME/.codex}"
 }
 
 emit() {
@@ -113,15 +138,31 @@ emit() {
   printf "CODEX_VOICE='%s'\n" "$(q "$VOICE")"
 }
 
-DEFAULT_NAME=$(default_model_name)
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/gstack-codex-probe" 2>/dev/null || true
+_TEL=$("$SCRIPT_DIR/gstack-config" get telemetry 2>/dev/null || echo off)
+DEFAULT_NAME=$(default_model_name) || { echo "Codex default model resolution failed; repair project/user config before retrying." >&2; exit 1; }
 if [ -z "$MODEL" ]; then
+  CLI_VERSION=$(codex --version 2>/dev/null | head -1)
+  CLI_VERSION="${CLI_VERSION:-unavailable}"
+  default_error() {
+    echo "Codex default model '$DEFAULT_NAME' unavailable or unverified (codex --version: $CLI_VERSION): $1. No model substituted." >&2
+    _gstack_codex_log_event "codex_default_model_unavailable" 2>/dev/null || true
+    exit 1
+  }
+  [ "$DEFAULT_NAME" != client-default ] || default_error "no top-level model configured in project/user config.toml"
+  command -v codex >/dev/null 2>&1 && _gstack_codex_auth_probe >/dev/null 2>&1 || default_error "no runnable, authenticated Codex CLI"
+  DEFAULT_AVAIL=$(_gstack_codex_model_available "$DEFAULT_NAME" 2>/dev/null)
+  DEFAULT_RC=$?
+  if [ "$DEFAULT_RC" -ne 0 ]; then
+    DEFAULT_HINT=$(printf '%s\n' "$DEFAULT_AVAIL" | grep '^HINT: ' | head -1 | sed 's/^HINT: //' | tr -d '\n' | tr '\"$`\\' '    ' | cut -c1-200)
+    default_error "${DEFAULT_HINT:-$(printf '%s' "$DEFAULT_AVAIL" | head -1)}"
+  fi
+  _gstack_codex_log_event "codex_default_model_available" 2>/dev/null || true
   emit "default" "$DEFAULT_NAME" "${SOURCE:-default}" "false" "none" "" ""
   exit 0
 fi
 
-# shellcheck disable=SC1091
-source "$SCRIPT_DIR/gstack-codex-probe" 2>/dev/null || true
-_TEL=$("$SCRIPT_DIR/gstack-config" get telemetry 2>/dev/null || echo off)
 if ! command -v codex >/dev/null 2>&1 || ! _gstack_codex_auth_probe >/dev/null 2>&1; then
   emit "$MODEL" "$DEFAULT_NAME" "fallback" "true" "no-auth" "" ""
   echo "Codex model: $MODEL requested but no runnable, authenticated Codex CLI was found; keeping the default route ($DEFAULT_NAME)." >&2

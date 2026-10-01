@@ -2181,6 +2181,10 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'design-brief-contract-'));
     const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
     try {
+      const routedBin = path.join(dir, 'routing');
+      fs.mkdirSync(routedBin);
+      fs.writeFileSync(path.join(routedBin, 'gstack-codex-model'), '#!/bin/sh\nprintf "%s\\n" "CODEX_MODEL=fixture" "CODEX_EFFORT=medium" "CODEX_MODEL_SOURCE=policy" "CODEX_MODEL_EXEC_FLAGS="\n', { mode: 0o700 });
+      fs.writeFileSync(path.join(routedBin, 'gstack-voice-row'), '#!/bin/sh\nexit 0\n', { mode: 0o700 });
       const brief = path.join(dir, 'product.md');
       const capture = path.join(dir, 'argv.json');
       const marker = path.join(dir, 'must-not-execute');
@@ -2189,7 +2193,7 @@ describe('DESIGN_OUTSIDE_VOICES resolver', () => {
       fs.writeFileSync(path.join(dir, 'codex'), `#!${process.execPath}\nrequire('fs').writeFileSync(process.env.CAPTURE, JSON.stringify(process.argv.slice(2)));\nconsole.log('Recommendation: choose a clear hierarchy because builders need to find their work.');\n`, { mode: 0o700 });
       const prepare = (file: string) => command.replace("'<prepared-prompt-file>'", quote(file))
         .replaceAll('$HOME/.claude/skills/gstack', ROOT);
-      const env = { ...process.env, PATH: dir + path.delimiter + process.env.PATH, CAPTURE: capture,
+      const env = { ...process.env, PATH: dir + path.delimiter + process.env.PATH, CAPTURE: capture, GSTACK_BIN: routedBin,
         CODEX_THREAD_ID: '', CODEX_SANDBOX: '', CLAUDECODE: '1', GSTACK_ACTIVE_HOST: 'claude' };
       const result = spawnSync('bash', ['-c', prepare(brief)], { cwd: ROOT, env, encoding: 'utf8', timeout: 5_000 });
       expect(result.status, result.stderr).toBe(0);

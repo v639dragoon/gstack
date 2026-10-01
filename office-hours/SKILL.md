@@ -845,7 +845,8 @@ _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
 cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 
 source "$HOME/.claude/skills/gstack/bin/gstack-codex-probe" || exit 1
-eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'second-opinion' --effort medium)" || exit 1
+_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'second-opinion' --effort medium) || exit 1
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
 _OUTSIDE_PROMPT=$(cat "$_OUTSIDE_INPUT") || exit 1
 _OUTSIDE_EXIT=0
@@ -1161,7 +1162,8 @@ _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
 cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 
 source "$HOME/.claude/skills/gstack/bin/gstack-codex-probe" || exit 1
-eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'design-direction' --effort medium)" || exit 1
+_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'design-direction' --effort medium) || exit 1
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
 _OUTSIDE_PROMPT=$(cat "$_OUTSIDE_INPUT") || exit 1
 _OUTSIDE_EXIT=0
