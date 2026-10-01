@@ -530,7 +530,10 @@ describe('rendered routed step carries the model', () => {
   const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
   for (const site of SITES) {
     test(`${site}: resolves the model once, pins it on both calls, records it, never re-runs on another model`, () => {
-      const text = read(site);
+      const union = read(site);
+      expect(union).toContain('adversarial subagent (always runs)');
+      const text = union.slice(union.indexOf('### Governor codex-structured slot'));
+      expect(text.length).toBeGreaterThan(1000);
       expect(text).toContain('gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}"');
       const exec = text.split('\n').filter((l) => /_gstack_codex_timeout_wrapper 540 codex exec\b/.test(l));
       const review = text.split('\n').filter((l) => /_gstack_codex_timeout_wrapper 540 codex review --base\b/.test(l));

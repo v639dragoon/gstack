@@ -29,25 +29,13 @@ TEST_FW=""
 echo "TEST_FW: ${TEST_FW:-unknown}"
 ```
 
-### Shared diff/risk manifest (Phase 0)
-
-```bash
-~/.claude/skills/gstack/bin/gstack-diff-manifest <base> 2>/dev/null || true
-date -u +%Y-%m-%dT%H:%M:%SZ
-```
-
-Carry the printed `RUN_ID`, `MANIFEST_PATH`, `MANIFEST_WTREE`, `DOC_FP`
-and the timestamp as LITERALS into the gate-log calls below (and Step 18). On
-a fix cycle pass the earlier RUN_ID as arg 2 — one run, ONE run id. The
-manifest is an INDEX; it never replaces the raw diff.
-
-### Governor plan and packet
+### Governor manifest, plan, packet
 
 Create one manifest, deterministic reviewer plan, and shared packet:
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-diff-manifest <base>
-~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
+~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude
 ~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
 ~/.claude/skills/gstack/bin/gstack-review-packet "$RUN_ID" <base>
 ```
@@ -59,7 +47,7 @@ Carry these printed values as literals for the rest of the invocation:
 
 `PASSES` is the whole-workflow accounting for this run: every AI pass it may
 dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
-voice) with its model and effort; a pass absent from it never runs. `resume`
+voice) with its model and effort; Upstream-required passes join its accounting through register-upstream; a pass absent from either record never runs. `resume`
 carries forward the terminal verdicts of a PRIOR run whose content
 fingerprint, base, policy, tier, reviewer list and slice kind all equal this
 plan's (a matching commit with a dirty tree never qualifies): print
@@ -74,6 +62,8 @@ Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
 If `OUTCOME_MISSING=true`, print exactly:
 
 `Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: ~/.claude/skills/gstack/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]`.
+
+
 
 ### Read specialist hit rates (adaptive gating)
 
@@ -115,6 +105,23 @@ Note which specialists were selected, gated, and skipped. Print the selection:
 ---
 
 ### Dispatch specialists in parallel
+
+Union upstream-selected specialists with planned `specialist:*` slots, retaining
+source labels. The small-diff bypass skips upstream specialists only; execute any
+governor-planned slots separately, then the parent Exploratory QA handoff.
+Never dispatch the same specialist twice: one result may satisfy both sources
+only when both dispatch records name the same frozen tree/SHA.
+Register upstream-only selected specialists with
+`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>`;
+then run `gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>`
+before each Agent call. Every allowed Agent is accounted before launch. Every specialist
+Agent sets `model: "sonnet"`. Each prompt starts: "Read the review packet at {PACKET_PATH} and the diff at {DIFF_PATH} first." CI_GREEN=true
+means do not repeat builds/tests. Record each terminal verdict with `gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>` and a best-effort
+`gstack-gate-log` row with model sonnet, effort agent-default, effort_source routed,
+fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream
+settlement and missing-coverage rules; the budget allows one corrected attempt.
+Routed codex-structured remains an additional Step 4.8 slot.
+
 
 For each selected specialist, launch an independent subagent via the Agent tool.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
@@ -302,6 +309,12 @@ unchanged.
 ### Red Team dispatch (conditional)
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
+
+Register upstream activation as `upstream-specialist:red-team` unless red-team
+already occupies a planned slot. Dispatch the chosen gate through review-budget
+before the Sonnet Agent call; record its verdict and gate row afterward. A planned
+red-team runs even without upstream activation. Upstream-required activation is
+accounted separately and does not consume the single routed escalation.
 
 Two dispatch paths, ONE activation condition — they differ only in WHEN:
 

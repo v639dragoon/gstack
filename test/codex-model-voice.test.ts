@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-const bin = join(import.meta.dir, '..', 'bin', 'gstack-codex-model'), gate = join(import.meta.dir, '..', 'bin', 'gstack-gate-log'), dirs: string[] = [];
+const bin = join(import.meta.dir, '..', 'bin/gstack-codex-model'), gate = join(import.meta.dir, '..', 'bin/gstack-gate-log'), dirs: string[] = [];
 // A fixture-only Codex catalog supports the default and rejects named routes.
 // No test touches the real CLI, ambient auth/state, or the network.
 const shim = mkdtempSync(join(tmpdir(), 'voice-shim-'));
@@ -84,3 +84,24 @@ describe('gate-log outside-voice records', () => {
     expect(log({ ...base, model: 'gpt-6-astra', model_source: 'env', model_reason: 'founder asked' }).status).toBe(0);
   });
 });
+
+// R2: version probes must never consume the parent tool's still-open stdin.
+test('default version probe closes stdin and remains bounded', async () => {
+  const d = repo(null), fake = join(d, 'shim');
+  mkdirSync(fake);
+  writeFileSync(join(fake, 'codex'), `#!/bin/sh
+if [ "$1" = --version ]; then cat >/dev/null; echo codex-fixture; exit 0; fi
+if [ "$1" = exec ]; then echo OK; exit 0; fi
+exit 1
+`, { mode: 0o755 });
+  const child = Bun.spawn([bin, 'resolve', '--voice', 'outside-review'], {
+    cwd: d, stdin: 'pipe', stdout: 'pipe', stderr: 'pipe', timeout: 8_000,
+    env: { ...process.env, GSTACK_CODEX_MODEL: '', CODEX_HOME: join(d, 'codex-home'),
+      GSTACK_HOME: join(d, 'state'), PATH: `${fake}:${process.env.PATH}` },
+  });
+  try {
+    const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(code, stderr).toBe(0);
+    expect(stdout).toContain('CODEX_MODEL_SOURCE=');
+  } finally { child.stdin.end(); child.kill(); }
+}, 10_000);

@@ -260,11 +260,11 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 Curated jargon list lives at `~/.claude/skills/gstack/scripts/jargon-list.json`. On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
 
-## Completeness Principle — Bounded Completion
+## Completeness Principle — Boil the Ocean
 
-Completion is bounded by the accepted behavior, not by what is cheap to add: implement it, cover the material failure cases, resolve blockers, finish. No unrelated cleanup, speculative tests, whole-file rewrites or repeated status reports; separate work (rewrites, long migrations) is its own scope, never a shortcut excuse.
+AI makes completeness cheap, so the complete thing is the goal. Recommend full coverage (tests, edge cases, error paths) — boil the ocean one lake at a time. The only thing out of scope is genuinely unrelated work (rewrites, multi-quarter migrations); flag that as separate scope, never as an excuse for a shortcut.
 
-When options differ in coverage, include `Completeness: X/10` (10 = every material in-scope case, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores or widen scope to raise one.
+When options differ in coverage, include `Completeness: X/10` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores.
 
 ## Confusion Protocol
 
@@ -434,13 +434,13 @@ Set `VERSION_MODE=$(~/.claude/skills/gstack/bin/gstack-version-mode)` in this ch
 Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
 
 **Routine work needs no confirmation:** include uncommitted changes, choose MICRO/PATCH
-under Step 12, draft CHANGELOG and commits, mark completed TODOs and retain advisories without fixes.
+under Step 12, draft CHANGELOG and commits, mark completed TODOs and auto-fix findings.
 When Step 7 coverage meets its target, report remaining gaps and verify generated
 tests without asking again. Step 15 commits those tests.
 
 **Route:** integrate (1–3) → test and review (4–11.5) → prepare the release
 (12–15) → verify frozen content (16) → push and publish (17–21).
-Every new invocation repeats Steps 1–16, including deterministic checks, tier-budgeted reviews and the docs audit.
+Every new invocation repeats Steps 1–16, including both reviews and the docs audit.
 Deterministic tests/typecheck/build/gitleaks/redaction/verification/claim-check remain required when applicable.
 Steps 12, 17 and 19 prevent duplicate bumps, pushes and PRs, never verification.
 In post-merge mode, Step 12 chooses BUMP_LEVEL and Step 13 rewrites this branch's one fragment.
@@ -738,7 +738,7 @@ repeat Step 2 (decisions included) on the merged content, then Step 4.
 ### Plan the governed audits
 
 Before Steps 7–8 read their flags, run `gstack-diff-manifest <base>` and
-`gstack-review-budget plan "$MANIFEST_PATH" --cycle 0` from the installed bin directory.
+`gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude` from the installed bin directory.
 Carry RUN_ID, CYCLE, COVERAGE_AUDIT, PLAN_COMPLETION and REPAIR_CYCLES_MAX as literals.
 Step 9.1 refreshes this same run after audit writes; never mint a replacement run
 or reset the invocation's audit attempts or repair counts.
@@ -760,7 +760,7 @@ or reset the invocation's audit attempts or repair counts.
 
 ## Step 11.5: Bind the reviews
 
-1. **Select the review evidence.** Run `~/.claude/skills/gstack/bin/gstack-review-read`.
+1. **Select the two reviews.** Run `~/.claude/skills/gstack/bin/gstack-review-read`.
    Select this invocation's final Step 9.4 record (`skill:"review"`, `via:"ship"`)
    and Step 11 native record (`skill:"adversarial-review"`). Match each to its saved
    handle, original token and source; reject outside-provider or older records.
@@ -912,11 +912,11 @@ Make bisectable commits; if already committed, continue to Step 16. Never create
    Under 50 lines across fewer than 4 files may be one commit.
 2. Order dependencies first: infrastructure → models/services → controllers/views.
    Each commit must work independently, without broken imports or missing code.
-   In-branch: group VERSION + CHANGELOG + TODOS.md after the feature commits.
+   Group VERSION + CHANGELOG + TODOS.md after the feature commits (in-branch mode).
    Post-merge: group the one fragment + TODOS.md instead.
 3. Use `<type>: <summary>` (feat/fix/chore/refactor/docs) and a brief body.
-   In-branch, only the final VERSION/CHANGELOG commit gets the release version and co-author
-   trailer. Do not create a Git tag:
+   Only the final VERSION/CHANGELOG commit gets the release version and co-author
+   trailer. Do not create a Git tag (in-branch mode):
 
 ```bash
 git commit -m "$(cat <<'EOF'
@@ -1023,7 +1023,7 @@ every allowed edit is release metadata:
 Post-merge: use only `--allow-paths "$FRAGMENT_PATH"` (exact path). Below is in-branch.
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,agents-digest/gstack-AGENTS.md --allow-version-only package.json
+~/.claude/skills/gstack/bin/gstack-evidence check --label tests --expect-cmd '<tests>' --label vitest --expect-cmd '<vitest>' --max-age 24 --allow-paths CHANGELOG.md,VERSION,package.json,agents-digest/gstack-AGENTS.md
 ```
 
 | Receipt result | Next action |

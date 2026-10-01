@@ -260,11 +260,11 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 Curated jargon list lives at `~/.claude/skills/gstack/scripts/jargon-list.json`. On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
 
-## Completeness Principle — Bounded Completion
+## Completeness Principle — Boil the Ocean
 
-Completion is bounded by the accepted behavior, not by what is cheap to add: implement it, cover the material failure cases, resolve blockers, finish. No unrelated cleanup, speculative tests, whole-file rewrites or repeated status reports; separate work (rewrites, long migrations) is its own scope, never a shortcut excuse.
+AI makes completeness cheap, so the complete thing is the goal. Recommend full coverage (tests, edge cases, error paths) — boil the ocean one lake at a time. The only thing out of scope is genuinely unrelated work (rewrites, multi-quarter migrations); flag that as separate scope, never as an excuse for a shortcut.
 
-When options differ in coverage, include `Completeness: X/10` (10 = every material in-scope case, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores or widen scope to raise one.
+When options differ in coverage, include `Completeness: X/10` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores.
 
 ## Confusion Protocol
 
@@ -432,10 +432,6 @@ branch name wherever the instructions say "the base branch" or `<default>`.
 Review the branch diff against the base for structural issues tests miss.
 
 Every Agent/subagent call sets `model: "sonnet"` or an instructed `model: "haiku"`.
-
-Only BLOCKING findings stop for judgment. Informational and ADVISORY findings
-never block or get fixed. Deterministic checks always run; semantic review is
-tier-budgeted and coverage, plan-completion, and doc release are slice-gated.
 
 ---
 
@@ -921,10 +917,8 @@ Combine core, specialist, Step 4.7 QA, Step 4.8 adversarial and VALID & ACTIONAB
 For QA findings, assign confidence (1–10) from replay/code evidence using Confidence
 Calibration; retain Step 4.7's severity, not a severity inferred from confidence.
 Run Step 5.0 severity/prior-skip dedup on all
-findings before Step 5a classification. Then act only on remaining BLOCKING findings.
-Structured approval does not waive blocking test_stub ASK gates.
-
-Only BLOCKING findings enter the fix flow. Advisories remain visible but untouched.
+findings before Step 5a classification. Then action every remaining finding.
+Structured approval does not waive advisory/test_stub ASK gates.
 
 ### Step 5.0: Cross-review finding dedup
 
@@ -992,11 +986,9 @@ or missing-reviewer rules.
 
 ### Step 5a: Classify each finding
 
-BLOCKING means its severity is in `BLOCKING_SEVERITIES` OR its category is in
-`BLOCKING_CATEGORIES`. Everything else is ADVISORY.
-ADVISORY findings are NEVER fixed inside /review: no AUTO-FIX and no ASK.
-Keep at most `MAX_ADVISORIES` (5), sorted by confidence, and emit them under
-`## Advisories (not fixed)` in the review summary. `AUTOFIX_INFORMATIONAL=false`.
+For each finding, classify as AUTO-FIX or ASK per the Fix-First Heuristic in
+checklist.md. Critical findings lean toward ASK; informational findings lean
+toward AUTO-FIX.
 
 **Advisory override:** After severity validation, `advisory:true` is ASK-only. Never auto-apply an optional extraction, even when mechanical. Show `[ADVISORY]`, helper, caller migration, tests and estimated total savings for approval or Skip. Handle real defects independently.
 
@@ -1073,7 +1065,7 @@ After outputting your own findings, if Greptile comments were classified in Step
 
 Before replying to any comment, run greptile-triage.md's **Escalation Detection** to choose Tier 1 (friendly) or Tier 2 (firm) reply templates.
 
-1. **VALID & ACTIONABLE comments:** Only BLOCKING comments enter the fix flow. Use their Step 5a–5d disposition; do not ask a second fix question. Step 5c alone supplies A) Fix / B) Skip for ASK items. After a completed fix, use the **Fix reply template** with diff and explanation; cite the current diff if uncommitted, never invent a commit SHA. A Skip leaves the defect unresolved and grants no new fix permission. If evidence disproves the finding, reclassify it below.
+1. **VALID & ACTIONABLE comments:** Use their Step 5a–5d disposition; do not ask a second fix question. Step 5c alone supplies A) Fix / B) Skip for ASK items. After a completed fix, use the **Fix reply template** with diff and explanation; cite the current diff if uncommitted, never invent a commit SHA. A Skip leaves the defect unresolved and grants no new fix permission. If evidence disproves the finding, reclassify it below.
 
 2. **FALSE POSITIVE comments:** These are reply decisions, not code approval. Show file:line (or [top-level]), summary, permalink and evidence, then ask:
    - A) Reply explaining why this is incorrect (recommended if clearly wrong)
@@ -1085,26 +1077,6 @@ Before replying to any comment, run greptile-triage.md's **Escalation Detection*
 3. **VALID BUT ALREADY FIXED comments:** Reply with greptile-triage.md's **Already Fixed reply template**, no AskUserQuestion: what was done and the fixing commit SHA; save to both per-project and global greptile-history.
 
 4. **SUPPRESSED comments:** Skip silently (known false positives from previous triage).
-
-### Step 5e: Bounded repair verification
-
-After fixes, re-run tests, then run
-`~/.claude/skills/gstack/bin/gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
-
-- `FULL_RERUN=false`: re-dispatch ONLY each finding's reviewer after running
-  `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`.
-  Use `subagent_type: "general-purpose"`, `model: "sonnet"`,
-  `run_in_background: false`; prompt: "Confirm the fix at {path}:{line} closes
-  finding {fingerprint}; quote the fixed lines; output NO FINDINGS or the
-  remaining finding".
-- `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log
-  `rerun_cause:"scope-expansion:{triggers}"`, run `gstack-diff-manifest <base>
-  "$RUN_ID"`, then `gstack-review-budget plan "$MANIFEST_PATH" --cycle <n+1>`.
-  Carry the possibly raised tier/new `REVIEWERS`; all dispatch, verdict, and
-  completion calls use `--cycle <n+1>`.
-- Exit 3: STOP and report reappearing findings with the existing wording.
-
-Never exceed `REPAIR_CYCLES_MAX`.
 
 ---
 
@@ -1136,6 +1108,14 @@ Never exceed `REPAIR_CYCLES_MAX`.
    equal the bound snapshot blobs (`[]` if none). Never carry prior-cycle, supplied
    or prior-record coverage forward or build this proof yourself. Fixed advice
    needs no skip coverage.
+
+Before saving a completed pass, run `gstack-review-budget complete "$RUN_ID" --cycle <n> --require-native`. Missing or unsuccessful governed reviewers make
+COMPLETED=false. On exit 2 retain INCOMPLETE= and STOP with a blocker report after saving incomplete evidence. After edits use `gstack-review-budget rerun-check "$RUN_ID"
+--cycle <n>` and retain fix_cycle/rerun_cause; refresh the manifest and plan
+for the new candidate before repeating the whole upstream pass. The governor's
+REPAIR_CYCLES_MAX is an additional cap; it never increases upstream's three cycles.
+Record findings and resolutions with `gstack-review-budget finding` / `resolve`;
+the policy's BLOCKING/ADVISORY metadata never overrides upstream AUTO-FIX/ASK.
 
 ### 2. Fill the record
 
@@ -1204,10 +1184,6 @@ Emit one final report, merging all reviewers rather than concatenating them:
    - `Gate edits: partial (K of M eligible read)` followed by the findings counts for the hunks that were read
    - `Gate edits: UNAVAILABLE — <GATE_ERROR line or helper exit>` (missing coverage, never `none detected`)
    List each kept finding's `gate`, path and `reason` under it.
-
-- `specialists` = stats for only reviewers dispatched by the plan.
-- `findings` = blocking findings (`fixed` or `skipped`) plus retained advisories
-  (`skipped`). Informational findings are never recorded as auto-fixed.
 
 ## Capture Learnings
 

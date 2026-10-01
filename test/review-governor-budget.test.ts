@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs'
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-const bin = join(import.meta.dir, '..', 'bin', 'gstack-review-budget'),
+const bin = join(import.meta.dir, '..', 'bin/gstack-review-budget'),
   dirs: string[] = [];
 function setup(
   policy: any = { version: 1, auth_surfaces: ['lib/auth/**'], d_surfaces: ['danger/**'] },
@@ -547,4 +547,38 @@ describe('review budgets', () => {
     expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
     expect(b.stdout).toMatch(/^CARRIED_FROM=A$/m);
   });
+});
+
+
+test('D4 native and upstream reviewer accounting cannot substitute for routed slots', () => {
+  const { d, s } = setup();
+  const file = manifest(d, 'D', 'd4');
+  expect(run(d, s, ['plan', file]).status).toBe(0);
+  const plan = JSON.parse(run(d, s, ['plan', file, '--json']).stdout);
+  for (const reviewer of plan.reviewers) {
+    expect(run(d, s, ['dispatch', 'd4', reviewer.gate]).status).toBe(0);
+    expect(run(d, s, ['verdict', 'd4', reviewer.gate, 'clean']).status).toBe(0);
+  }
+  expect(run(d, s, ['complete', 'd4', '--require-native']).stdout).toContain('INCOMPLETE=native-adversarial');
+  expect(run(d, s, ['register-upstream', 'd4', 'made-up-reviewer']).status).not.toBe(0);
+  for (const gate of ['native-adversarial', 'upstream-specialist:maintainability']) {
+    expect(run(d, s, ['register-upstream', 'd4', gate]).status).toBe(0);
+    expect(run(d, s, ['dispatch', 'd4', gate]).status).toBe(0);
+    expect(run(d, s, ['complete', 'd4', '--require-native']).status).toBe(2);
+    expect(run(d, s, ['verdict', 'd4', gate, 'error']).status).toBe(0);
+    expect(run(d, s, ['complete', 'd4', '--require-native']).status).toBe(2);
+    expect(run(d, s, ['dispatch', 'd4', gate]).status).toBe(0);
+    expect(run(d, s, ['verdict', 'd4', gate, 'clean']).status).toBe(0);
+    expect(run(d, s, ['dispatch', 'd4', gate]).stdout).toContain('duplicate-slot');
+  }
+  expect(run(d, s, ['register-upstream', 'd4', 'upstream-outside:challenge', '--optional', '--model', 'gpt-6.1-sol', '--effort', 'high']).status).toBe(0);
+  expect(run(d, s, ['dispatch', 'd4', 'upstream-outside:challenge']).status).toBe(0);
+  expect(run(d, s, ['verdict', 'd4', 'upstream-outside:challenge', 'timeout']).status).toBe(0);
+  // D4 keeps upstream's optional challenge failure non-blocking.
+  expect(run(d, s, ['complete', 'd4', '--require-native']).status).toBe(0);
+  // A refresh cannot relabel the successful upstream verdict to a newer candidate.
+  const raw = JSON.parse(readFileSync(file, 'utf8')); raw.wtree = 'new-candidate';
+  writeFileSync(file, JSON.stringify(raw));
+  expect(run(d, s, ['plan', file]).status).toBe(0);
+  expect(run(d, s, ['complete', 'd4', '--require-native']).status).toBe(2);
 });

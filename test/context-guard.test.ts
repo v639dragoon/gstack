@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 const root = join(import.meta.dir, '..'),
-  bin = join(root, 'bin', 'gstack-context-guard'),
+  bin = join(root, 'bin/gstack-context-guard'),
   dirs: string[] = [];
 function go(tokens: number, session = 's') {
   const d = mkdtempSync(join(tmpdir(), 'guard-'));

@@ -4,7 +4,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 const root = join(import.meta.dir, '..'),
-  bin = join(root, 'bin', 'gstack-outcome'),
+  bin = join(root, 'bin/gstack-outcome'),
   dirs: string[] = [];
 function repo() {
   const d = mkdtempSync(join(tmpdir(), 'outcome-')),

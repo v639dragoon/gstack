@@ -5,7 +5,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-const bin = join(import.meta.dir, '..', 'bin', 'gstack-review-budget'),
+const bin = join(import.meta.dir, '..', 'bin/gstack-review-budget'),
   dirs: string[] = [];
 function setup() {
   const d = mkdtempSync(join(tmpdir(), 'resume-repo-')), s = mkdtempSync(join(tmpdir(), 'resume-state-'));
@@ -43,7 +43,7 @@ describe('pass accounting', () => {
     expect(gates).toEqual(['codex-structured', 'specialist:api-contract', 'coverage-audit', 'plan-completion', 'doc-release', 'outside-voice:doc-release']);
     for (const x of p.passes) for (const k of ['purpose', 'model', 'effort', 'budget', 'retry', 'planned']) expect(x, `${x.gate}.${k}`).toHaveProperty(k);
     expect(p.passes.find((x: any) => x.gate === 'coverage-audit').planned).toBe(true);
-    expect(p.passes.find((x: any) => x.gate === 'outside-voice:doc-release').planned).toBe(false); // tier C: no doc voice
+    expect(p.passes.find((x: any) => x.gate === 'outside-voice:doc-release').planned).toBe(true); // D4 restores upstream's default-on doc voice at every tier
     expect(p.wtree).toBe('w'.repeat(40));
     expect(p.policy_sha256).toBe('p1');
     const text = run(d, s, ['plan', manifest(d, 'r1b'), '--cycle', '0']).stdout;
