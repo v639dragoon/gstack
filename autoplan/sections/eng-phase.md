@@ -69,7 +69,8 @@ export _CODEX_DEADLINE=$(($(date +%s)+540)); _CODEX_OUT=$("$_CODEX_PROBE" role-r
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" show-first-use-notice
-eval "$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'autoplan' --effort medium)" || exit 1
+_CODEX_ROUTE=$("$GSTACK_BIN/gstack-codex-model" resolve --voice 'autoplan' --effort medium) || exit 1
+eval "$_CODEX_ROUTE" || exit 1
 _OUTSIDE_T0=$(date +%s)
 _OUTSIDE_EXIT=0
 "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
