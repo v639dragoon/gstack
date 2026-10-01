@@ -163,9 +163,9 @@ describe('GPT-5.6 Sol model profile', () => {
     const generic = generateModelOverlay(ctx('gpt'));
     const completeness = generateCompletenessSection(ctx('gpt'));
     expect(generic).toContain('make your best judgment and proceed');
-    // Fork (harness pass 2026-09-15): the generic preamble is Bounded Completion.
-    expect(completeness).toContain('Bounded Completion');
-    expect(completeness).not.toContain('completeness cheap');
+    // D4 (round 2): the non-Sol preamble carries upstream's wording.
+    expect(completeness).toContain('Boil the Ocean');
+    expect(completeness).not.toContain('Boil the Ocean Within Scope');
     for (const model of ['gpt-6-luna', 'gpt-6-sol-2026-09-01', 'gpt-6.1-sol-2026-09-01', 'gpt-6.1-luna']) {
       expect(generateCompletenessSection(ctx(resolveModel(model)!))).toBe(completeness);
       expect(generateModelOverlay(ctx(resolveModel(model)!))).toBe(generic);
