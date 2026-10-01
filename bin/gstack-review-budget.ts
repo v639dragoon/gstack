@@ -256,6 +256,7 @@ if (command === 'plan') {
       'specialist:security@sonnet',
       m.scope?.migrations ? 'specialist:data-migration@sonnet' : 'red-team@sonnet',
     ];
+  if (opt('--host') === 'codex') { reviewerSpecs = []; reviewerBudget = 0; }
   const out = m.routing.outcome || {};
   const final = out.is_final_slice || out.is_flag_flip || !out.present;
   const deterministicGates =
@@ -310,7 +311,7 @@ if (command === 'plan') {
   const codexModel: string | null = codexSlot?.model ?? null;
   const codexModelSource = codexModel ? 'policy' : 'default';
   const codexEffort: string | null = codexSlot?.model_or_effort ?? null;
-  const docVoice = tier === 'D' && final;
+  const docVoice = true; // D4: upstream documentation voice is default-on (spawned children still defer to the parent).
   // Whole-workflow accounting (dohma harness pass 2026-09-15): every AI pass
   // this run may dispatch is declared ONCE here with its purpose, model,
   // effort, budget and retry policy. The reviewer slots are the same objects
@@ -352,9 +353,9 @@ if (command === 'plan') {
     reviewerBudget,
     reviewerSpecs,
     reviewers,
-    adversarialClaude: false,
-    codexChallenge: false,
-    redTeamLocTrigger: false,
+    adversarialClaude: true,
+    codexChallenge: true,
+    redTeamLocTrigger: true,
     coverageAudit: final,
     planCompletion: final,
     docRelease: true,
@@ -434,6 +435,27 @@ if (command === 'plan') {
   process.exit(0);
 }
 
+// D4: upstream-required attempts are accounted in their own bounded slots.
+// They neither consume nor substitute for the unchanged routed reviewer budget.
+const upstreamGates = (id: string, cycle: number): string[] => [...new Set(records(id)
+  .filter(r => r.record_type === 'upstream-reviewer' && r.cycle === cycle)
+  .map(r => r.gate))];
+if (command === 'register-upstream') {
+  const [id, gate] = argv;
+  if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|red-team))$/.test(gate))
+    fail('known upstream-required reviewer gate required');
+  const cycle = requestedCycle(), p = cyclePlan(loadPlan(id), cycle);
+  if (!upstreamGates(id, cycle).includes(gate)) append(id, {
+    record_type: 'upstream-reviewer', run_id: id, cycle, gate,
+    required: !has('--optional'),
+    model: opt('--model') ?? 'sonnet', effort: opt('--effort') ?? 'agent-default',
+    budget: 1, retry: 'once-on-error-or-timeout',
+    wtree: p.wtree, reviewed_sha: p.head_sha, ts: now(),
+  });
+  console.log(`UPSTREAM_REVIEWER=${gate}`);
+  process.exit(0);
+}
+
 if (command === 'dispatch') {
   const id = argv[0],
     gate = argv[1];
@@ -442,10 +464,11 @@ if (command === 'dispatch') {
   const cycle = requestedCycle();
   const p = cyclePlan(rootPlan, cycle);
   const old = records(id);
-  const semantic =
+  const upstream = upstreamGates(id, cycle).includes(gate);
+  const semantic = upstream ||
     ['codex-structured', 'red-team', 'adversarial-claude', 'codex-challenge'].includes(gate) ||
     gate.startsWith('specialist:');
-  const planned = p.reviewers.some((r: any) => r.gate === gate);
+  const planned = upstream || p.reviewers.some((r: any) => r.gate === gate);
   const verifyOf = opt('--verify-of');
   const escRaw = opt('--escalation');
   const inCycle = (r: any) => Number(r.cycle ?? 0) === cycle;
@@ -454,6 +477,7 @@ if (command === 'dispatch') {
       r.record_type === 'dispatch' &&
       r.allowed &&
       r.semantic &&
+      !upstreamGates(id, cycle).includes(r.gate) &&
       !r.verify_of &&
       !r.retry &&
       inCycle(r),
@@ -488,7 +512,7 @@ if (command === 'dispatch') {
     reason = allowed ? 're-verification' : 'unknown-finding';
   } else if (semantic && planned) {
     const lastVerdict = gateVerdicts.at(-1)?.verdict;
-    if (gateDispatches.length === 0 && priorAllowedSemantic < p.reviewerBudget) {
+    if (gateDispatches.length === 0 && (upstream || priorAllowedSemantic < p.reviewerBudget)) {
       allowed = true;
       reason = 'on-plan';
     } else if (
@@ -570,7 +594,7 @@ if (command === 'verdict') {
     fail('run id, gate, and valid verdict required');
   const cycle = requestedCycle();
   const p = cyclePlan(loadPlan(id), cycle);
-  if (!p.reviewers.some((r: any) => r.gate === gate) && !auditPlanned(p, gate)) {
+  if (!p.reviewers.some((r: any) => r.gate === gate) && !upstreamGates(id, cycle).includes(gate) && !auditPlanned(p, gate)) {
     console.log('VERDICT=blocked reason=off-plan');
     process.exit(2);
   }
@@ -644,14 +668,16 @@ if (command === 'complete') {
       .filter((r) => r.record_type === 'dispatch' && r.allowed && Number(r.cycle ?? 0) === cycle)
       .map((r) => r.gate),
   );
-  const owed = [
+  const owed = [...new Set([
     ...p.reviewers.map((r: any) => r.gate),
+    ...records(id).filter(r => r.record_type === 'upstream-reviewer' && r.cycle === cycle && r.required !== false).map(r => r.gate),
+    ...(has('--require-native') ? ['native-adversarial'] : []),
     ...audits.filter((g) => (requireAudits && auditPlanned(p, g)) || dispatched.has(g)),
-  ];
+  ])];
   const incomplete = owed
     .filter((gate: string) => {
       const result = rs.filter((r) => r.gate === gate).at(-1);
-      const semantic = p.reviewers.some((r: any) => r.gate === gate);
+      const semantic = upstreamGates(id, cycle).includes(gate) || p.reviewers.some((r: any) => r.gate === gate);
       return !['clean', 'issues_found'].includes(result?.verdict) ||
         (semantic && p.wtree && (result?.wtree !== p.wtree || result?.reviewed_sha !== p.head_sha));
     });

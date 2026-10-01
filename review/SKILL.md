@@ -43,7 +43,7 @@ Finish only when each of these exists (contract v1):
 
 ## Shared preamble (load first)
 
-This skill follows gstack shared preamble `6e5a2408473f` (AskUserQuestion format, voice, writing, completeness and completion rules). A section or subsection here with a shared heading replaces the shared one. Unless the next line loaded that file: if your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `~/.claude/skills/gstack/review/sections/preamble.md` in full before the command below.
+This skill follows gstack shared preamble `bddb4b7ad57b` (AskUserQuestion format, voice, writing, completeness and completion rules). A section or subsection here with a shared heading replaces the shared one. Unless the next line loaded that file: if your Read of that file, headed by this id, is still in context, do not read it again; otherwise Read `~/.claude/skills/gstack/review/sections/preamble.md` in full before the command below.
 
 !`~/.claude/skills/gstack/bin/gstack-skill-load preamble ~/.claude/skills/gstack/review/sections/preamble.md`
 
@@ -878,6 +878,14 @@ Before replying, run greptile-triage.md's **Escalation Detection** to pick Tier 
    The logger computes `snapshot_covered_paths` itself; never carry prior-cycle,
    supplied or prior-record coverage forward or build this proof yourself. Fixed advice
    needs no skip coverage.
+
+Before saving a completed pass, run `gstack-review-budget complete "$RUN_ID" --cycle <n> --require-native`. Missing or unsuccessful governed reviewers make
+COMPLETED=false. On exit 2 retain INCOMPLETE= and STOP with a blocker report after saving incomplete evidence. After edits use `gstack-review-budget rerun-check "$RUN_ID"
+--cycle <n>` and retain fix_cycle/rerun_cause; refresh the manifest and plan
+for the new candidate before repeating the whole upstream pass. The governor's
+REPAIR_CYCLES_MAX is an additional cap; it never increases upstream's three cycles.
+Record findings and resolutions with `gstack-review-budget finding` / `resolve`;
+the policy's BLOCKING/ADVISORY metadata never overrides upstream AUTO-FIX/ASK.
 
 ### 2. Fill the record
 

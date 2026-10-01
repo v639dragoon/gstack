@@ -7,7 +7,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { versionOnlyChange } from '../bin/gstack-evidence';
-const bin = join(import.meta.dir, '..', 'bin', 'gstack-evidence'), dirs: string[] = [];
+const bin = join(import.meta.dir, '..', 'bin/gstack-evidence'), dirs: string[] = [];
 afterAll(() => dirs.forEach((x) => rmSync(x, { recursive: true, force: true })));
 function setup() {
   const d = mkdtempSync(join(tmpdir(), 'ev-repo-')), s = mkdtempSync(join(tmpdir(), 'ev-state-'));
@@ -40,10 +40,13 @@ describe('gstack-evidence check bindings', () => {
     expect(ev(d, s, CHECK).stdout).toContain('EVIDENCE: FRESH');
     const pkg = JSON.parse(require('fs').readFileSync(join(d, 'package.json'), 'utf8'));
     writeFileSync(join(d, 'package.json'), JSON.stringify({ ...pkg, version: '1.0.1' }, null, 2) + '\n');
+    const upstreamArgs = ['check', '--label', 'tests', '--expect-cmd', 'true', '--max-age', '24', '--allow-paths', 'CHANGELOG.md,VERSION,package.json'];
+    expect(ev(d, s, upstreamArgs).stdout).toContain('EVIDENCE: FRESH');
     const bumped = ev(d, s, CHECK);
     expect(bumped.stdout).toContain('EVIDENCE: FRESH');
     expect(bumped.status).toBe(0);
     writeFileSync(join(d, 'package.json'), JSON.stringify({ ...pkg, version: '1.0.1', dependencies: { a: '2' } }, null, 2) + '\n');
+    expect(ev(d, s, upstreamArgs).stdout).toContain('EVIDENCE: STALE');
     const dep = ev(d, s, CHECK);
     expect(dep.stdout).toContain('EVIDENCE: STALE');
     expect(dep.stdout).toContain('package.json');

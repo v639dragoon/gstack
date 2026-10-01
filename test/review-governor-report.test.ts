@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, realpathSyn
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-const bin = join(import.meta.dir, '..', 'bin', 'gstack-outcome-report');
+const bin = join(import.meta.dir, '..', 'bin/gstack-outcome-report');
 describe('outcome report', () => {
   test('joins transcripts, gates, reviews and ledgers with safe recommendations', () => {
     const repo = mkdtempSync(join(tmpdir(), 'report-repo-')),
