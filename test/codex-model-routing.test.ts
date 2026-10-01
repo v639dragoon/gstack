@@ -314,7 +314,7 @@ describe('gstack-codex-model resolve', () => {
     expect(invocations(log).filter((l) => l.startsWith('exec '))).toHaveLength(2);
   });
 
-  test('the default route makes no codex call and names the layered default for the record', () => {
+  test('the default route probes and caches the configured model without adding model flags', () => {
     const { env, cwd, log } = resolverEnv();
     const k = parseQuoted(resolve(env, cwd, ['--model', '', '--effort', 'medium']).stdout);
     expect(k).toMatchObject({
@@ -325,7 +325,58 @@ describe('gstack-codex-model resolve', () => {
       CODEX_MODEL_EXEC_FLAGS: '',
       CODEX_MODEL_REVIEW_FLAGS: '',
     });
-    expect(invocations(log)).toHaveLength(0);
+    expect(invocations(log).filter(l => l.startsWith('debug models'))).toHaveLength(1);
+    expect(invocations(log).filter(l => l.startsWith('exec '))).toHaveLength(1);
+    expect(resolve(env, cwd, ['--effort', 'medium']).status).toBe(0);
+    expect(invocations(log).filter(l => l.startsWith('exec '))).toHaveLength(1);
+  });
+
+  test.each(['without', 'newer', 'unsupported', 'transient'])('unavailable default stops with model/version, never substitutes (%s)', (fault) => {
+    const { env, cwd, log } = resolverEnv(fault === 'without' ? { STUB_CATALOG: 'without' } : { STUB_MODE: fault });
+    writeFileSync(join(env.CODEX_HOME!, 'config.toml'), 'model = "gpt-6-astra"\n');
+    const r = resolve(env, cwd, ['--effort', 'medium']);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toBe('');
+    expect(r.stderr).toContain("default model 'gpt-6-astra'");
+    expect(r.stderr).toContain('codex --version: codex-cli 0.149.0');
+    expect(r.stderr).toContain('No model substituted');
+    if (fault === 'without') {
+      expect(invocations(log).filter(l => l.startsWith('exec '))).toHaveLength(0);
+      expect(resolve(env, cwd, ['--effort', 'medium']).status).toBe(1);
+      expect(invocations(log).filter(l => l.startsWith('debug models'))).toHaveLength(1);
+    }
+  });
+
+  test('trusted root-to-cwd config wins; top-level TOML only, with user fallback when untrusted', () => {
+    const { env, cwd } = resolverEnv();
+    const userConfig = join(env.CODEX_HOME!, 'config.toml');
+    // A standalone Git fixture owns project trust and all config writes.
+    expect(spawnSync('git', ['init', '-b', 'main'], { cwd, env, timeout: 30_000 }).status).toBe(0);
+    const root = require('fs').realpathSync(cwd);
+    writeFileSync(userConfig, `model = 'gpt-5.6-sol'\n[projects.${JSON.stringify(root)}]\ntrust_level = "trusted"\n`);
+    mkdirSync(join(cwd, '.codex'));
+    writeFileSync(join(cwd, '.codex/config.toml'), "model = 'gpt-6-astra' # literal TOML string\n");
+    expect(parseQuoted(resolve(env, cwd, ['--effort', 'medium']).stdout).CODEX_MODEL).toBe('gpt-6-astra');
+    const nested = join(cwd, 'nested');
+    mkdirSync(join(nested, '.codex'), { recursive: true });
+    writeFileSync(join(nested, '.codex/config.toml'), 'model = "gpt-5.6-sol"\n');
+    expect(parseQuoted(resolve(env, nested, ['--effort', 'medium']).stdout).CODEX_MODEL).toBe('gpt-5.6-sol');
+    writeFileSync(join(nested, '.codex/config.toml'), '[unrelated]\nmodel = "bogus-table-model"\n');
+    expect(parseQuoted(resolve(env, nested, ['--effort', 'medium']).stdout).CODEX_MODEL).toBe('gpt-6-astra');
+    writeFileSync(userConfig, `model = 'gpt-5.6-sol'\n[projects.${JSON.stringify(root)}]\ntrust_level = "untrusted"\n`);
+    expect(parseQuoted(resolve(env, nested, ['--effort', 'medium']).stdout).CODEX_MODEL).toBe('gpt-5.6-sol');
+  });
+
+  test('missing configured default and missing auth stop without any access round trip', () => {
+    const { env, cwd, log } = resolverEnv();
+    writeFileSync(join(env.CODEX_HOME!, 'config.toml'), '[unrelated]\nmodel = "gpt-6-astra"\n');
+    expect(resolve(env, cwd, ['--effort', 'medium']).stderr).toContain('no top-level model configured');
+    writeFileSync(join(env.CODEX_HOME!, 'config.toml'), 'model = "gpt-5.6-sol"\n');
+    require('fs').unlinkSync(join(env.CODEX_HOME!, 'auth.json'));
+    const r = resolve({ ...env, CODEX_API_KEY: '', OPENAI_API_KEY: '' }, cwd, ['--effort', 'medium']);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain('no runnable, authenticated Codex CLI');
+    expect(invocations(log).filter(l => l.startsWith('exec '))).toHaveLength(0);
   });
 
   test('effort above high is refused, never resolved automatically', () => {

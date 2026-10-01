@@ -6,12 +6,18 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 const bin = join(import.meta.dir, '..', 'bin', 'gstack-codex-model'), gate = join(import.meta.dir, '..', 'bin', 'gstack-gate-log'), dirs: string[] = [];
-// A `codex` shim that fails every probe sits FIRST on PATH, so a named model
-// always takes the deterministic no-auth fallback and the suite never touches
-// the real CLI or the network.
+// A fixture-only Codex catalog supports the default and rejects named routes.
+// No test touches the real CLI, ambient auth/state, or the network.
 const shim = mkdtempSync(join(tmpdir(), 'voice-shim-'));
 dirs.push(shim);
-writeFileSync(join(shim, 'codex'), '#!/bin/sh\nexit 1\n');
+writeFileSync(join(shim, 'codex'), `#!/bin/sh
+case "$1" in
+  --version) echo codex-fixture; exit 0 ;;
+  debug) echo '{"models":[{"slug":"gpt-5.6-sol"}]}'; exit 0 ;;
+  exec) case "$*" in *"--model gpt-5.6-sol "*) echo OK; exit 0 ;; esac ;;
+esac
+exit 1
+`);
 require('fs').chmodSync(join(shim, 'codex'), 0o755);
 afterAll(() => dirs.forEach((x) => rmSync(x, { recursive: true, force: true })));
 function repo(policy: any) {
@@ -19,13 +25,16 @@ function repo(policy: any) {
   dirs.push(d);
   spawnSync('git', ['init', '-b', 'main'], { cwd: d, timeout: 30_000 });
   mkdirSync(join(d, '.codex'));
+  mkdirSync(join(d, 'codex-home'));
+  writeFileSync(join(d, 'codex-home/auth.json'), '{}');
+  writeFileSync(join(d, 'codex-home/config.toml'), 'model = "gpt-5.6-sol"\n');
   writeFileSync(join(d, '.codex', 'config.toml'), 'model = "gpt-5.6-sol"\nmodel_reasoning_effort = "medium"\n');
   if (policy) writeFileSync(join(d, '.gstack-policy.json'), JSON.stringify(policy));
   return d;
 }
 const kv = (out: string) => Object.fromEntries(out.trim().split('\n').map((l) => { const i = l.indexOf('='); return [l.slice(0, i), l.slice(i + 1).replace(/^'|'$/g, '')]; }));
 function resolve(d: string, args: string[], env: any = {}) {
-  return spawnSync(bin, ['resolve', ...args], { cwd: d, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GSTACK_CODEX_MODEL: '', PATH: `${shim}:${process.env.PATH}`, ...env } });
+  return spawnSync(bin, ['resolve', ...args], { cwd: d, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GSTACK_CODEX_MODEL: '', CODEX_HOME: join(d, 'codex-home'), GSTACK_HOME: join(d, 'state'), PATH: `${shim}:${process.env.PATH}`, ...env } });
 }
 describe('gstack-codex-model resolve --voice', () => {
   test('unrouted voice = project default at medium, never the frontier model', () => {
@@ -36,7 +45,7 @@ describe('gstack-codex-model resolve --voice', () => {
     expect(r.CODEX_EFFORT).toBe('medium');
     expect(r.CODEX_VOICE).toBe('design-review');
   });
-  test('policy names model and effort per voice; no CLI -> logged fallback to the default route', () => {
+  test('policy names model and effort per voice; unavailable named model logs fallback to the default route', () => {
     const d = repo({ version: 1, routing: { models: { 'outside-voice': { 'design-review': { model: 'gpt-6-astra', effort: 'high' }, 'plan-review': { effort: 'low' } } } } });
     const r = resolve(d, ['--voice', 'design-review']);
     const v = kv(r.stdout);
