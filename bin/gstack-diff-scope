@@ -130,6 +130,7 @@ for f in ${FILES_LIST[@]+"${FILES_LIST[@]}"}; do
 
   # Config
   case "$f" in
+    .env.example) m_config=true ;;
     package.json|package-lock.json|yarn.lock|bun.lock|bun.lockb) m_config=true ;;
     Gemfile|Gemfile.lock) m_config=true ;;
     *.yml|*.yaml) m_config=true ;;

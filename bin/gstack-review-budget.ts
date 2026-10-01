@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { policyFlags, FLAG_NAMES, surfaceFlags, readPolicy, globs, DEFAULT_ENV_SURFACES, DEFAULT_TEST_GLOBS, auditReusable, gitRead } from '../lib/review-policy';
 
 const argv = process.argv.slice(2);
 const command = argv.shift() || '';
@@ -135,6 +136,34 @@ const priorRunFinished = (ledger: any[], plan: any): boolean => {
   return !!completion || cleanVerifications > 0;
 };
 
+if (command === 'policy-flags') {
+  const policy = readPolicy(repoRoot);
+  const flags = policyFlags(policy);
+  let qaSmoke = true;
+  if (argv[0] && !argv[0].startsWith('--')) {
+    try {
+      let base: string;
+      try { base = gitRead(repoRoot, ['merge-base', `origin/${argv[0]}`, 'HEAD']).trim(); }
+      catch { base = gitRead(repoRoot, ['merge-base', argv[0], 'HEAD']).trim(); }
+      const files = [...gitRead(repoRoot, ['diff', '--no-ext-diff', '--no-renames', '--name-only', '-z', base]).split('\0'),
+        ...gitRead(repoRoot, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0')].filter(Boolean);
+      qaSmoke = surfaceFlags(policy, files, 'D', {}).qaSmoke;
+    } catch { /* Unknown scope keeps smoke required. */ }
+  }
+  if (has('--json')) console.log(JSON.stringify({ ...flags, qaSmoke }));
+  else {
+    for (const [key, value] of Object.entries(flags)) console.log(`${FLAG_NAMES[key]}=${value}`);
+    console.log(`QA_SMOKE=${qaSmoke}`);
+  }
+  process.exit(0);
+}
+const currentWtree = () => {
+  const result = spawnSync(path.join(import.meta.dir, 'gstack-wtree'), [], {
+    cwd: repoRoot, encoding: 'utf8', timeout: 30_000,
+  });
+  return result.status === 0 && !result.error ? result.stdout.trim() : null;
+};
+
 if (command === 'plan') {
   const manifestFile = argv[0];
   if (!manifestFile) fail('manifest path required');
@@ -222,7 +251,7 @@ if (command === 'plan') {
   const routing = policyRaw?.routing;
   if (routing && typeof routing === 'object') {
     ignored = Object.keys(routing).filter(
-      (k) => !['budgets', 'repair_cycles', 'escalation_kinds', 'models'].includes(k),
+      (k) => !['budgets', 'repair_cycles', 'escalation_kinds', 'models', 'passes'].includes(k),
     );
     const proposed = routing.budgets?.[tier];
     if (tier !== 'D' && Number.isInteger(proposed) && proposed >= 1)
@@ -311,7 +340,10 @@ if (command === 'plan') {
   const codexModel: string | null = codexSlot?.model ?? null;
   const codexModelSource = codexModel ? 'policy' : 'default';
   const codexEffort: string | null = codexSlot?.model_or_effort ?? null;
-  const docVoice = true; // D4: upstream documentation voice is default-on (spawned children still defer to the parent).
+  const flags = policyFlags(policyRaw);
+  const surfaces = surfaceFlags(policyRaw, (m.files || []).map((f: any) => f.path), tier, m.scope);
+  const docRelease = !flags.docReleaseByImpact || ['C', 'D'].includes(tier) || m.routing.doc_impact_would_dispatch === true;
+  const docVoice = flags.codexDocVoice && docRelease;
   // Whole-workflow accounting (dohma harness pass 2026-09-15): every AI pass
   // this run may dispatch is declared ONCE here with its purpose, model,
   // effort, budget and retry policy. The reviewer slots are the same objects
@@ -329,7 +361,7 @@ if (command === 'plan') {
     })),
     { gate: 'coverage-audit', purpose: 'test coverage audit', model: 'sonnet', effort: 'agent-default', budget: 1, retry: 'inline-fallback', planned: final },
     { gate: 'plan-completion', purpose: 'plan completion audit', model: 'sonnet', effort: 'agent-default', budget: 1, retry: 'inline-fallback', planned: final },
-    { gate: 'doc-release', purpose: 'documentation audit', model: 'sonnet', effort: 'agent-default', budget: 1, retry: 'one-repair-or-re-audit', planned: true },
+    { gate: 'doc-release', purpose: 'documentation audit', model: 'sonnet', effort: 'agent-default', budget: 1, retry: 'one-repair-or-re-audit', planned: docRelease },
     { gate: 'outside-voice:doc-release', purpose: 'documentation review voice', model: 'routed:outside-voice', effort: 'medium', budget: 1, retry: 'none', planned: docVoice },
   ];
   const plan: any = {
@@ -353,12 +385,11 @@ if (command === 'plan') {
     reviewerBudget,
     reviewerSpecs,
     reviewers,
-    adversarialClaude: true,
-    codexChallenge: true,
-    redTeamLocTrigger: true,
+    ...flags,
+    ...surfaces,
     coverageAudit: final,
     planCompletion: final,
-    docRelease: true,
+    docRelease,
     codexDocVoice: docVoice,
     passes,
     wtree: m.wtree ?? null,
@@ -366,7 +397,7 @@ if (command === 'plan') {
     merge_base: m.merge_base ?? null,
     policy_sha256: m.policy?.sha256 ?? null,
     repairCyclesMax: cycles,
-    autofixInformational: false,
+    autofixInformational: flags.autofixInformational,
     maxAdvisories: 5,
     blockingSeverities: blocking,
     blockingCategories,
@@ -382,7 +413,11 @@ if (command === 'plan') {
     files: m.files || [],
     scope: m.scope || {},
     authSurfaces: policyRaw?.auth_surfaces || [],
-    dSurfaces: policyRaw?.d_surfaces || [],
+    dSurfaces: globs(policyRaw?.d_surfaces),
+    dSurfaceExceptions: globs(policyRaw?.d_surface_exceptions),
+    envSurfaces: globs(policyRaw?.env_surfaces, DEFAULT_ENV_SURFACES),
+    testGlobs: globs(policyRaw?.test_globs, DEFAULT_TEST_GLOBS),
+    policy: policyRaw || {},
     createdAt: now(),
     policyRoutingIgnored: ignored,
   };
@@ -405,9 +440,11 @@ if (command === 'plan') {
       ['OUTCOME_MISSING', plan.outcomeMissing],
       ['REVIEWER_BUDGET', reviewerBudget],
       ['REVIEWERS', reviewerSpecs.join(',')],
-      ['ADVERSARIAL_CLAUDE', false],
-      ['CODEX_CHALLENGE', false],
-      ['RED_TEAM_LOC_TRIGGER', false],
+      ...Object.entries(FLAG_NAMES).map(([key, name]) => [name, plan[key]] as [string, any]),
+      ['QA_SMOKE', plan.qaSmoke],
+      ['FULL_LANES_REQUIRED', plan.fullLanesRequired],
+      ['BUILD_GATE', plan.buildGate],
+      ['CI_BACKSTOP', plan.ciBackstop],
       ['COVERAGE_AUDIT', plan.coverageAudit],
       ['PLAN_COMPLETION', plan.planCompletion],
       ['DOC_RELEASE', plan.docRelease],
@@ -417,7 +454,6 @@ if (command === 'plan') {
       ['CARRIED_REPAIR_CYCLES', carriedCycles],
       ['CARRIED_FROM', carriedFrom ?? ''],
       ...(resetRequested ? [['REPAIR_BUDGET_RESET', resetReason]] as [string, any][] : []),
-      ['AUTOFIX_INFORMATIONAL', false],
       ['MAX_ADVISORIES', 5],
       ['BLOCKING_SEVERITIES', blocking.join(',')],
       ['BLOCKING_CATEGORIES', blockingCategories.join(',')],
@@ -431,6 +467,7 @@ if (command === 'plan') {
       ['POLICY_MODEL_IGNORED', modelIgnored.join(',')],
     ];
     for (const [k, v] of kv) console.log(`${k}=${v}`);
+    if (!plan.docRelease) console.log('Documentation: skipped (tier A/B, no doc-impact)');
   }
   process.exit(0);
 }
@@ -440,11 +477,22 @@ if (command === 'plan') {
 const upstreamGates = (id: string, cycle: number): string[] => [...new Set(records(id)
   .filter(r => r.record_type === 'upstream-reviewer' && r.cycle === cycle)
   .map(r => r.gate))];
+function gateDisabled(p: any, gate: string): boolean {
+  return gate === 'native-adversarial' && p.adversarialClaude === false ||
+    gate === 'upstream-outside:challenge' && p.codexChallenge === false ||
+    gate === 'upstream-outside:structured' && p.upstreamStructured === false ||
+    gate.startsWith('upstream-specialist:') && p.upstreamSpecialists === false ||
+    gate === 'outside-voice:doc-release' && p.codexDocVoice === false;
+}
 if (command === 'register-upstream') {
   const [id, gate] = argv;
   if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|red-team))$/.test(gate))
     fail('known upstream-required reviewer gate required');
   const cycle = requestedCycle(), p = cyclePlan(loadPlan(id), cycle);
+  if (gateDisabled(p, gate) || gate === 'upstream-specialist:red-team' && opt('--trigger') === 'loc' && p.redTeamLocTrigger === false) {
+    console.log('REGISTER=blocked reason=policy-disabled');
+    process.exit(2);
+  }
   if (!upstreamGates(id, cycle).includes(gate)) append(id, {
     record_type: 'upstream-reviewer', run_id: id, cycle, gate,
     required: !has('--optional'),
@@ -464,6 +512,10 @@ if (command === 'dispatch') {
   const cycle = requestedCycle();
   const p = cyclePlan(rootPlan, cycle);
   const old = records(id);
+  if (gateDisabled(p, gate)) {
+    console.log('DISPATCH=blocked reason=policy-disabled');
+    process.exit(2);
+  }
   const upstream = upstreamGates(id, cycle).includes(gate);
   const semantic = upstream ||
     ['codex-structured', 'red-team', 'adversarial-claude', 'codex-challenge'].includes(gate) ||
@@ -534,6 +586,29 @@ if (command === 'dispatch') {
       'plan-completion': p.planCompletion,
       'doc-release': p.docRelease,
     };
+    // Within one invocation only. Copy the accepted inputs/results into this
+    // cycle before returning a satisfied blocked line; never reuse failed work.
+    if (flag[gate] && p.auditReuse) {
+      const current = currentWtree();
+      const prior = old.filter(r => r.record_type === 'verdict' && r.gate === gate &&
+        Number(r.cycle ?? 0) <= cycle).at(-1);
+      const dispatch = prior && old.filter(r => r.record_type === 'dispatch' && r.allowed &&
+        r.gate === gate && Number(r.cycle ?? 0) === Number(prior.cycle ?? 0)).at(-1);
+      if (current && prior && dispatch && ['clean', 'issues_found'].includes(prior.verdict) &&
+        prior.policy_sha256 === p.policy_sha256 && prior.base === p.base &&
+        (dispatch.inputs_hash ?? null) === opt('--inputs-hash') &&
+        auditReusable(repoRoot, gate, prior.verdict, prior.wtree, current, p.policy)) {
+        const reuse = { run_id: id, cycle, reused_from: `${id}:${prior.cycle}`, reused_ts: now(),
+          wtree: current, reviewed_sha: p.head_sha, prior_wtree: prior.wtree };
+        // Already copied/accepted in this cycle: preserve its original record.
+        if (Number(prior.cycle ?? 0) !== cycle || prior.wtree !== current) {
+          append(id, { ...dispatch, ...reuse, reason: 'reused' });
+          append(id, { ...prior, ...reuse });
+        }
+        console.log('DISPATCH=blocked reason=reused');
+        process.exit(2);
+      }
+    }
     allowed = !!flag[gate];
     reason = allowed
       ? 'on-plan'
@@ -573,6 +648,9 @@ if (command === 'dispatch') {
     reason,
     escalation,
     semantic,
+    inputs_hash: opt('--inputs-hash'),
+    policy_sha256: p.policy_sha256,
+    base: p.base,
     verify_of: verifyOf || undefined,
     retry: retry || undefined,
     cycle,
@@ -629,8 +707,10 @@ if (command === 'verdict') {
     gate,
     verdict,
     // Bind the result to its actual dispatch, never a subsequently refreshed plan.
-    wtree: current.filter(r => r.record_type === 'dispatch' && r.allowed && r.gate === gate && Number(r.cycle ?? 0) === cycle).at(-1)?.wtree ?? null,
+    wtree: p.auditReuse && auditPlanned(p, gate) ? currentWtree() : current.filter(r => r.record_type === 'dispatch' && r.allowed && r.gate === gate && Number(r.cycle ?? 0) === cycle).at(-1)?.wtree ?? null,
     reviewed_sha: current.filter(r => r.record_type === 'dispatch' && r.allowed && r.gate === gate && Number(r.cycle ?? 0) === cycle).at(-1)?.reviewed_sha ?? null,
+    policy_sha256: p.policy_sha256,
+    base: p.base,
     critical: count('--critical'),
     informational: count('--informational'),
     ts: now(),
@@ -671,7 +751,7 @@ if (command === 'complete') {
   const owed = [...new Set([
     ...p.reviewers.map((r: any) => r.gate),
     ...records(id).filter(r => r.record_type === 'upstream-reviewer' && r.cycle === cycle && r.required !== false).map(r => r.gate),
-    ...(has('--require-native') ? ['native-adversarial'] : []),
+    ...(has('--require-native') && p.adversarialClaude !== false ? ['native-adversarial'] : []),
     ...audits.filter((g) => (requireAudits && auditPlanned(p, g)) || dispatched.has(g)),
   ])];
   const incomplete = owed
@@ -708,7 +788,7 @@ if (command === 'resume') {
   const rootPlan = loadPlan(id);
   const p = cyclePlan(rootPlan, 0);
   const key = (x: any) =>
-    JSON.stringify([x.wtree, x.head_sha, x.base, x.merge_base, x.policy_sha256, x.effectiveTier, x.reviewerSpecs, x.sliceKind, x.coverageAudit, x.planCompletion, x.docRelease]);
+    JSON.stringify([x.wtree, x.head_sha, x.base, x.merge_base, x.policy_sha256, x.effectiveTier, x.reviewerSpecs, x.sliceKind, x.coverageAudit, x.planCompletion, x.docRelease, x.adversarialClaude, x.codexChallenge, x.upstreamSpecialists, x.upstreamStructured, x.codexDocVoice]);
   const reusable = ['clean', 'issues_found'];
   let source: any = null;
   if (p.wtree && fs.existsSync(budgetDir)) {
@@ -817,8 +897,8 @@ if (command === 'rerun-check') {
   for (const x of rows) {
     if (!original.has(x.p)) triggers.push(`new-file:${x.p}`);
     if (matchAny(x.p, p.authSurfaces)) triggers.push(`auth-surface:${x.p}`);
-    if (matchAny(x.p, p.dSurfaces)) triggers.push(`d-surface:${x.p}`);
-    if (matchAny(x.p, ['lib/env/**', '.env.example'])) triggers.push(`env:${x.p}`);
+    if (matchAny(x.p, p.dSurfaces) && !(p.dSurfaceExceptions ?? []).includes(x.p)) triggers.push(`d-surface:${x.p}`);
+    if (matchAny(x.p, p.envSurfaces ?? DEFAULT_ENV_SURFACES)) triggers.push(`env:${x.p}`);
     if (matchAny(x.p, ['supabase/migrations/**'])) triggers.push(`migration:${x.p}`);
     if (matchAny(x.p, ['app/api/**'])) triggers.push(`api:${x.p}`);
   }
