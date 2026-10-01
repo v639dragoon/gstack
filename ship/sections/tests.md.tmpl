@@ -17,6 +17,8 @@ timeout-only fix and three other routine stops go through `gstack-no-stop record
 `gstack-pregate clear` or, under a user cap, `--remote --spend-cap <usd>`. Rerun
 after the final stamp (`gstack-ship-release finish` does); Step 18 refuses a stale one.
 
+Read TESTING.md's `Local lanes` and `Full lanes`. Before selecting lanes, run `gstack-diff-manifest <base>` and `gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host {{HOST_ID}}` from the installed bin; retain RUN_ID and all printed literals. Run Local lanes always. When `FULL_LANES_REQUIRED=false`, skip Full lanes (full suite/build) and record `build: DEFERRED to CI check {CI_BACKSTOP}`; never a silent pass. When true, run Full lanes too. Repos without policy lanes retain every applicable suite below.
+
 Use the project's test commands discovered in Step 4 or documented in CLAUDE.md/AGENTS.md. Run every applicable suite; do not assume Rails or Vitest. Pass each as `--lane <label>=<command>`; use the same lane labels and exact commands again in Step 16.
 
 <a id="ci-carry"></a>

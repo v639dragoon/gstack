@@ -265,6 +265,13 @@ if (!env.GDM_POLICY_PATH) {
   tierSource = 'policy';
   routingTier = tier as 'A' | 'B' | 'C' | 'D';
   routingRule = tierRule!;
+  // The new CONFIG classifier must not silently demote legacy .env.example
+  // scope-error routing. Only explicit D3 surface policy opts into that routing.
+  if (filePaths.includes('.env.example') &&
+      ![pol!.c_surfaces, pol!.d_surface_exceptions, pol!.env_surfaces].some(Array.isArray)) {
+    routingTier = 'D';
+    routingRule = 'legacy-env-example (fail-upward)';
+  }
   if (scope.migrations === true) {
     routingTier = 'D';
     routingRule = 'scope:migrations (critical surface)';

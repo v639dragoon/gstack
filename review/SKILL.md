@@ -255,6 +255,8 @@ Read `~/.claude/skills/gstack/review/checklist.md`.
 
 ## Step 2.5: Check for review bot comments
 
+Read `~/.claude/skills/gstack/bin/gstack-review-budget policy-flags <base>` and carry its literals until Step 4.5's plan refresh. When `GREPTILE=false`, skip this pass and Greptile resolution below: no fetch, dispatch, replies or fix proposals.
+
 Read `~/.claude/skills/gstack/review/greptile-triage.md` and follow its fetch, filter, classify and **escalation detection** steps.
 
 **A skip, an error or zero comments:** continue (name an error's reason); review works without bots.
@@ -473,6 +475,8 @@ Sanitize every query before it leaves the machine: strip hostnames, IPs, file pa
 > **STOP.** Before any probe, including plan checks, complete the ordered scope/method Reads in earlier responses. Never batch a probe (capture, guard start, plan check) with a Read.
 Step 4 is read-only: defer charters, setup and probes to Step 4.7.
 
+Read `~/.claude/skills/gstack/bin/gstack-review-budget policy-flags <base>` now and carry `QA_SMOKE`; this is manifest-free and precedes the Step 4.5 plan.
+
 1. From the installed /review SKILL.md's directory, choose one path:
 - If the caller directory is `review`, Read `../qa/sections/exploratory.md` in full.
 - If the caller directory is prefixed `gstack-review`, use `../gstack-qa/sections/exploratory.md` instead and read it in full.
@@ -619,6 +623,8 @@ critical finding or another writer during collection. Skip silently if no docs e
 
 ### Step 4.7: Exploratory QA (before Fix-First)
 
+When `QA_SMOKE=false`, skip this pass's exploratory smoke, setup and guard only; required plan checks still run with their methods/preflight. Report smoke as policy-skipped, never a not-run required probe; it does not block the parent completion gate.
+
 Only the parent runs report-only discovery.
 Never overwrite another run's reports. Batch only independent Reads.
 
@@ -755,6 +761,8 @@ or missing-reviewer rules.
 
 ### Step 5a: Classify each finding
 
+When `AUTOFIX_INFORMATIONAL=false`, override the heuristic below: BLOCKING means severity in `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`; everything else is ADVISORY. ADVISORY findings are NEVER fixed: no AUTO-FIX and no ASK. List at most `MAX_ADVISORIES`, sorted by confidence, under `## Advisories (not fixed)`. Advisory test stubs are listed, never asked. Only BLOCKING findings enter the normal fix/ASK and regression flow below.
+
 For each finding, classify as AUTO-FIX or ASK per the Fix-First Heuristic in
 checklist.md. Critical findings lean toward ASK; informational toward AUTO-FIX.
 
@@ -826,6 +834,8 @@ Verify claims or flag them as unknown; "this looks fine" is not evidence.
 
 ### Review bot comment resolution
 
+When `GREPTILE=false`, skip this pass; proceed to persistence.
+
 After outputting your own findings, if bot comments were classified in Step 2.5:
 
 Use greptile-triage.md's Output Format summary in your header and its History File Writes for each record.
@@ -848,6 +858,8 @@ Before replying, run greptile-triage.md's **Escalation Detection** to pick Tier 
 ---
 
 ## Step 5.8: Persist Eng Review result
+
+When `ADVERSARIAL_CLAUDE=false`, skip native receipt/completion requirements below; completed core and governor reviewers plus all required plan checks determine completion. Policy-skipped smoke is never a not-run required probe. When `AUTOFIX_INFORMATIONAL=false`, the Step 5a advisory override also controls persistence and action counts.
 
 ### 1. Re-review after edits
 
@@ -885,7 +897,7 @@ COMPLETED=false. On exit 2 retain INCOMPLETE= and STOP with a blocker report aft
 for the new candidate before repeating the whole upstream pass. The governor's
 REPAIR_CYCLES_MAX is an additional cap; it never increases upstream's three cycles.
 Record findings and resolutions with `gstack-review-budget finding` / `resolve`;
-the policy's BLOCKING/ADVISORY metadata never overrides upstream AUTO-FIX/ASK.
+when `AUTOFIX_INFORMATIONAL=true`, the policy's BLOCKING/ADVISORY metadata never overrides upstream AUTO-FIX/ASK.
 
 ### 2. Fill the record
 

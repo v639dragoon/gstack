@@ -16,6 +16,8 @@ or a granted fix-check (item 3.5, then Step 11.5) follows voices.
 
 ## Step 11: Adversarial review
 
+The carried plan literals govern the passes below. When `ADVERSARIAL_CLAUDE=false`, skip the native pass, its registration, receipt and native-completion requirement. When `CODEX_CHALLENGE=false` or `UPSTREAM_STRUCTURED=false`, skip that upstream outside pass; if both are false skip this section's outside preflight too. The governor codex-structured slot retains its own required routing and preflight.
+
 Unavailable or disabled outside coverage stays explicit.
 
 **Detect diff size:**
@@ -94,6 +96,8 @@ Branch on the echoed `CODEX_MODE`:
 
 ### Claude adversarial subagent (on `DISPATCH: adversarial-native`)
 
+When `ADVERSARIAL_CLAUDE=false`, skip this pass: no Agent, registration or PASS_START. Continue to the enabled outside passes and governor slot.
+
 
 
 Before dispatch, run `~/.claude/skills/gstack/bin/gstack-review-log --start adversarial-review`
@@ -126,6 +130,8 @@ The upstream one-corrected-attempt recovery applies; terminal failure never cert
 ---
 
 ### Codex adversarial challenge (on `DISPATCH: outside-voice`, when `CODEX_MODE` is `ready` or `unverified`)
+
+When `CODEX_CHALLENGE=false`, skip this pass: no outside invocation or registration; continue to structured review.
 
 On `DISPATCH: outside-voice`, if `CODEX_MODE` is `ready` or `unverified`:
 
@@ -206,6 +212,8 @@ Other modes skip it; the native pass follows its own DISPATCH line.
 ---
 
 ### Codex structured review (on `DISPATCH: outside-voice`, 200+ lines)
+
+When `UPSTREAM_STRUCTURED=false`, skip this pass even for large diffs or user force selection. The separate governor codex-structured slot still runs when planned.
 
 On `DISPATCH: outside-voice`, if `CODEX_MODE` is `ready` or `unverified` and either `DIFF_TOTAL >= 200` or the user requested the override above:
 
@@ -529,6 +537,8 @@ Failures and timeouts are missing coverage, never a clean result. Remove
 governor completion gate at Step 11.5 uses `INCOMPLETE=` means STOP with a blocker report.
 
 ### Finish the adversarial phase
+
+When `ADVERSARIAL_CLAUDE=false`, skip the native-incomplete decision below. Use governor completion for required reviewer coverage; enabled passes and supported findings retain the remaining fix/completion decisions.
 
 Apply Step 9.3's matching procedure before testing the actionable fix queue below.
 Only unmatched or reopened findings remain queued. Unvalidated historical Skips

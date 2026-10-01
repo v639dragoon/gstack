@@ -44,7 +44,9 @@ export const FLAG_NAMES: Record<string, string> = {
   autofixInformational: 'AUTOFIX_INFORMATIONAL', docReleaseByImpact: 'DOC_RELEASE_BY_IMPACT',
 };
 export function surfaceFlags(policy: any, files: string[], tier: string, scope: any) {
-  const full = !policy?.lanes || tier === 'D' || scope?.config === true ||
+  const paths = policy?.lanes?.full_paths;
+  const full = !Array.isArray(paths) || !paths.every((g: any) => typeof g === 'string' && g.length > 0) ||
+    tier === 'D' || scope?.config === true ||
     files.some(p => matchAny(p, globs(policy.lanes.full_paths)));
   // A missing CI backstop cannot silently defer a deterministic build.
   const ci = typeof policy?.lanes?.ci_backstop === 'string' ? policy.lanes.ci_backstop.trim() : '';
