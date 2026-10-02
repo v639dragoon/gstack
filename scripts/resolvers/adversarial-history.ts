@@ -14,7 +14,7 @@ its original token. If it never started because it was unavailable, disabled or
 size-gated, omit \`--finish PASS_START\` and set completed/converged false.
 Do not create or borrow a token just to save a result.
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
 \`\`\`
 PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
 Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.8'} result:

@@ -2321,7 +2321,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
 
 6. Persist the review result to the review log:
 ```bash
-$GSTACK_ROOT/bin/gstack-review-log '{"skill":"review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
+$GSTACK_ROOT/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
 ```
 - `TIMESTAMP`: ISO 8601. `STATUS`: `unavailable` for missing dispatched reviewer output;
   otherwise `clean` only for completed coverage with no
@@ -2748,7 +2748,7 @@ its original token. If it never started because it was unavailable, disabled or
 size-gated, omit `--finish PASS_START` and set completed/converged false.
 Do not create or borrow a token just to save a result.
 ```bash
-$GSTACK_ROOT/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"codex","outside_provider":"claude-code","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+$GSTACK_ROOT/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"SOURCE","host":"codex","outside_provider":"claude-code","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
 ```
 PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
 Fill fields from this attempt, not the parent's Step 9.4 result:

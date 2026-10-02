@@ -163,7 +163,9 @@ describe('caller native-event observer controls', () => {
         .replace('"commit":"COMMIT"', `"commit":"'"$(git rev-parse --short HEAD)"'"`)
         .replace('"STATUS"', '"issues_found"').replace(/"issues_found":N/, '"issues_found":1').replace('"critical":N', '"critical":1').replace('"informational":N', '"informational":0')
         .replace('SCORE', '10.0').replace('SPECIALISTS_JSON', '{}').replace('FINDINGS_JSON', '[{"fingerprint":"scale.ts:3:functional-contract","severity":"CRITICAL","action":"ask-pending"}]')
-        .replace('COMPLETED', 'false').replace('CONVERGED', 'false').replace('CYCLES', '0').replace('REVIEW_START', 'native-token');
+        .replace('COMPLETED', 'false').replace('CONVERGED', 'false').replace('CYCLES', '0').replace('REVIEW_START', 'native-token')
+        // Fork: the review governor's run_id/cycle fields ride after timestamp; a real run fills them too.
+        .replace('"run_id":"{RUN_ID}"', '"run_id":"native-run"').replace('"cycle":{N}', '"cycle":0');
       expect(errorsFor(filled)).toEqual([]);
       const fixture = createQaCallerFixture(caller === 'review' ? 'review-exploratory-small-cli' : 'ship-exploratory-small-cli', { installRuntime: false });
       try { expect(qaCallerSessionOptions(fixture, 'free-control').prompt).toContain(callerReviewRecordTemplate(fixture)); } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
