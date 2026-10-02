@@ -910,7 +910,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
 
 6. Persist the review result to the review log:
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES,"run_id":"{RUN_ID}","cycle":{N},"pass":PASS,"review_scope":"SCOPE","range_base":RANGE_BASE_OR_NULL}' --finish REVIEW_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES,"pass":PASS,"review_scope":"SCOPE","range_base":RANGE_BASE_OR_NULL}' --finish REVIEW_START
 ```
 - `TIMESTAMP`: ISO 8601. `STATUS`: `unavailable` for missing dispatched reviewer output,
   else `clean` only for completed coverage with no unresolved non-advisory defects,
