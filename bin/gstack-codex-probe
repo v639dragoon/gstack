@@ -434,7 +434,8 @@ _gstack_codex_model_available() {
     ''|*[!A-Za-z0-9._-]*) echo "MODEL_UNAVAILABLE"; echo "HINT: model slug missing or malformed."; return 1 ;;
   esac
   local _codex_home="${CODEX_HOME:-$HOME/.codex}"
-  local _gstack_home="${GSTACK_HOME:-$HOME/.gstack}"
+  local _gstack_home
+  _gstack_home="$(. "${BASH_SOURCE[0]%/*}/gstack-state-root.sh" 2>/dev/null && gstack_state_root)" || return 3
   local _cache="$_gstack_home/.codex-model-available-$_slug"
   local _cfg_m _auth_m _ver _sig
   _cfg_m=$(stat -c %Y "$_codex_home/config.toml" 2>/dev/null || stat -f %m "$_codex_home/config.toml" 2>/dev/null || echo 0)

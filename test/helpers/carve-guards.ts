@@ -153,7 +153,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     },
     behavioral: 'external',
     externalTest: 'test/skill-e2e-ship-section-loading.test.ts',
-    maxSkeletonBytes: 85_260, // C3: C2 83,933 + 1,310 carry bytes = 85,243; D3: 82,860 + 1,073 gating bytes = 83,933; D4: upstream 78,373 + retained governor/binding/post-merge guards 4,487 = 82,860 (v1.91.9); pinned behavior retained.
+    maxSkeletonBytes: 85_900, // upstream v1.91.12 78,983 + retained fork paragraphs 6,870 = 85,853 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 181_000, // token-reduction Phases 1-2 (v1.69.x branch); measured union 201,464
     mustContain: ['VERSION', 'CHANGELOG', 'review', 'merge', 'PR'],
     // v1.58.5.0: pre-push-guard install (#2077) stacks on the shared first-run-guidance preamble.
@@ -482,7 +482,7 @@ do not launch the downstream skill or open a browser.`,
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 78_180, // C3: C2 76,595 + 1,580 carry bytes = 78,175; D3: 75,048 + 1,547 policy-gating bytes = 76,595; D4: upstream 74,078 + retained governor/model/queue guards 970 = 75,048 (v1.91.9); pinned behavior retained.
+    maxSkeletonBytes: 79_000, // upstream v1.91.12 74,881 + retained fork paragraphs 4,097 = 78,978 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 89_000, // Upstream floor restored under D4; measured union 148,957 (v1.91.9)
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
     maxSizeRatio: 1.217, // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors. + v1.91.12.0 merge of #2999 (above, plus plan-completion fallback intent and specialist checklist-by-path) with #3002; measured 1.1843 (2026-10-01). + v1.91.19.0 wave: verdict-form Codex callers with sandbox preflight (INV-1/B1), P0/P1 structured gate (B1b), bound-plan discovery and data-not-instructions guard (F1/D3), visible LEARNINGS failures (B5); measured 129,941 / 108,523 = 1.1974 (2026-10-03). + v1.91.18.0 (#3023) merged into the v1.91.19.0 wave; measured 130,025 / 108,523 = 1.1981 (2026-10-04). + Oct 6 fix wave: quota_exhausted preflight branch (#3051); measured 130,359 / 108,523 = 1.2012 (2026-10-06). + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); measured 131,314 / 108,523 = 1.2100 (2026-10-06). Combined Oct 6 wave head (A and B): measured 131,966 / 108,523 = 1.2160 (2026-10-06).
@@ -510,7 +510,7 @@ do not launch the downstream skill or open a browser.`,
       gateAfterStop: 'EXIT PLAN MODE GATE',
     },
     behavioral: 'prompt',
-    maxSkeletonBytes: 59_350, // + v1.78 AUQ spawned-trigger objectivity; generated Codex overlay measured 59,307
+    maxSkeletonBytes: 59_400, // upstream v1.91.12 58,778 + retained fork paragraphs 586 = 59,364 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 83_400, // Phase 4 wave 1; measured union 84,304
     mustContain: ['GATE: PASS', 'CROSS-MODEL ANALYSIS', 'codex exec resume', 'sandbox_mode="read-only"', 'mktemp'],
     maxSizeRatio: 1.06, // measured 1.040 vs the v1.64.1.0 parity baseline
