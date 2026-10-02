@@ -18,6 +18,8 @@
     { "file": "scripts/resolvers/spec-review.ts", "movedFrom": "scripts/resolvers/review.ts" },
     { "file": "scripts/resolvers/outside-voice-steps.ts", "movedFrom": "scripts/resolvers/review.ts" },
     { "file": "scripts/resolvers/review-scope.ts", "movedFrom": "scripts/resolvers/review.ts" },
+    { "file": "scripts/resolvers/governor-structured.ts", "movedFrom": "scripts/resolvers/outside-voice-steps.ts" },
+    { "file": "scripts/resolvers/adversarial-history.ts", "movedFrom": "scripts/resolvers/outside-voice-steps.ts" },
     { "file": "test/helpers/pty/auq.ts", "movedFrom": "test/helpers/claude-pty-runner.ts" },
     { "file": "test/helpers/pty/binary.ts", "movedFrom": "test/helpers/claude-pty-runner.ts" },
     { "file": "test/helpers/pty/boundaries.ts", "movedFrom": "test/helpers/claude-pty-runner.ts" },

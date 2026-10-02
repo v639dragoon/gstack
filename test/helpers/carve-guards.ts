@@ -153,7 +153,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     },
     behavioral: 'external',
     externalTest: 'test/skill-e2e-ship-section-loading.test.ts',
-    maxSkeletonBytes: 85_260, // C3: C2 83,933 + 1,310 carry bytes = 85,243; D3: 82,860 + 1,073 gating bytes = 83,933; D4: upstream 78,373 + retained governor/binding/post-merge guards 4,487 = 82,860 (v1.91.9); pinned behavior retained.
+    maxSkeletonBytes: 85_900, // upstream v1.91.12 78,983 + retained fork paragraphs 6,870 = 85,853 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 181_000, // token-reduction Phases 1-2 (v1.69.x branch); measured union 201,464
     mustContain: ['VERSION', 'CHANGELOG', 'review', 'merge', 'PR'],
     // v1.58.5.0: pre-push-guard install (#2077) stacks on the shared first-run-guidance preamble.
@@ -166,7 +166,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // wave's headline capability) grows the union to 1.195x. Deliberate:
     // the section is on-demand (loads only for Apple store targets), so
     // per-invocation cost for non-iOS ships is one manifest line.
-    maxSizeRatio: 1.629, // C3: C2 302,733 + 3,028 carry bytes = 305,761 / 187,706 = 1.62894; D3: D4 295,750 + 6,983 policy-gating bytes = 302,733 / 187,706 = 1.6128. D4: upstream 261,958 + retained governor/routing/D1 telemetry 33,792 = 295,750 / 187,706 baseline = 1.5756 (2026-09-30). Previous cap/comment: // Shared advisory identity/dedup + critical-severity validation: 248,065 union bytes / 187,706 baseline = 1.3216 (2026-09-17). + test value bar in the lazy Step 7 section (value cards, weak paths, gate table, base control, machine checks; ~13.6KB): measured 1.396 (2026-09-29).
+    maxSizeRatio: 1.636, // upstream v1.91.12 263,437 + retained fork paragraphs 43,618 = 307,055 / 187,706 baseline = 1.635829 (2026-10-01); pinned fork behavior retained.
   },
   'plan-ceo-review': {
     skill: 'plan-ceo-review',
@@ -221,7 +221,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // 1.08 → 1.10: the scope-gate exceptions block (+ its adversarial-review
     // hardening: host-anchored mode signal, precedence, passing-mention
     // guards) and the plan-mode preamble reword land the union at 1.092.
-    maxSizeRatio: 1.176, // D4 shared resolver: upstream 145,545 + routing 848 = 146,393 / 124,597 baseline = 1.1749 (2026-09-30). Previous cap/comment: // upstream union 145,545 + fork routed voice/completion delta 453 = 145,998; measured 1.171 (v1.91.9).
+    maxSizeRatio: 1.181, // upstream v1.91.12 146,291 + retained fork paragraphs 848 = 147,139 / 124,597 baseline = 1.180919 (2026-10-01); pinned fork behavior retained.
   },
   'plan-design-review': {
     skill: 'plan-design-review',
@@ -243,7 +243,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // tier-2+ skeleton (measured 89,184). Main's v1.64.0.0 adds ~340 B more
     // (telemetry --error-message/--failed-step preamble prose, PR #769).
     // Budget covers the sum of both waves.
-    maxSkeletonBytes: 79_500, // Harness-aware outside voice: validated dispatch and provenance.
+    maxSkeletonBytes: 79_800, // upstream v1.91.12 78,982 + retained fork paragraphs 808 = 79,790 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 99_200, // token-reduction Phases 1-2 (v1.69.x branch); measured union 110,293
     mustContain: ['design', 'visual'],
     maxSizeRatio: 1.12, // D1 1.104 + main's ~0.008
@@ -348,7 +348,7 @@ do not launch the downstream skill or open a browser.`,
     // the #538 opt-out + D1 evidence directive — ratio 1.104 measured.
     // #2499 project-scope MCP jq in the brain-sync block grew every tier-2+
     // skeleton ~1.5KB (entry resolution emitted once per SKILL.md).
-    maxSkeletonBytes: 87_500, // Office-hours + sketch outside voices include host guards and completion checks.
+    maxSkeletonBytes: 87_600, // upstream v1.91.12 85,923 + retained fork paragraphs 1,618 = 87,541 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 115_800, // Phase 4 wave 4; measured union 118,175
     mustContain: ['design doc', 'problem statement'],
     maxSizeRatio: 1.12,
@@ -410,7 +410,7 @@ do not launch the downstream skill or open a browser.`,
     // + W1 guarded state-root resolution in the Context Recovery preamble, the
     // eureka log, the office-hours lookup and the taste-profile read; measured
     // 1.0834 (2026-09-30).
-    maxSizeRatio: 1.09, // fork routed voice; upstream state-root growth retained.
+    maxSizeRatio: 1.094, // upstream v1.91.12 98,042 + retained fork paragraphs 817 = 98,859 / 90,375 baseline = 1.093876 (2026-10-01); pinned fork behavior retained.
   },
   cso: {
     skill: 'cso',
@@ -481,10 +481,10 @@ do not launch the downstream skill or open a browser.`,
       gateAfterStop: undefined, // operational multi-STOP skill, like ship
     },
     behavioral: 'plan',
-    maxSkeletonBytes: 78_180, // C3: C2 76,595 + 1,580 carry bytes = 78,175; D3: 75,048 + 1,547 policy-gating bytes = 76,595; D4: upstream 74,078 + retained governor/model/queue guards 970 = 75,048 (v1.91.9); pinned behavior retained.
+    maxSkeletonBytes: 79_000, // upstream v1.91.12 74,881 + retained fork paragraphs 4,097 = 78,978 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 89_000, // Upstream floor restored under D4; measured union 148,957 (v1.91.9)
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
-    maxSizeRatio: 1.426, // C3: C2 152,425 + 2,226 carry bytes = 154,651 / 108,523 = 1.42505. D3: D4 148,957 + 3,468 policy-gating bytes = 152,425 / 108,523 = 1.40454. D4: upstream 127,057 + retained governor/routing 21,900 = 148,957 / 108,523 baseline = 1.3726 (2026-09-30). Previous cap/comment: // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors.
+    maxSizeRatio: 1.437, // upstream v1.91.12 128,521 + retained fork paragraphs 27,409 = 155,930 / 108,523 baseline = 1.436838 (2026-10-01); pinned fork behavior retained.
   },
   codex: {
     skill: 'codex',
@@ -509,7 +509,7 @@ do not launch the downstream skill or open a browser.`,
       gateAfterStop: 'EXIT PLAN MODE GATE',
     },
     behavioral: 'prompt',
-    maxSkeletonBytes: 59_350, // + v1.78 AUQ spawned-trigger objectivity; generated Codex overlay measured 59,307
+    maxSkeletonBytes: 59_400, // upstream v1.91.12 58,778 + retained fork paragraphs 586 = 59,364 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 83_400, // Phase 4 wave 1; measured union 84,304
     mustContain: ['GATE: PASS', 'CROSS-MODEL ANALYSIS', 'codex exec resume', 'sandbox_mode="read-only"', 'mktemp'],
     maxSizeRatio: 1.06, // measured 1.040 vs the v1.64.1.0 parity baseline
@@ -536,7 +536,7 @@ do not launch the downstream skill or open a browser.`,
     },
     behavioral: 'prompt',
     maxSkeletonBytes: 74_500, // + Aside browser contract for Step 7 canary ({{ASIDE_SETUP}}); measured 73_523
-    maxSizeRatio: 1.11, // + v1.81 Aside contract + gstack-browser fallback block + upstream v1.87 review_freshness readiness rules; measured 1.101 over v1.87.5
+    maxSizeRatio: 1.113, // upstream v1.91.12 114,060 + retained fork paragraphs 2,280 = 116,340 / 104,578 baseline = 1.112471 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 91_000, // Phase 4 wave 1; estimated union ~94.9KB
     mustContain: ['readiness', 'merge', 'canary', 'revert', 'staging'],
   },

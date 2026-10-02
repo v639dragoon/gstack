@@ -1,3 +1,4 @@
+import { resolveStateRoot } from '../lib/state-root';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
@@ -55,7 +56,7 @@ async function main() {
     const hook = JSON.parse(await Bun.stdin.text());
     if (typeof hook.session_id !== 'string' || !hook.session_id) return;
     const home =
-      process.env.GSTACK_HOME || process.env.GSTACK_STATE_DIR || path.join(process.env.HOME || '/', '.gstack');
+      resolveStateRoot();
     const marker = path.join(
       home,
       'context-guard',

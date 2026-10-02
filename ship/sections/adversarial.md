@@ -80,6 +80,12 @@ reads, not when it saves its result. Include non-ignored untracked source in eac
 reviewer's context or read instructions (`git ls-files --others --exclude-standard`).
 Those files are part of the recorded content too.
 
+Register and dispatch the required native attempt before its Agent call:
+`gstack-review-budget register-upstream "$RUN_ID" native-adversarial --cycle <n>`,
+then `gstack-review-budget dispatch "$RUN_ID" native-adversarial --cycle <n>`.
+Registration records this upstream-required reviewer independently of routed slots.
+Every native call sets `subagent_type: "general-purpose"` and `model: "sonnet"`.
+
 Dispatch via the Agent tool with `run_in_background: false` (background is the default since Claude Code v2.1.198); findings must arrive before review concludes. Fresh context avoids checklist bias, but this is the same harness, not an independent model unless runtime identity proves otherwise.
 
 Subagent prompt:

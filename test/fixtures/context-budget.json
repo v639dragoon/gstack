@@ -1,5 +1,5 @@
 {
-  "_comment": "Context-budget ratchet ceilings (~tokens). Regenerate: bun test/helpers/capture-context-budget.ts. Headroom: alwaysOnTotal x1.05, eagerPerInvocation x1.1. Graded by test/context-budget-ratchet.test.ts via lib/context-bill.ts checkBudget.",
+  "_comment": "Context-budget ratchet ceilings (~tokens). Regenerate: bun test/helpers/capture-context-budget.ts. Headroom: alwaysOnTotal x1.05, eagerPerInvocation x1.1. Graded by test/context-budget-ratchet.test.ts via lib/context-bill.ts checkBudget. v1.91.12 ship: upstream 18761 + retained fork paragraphs 1632 = 20393 tokens; ship ceiling refreshed by capture with unchanged x1.1 headroom (2026-10-01).",
   "alwaysOnTotal": 6873,
   "eagerPerInvocation": {
     "autoplan": 18022,
@@ -57,7 +57,7 @@
     "setup-browser-cookies": 3194,
     "setup-deploy": 11557,
     "setup-gbrain": 15554,
-    "ship": 20297,
+    "ship": 22432,
     "skillify": 12196,
     "spec": 14993,
     "sync-gbrain": 13975,
