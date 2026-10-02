@@ -20,7 +20,7 @@ function rows(): any[] {
   });
 }
 function read(records: any[], opts: { partial?: boolean; cwd?: string; exactParent?: boolean } = {}) {
-  const config = fs.mkdtempSync(path.join(os.tmpdir(), 'plan-cwd-ancestry-')); dirs.push(config);
+  const config = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'plan-cwd-ancestry-')); dirs.push(config);
   const project = path.join(config, 'projects', 'owned'); fs.mkdirSync(project, { recursive: true });
   const file = path.join(project, captured.sessionId + '.jsonl');
   const bytes = records.map(r => JSON.stringify(r)).join('\n') + (opts.partial ? '' : '\n');
