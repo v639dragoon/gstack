@@ -241,3 +241,51 @@ test('default projection retains its original physical-order and exact-cwd behav
  expect(got.events.map(e=>e.toolUseId)).toEqual(['dispatch']);
  expect(autoplanPhaseCompletions(got.transcript,0)).toEqual([]);
 });
+
+// A session begun with /clear (or any SessionStart hook output) roots its
+// journal at the hook's own notes, then the first user message. Those notes
+// carry no message; they admit the chat only from this cwd, unbroken to a root.
+const hookNote=(n:number,parent:number|null,type:string)=>({...record(n,parent),type:'attachment',message:undefined,
+ attachment:{type,hookName:'SessionStart:clear',hookEvent:'SessionStart'}});
+function hookRows():any[]{const r=rows();r[0].parentUuid=uuid(51);
+ return [hookNote(50,null,'hook_success'),hookNote(51,50,'hook_additional_context'),...r];}
+test('a journal that starts with this cwd\'s SessionStart hook notes is owned like a user-rooted one',()=>{
+ const normal=readOwned(rows()),hooked=readOwned(hookRows());
+ expect(hooked.transcript.status).toBe('ready');expect(hooked).toEqual(normal);
+ const single=hookRows().slice(1);single[0].parentUuid=null;expect(readOwned(single)).toEqual(normal);
+ const r=hookRows();expect(readOwned([r[4],...r.slice(0,4),...r.slice(5)])).toEqual(normal);
+ const d=read(hookRows());expect(d.events.map(e=>e.toolUseId)).toEqual(['read-owned','read-owned','dispatch']);
+ expect(designAudit(d.events)?.passed).toBe(true);
+ expect(autoplanPhaseCompletions(d.transcript,0)).toEqual([{phase:1,ts:Date.parse(time)}]);
+});
+for(const [name,change] of Object.entries({
+ 'foreign hook root cwd':(r:any[])=>r[0].cwd='/another/fixture',
+ 'foreign linking hook cwd':(r:any[])=>r[1].cwd='/another/fixture',
+ 'non-SessionStart hook':(r:any[])=>r[1].attachment.hookEvent='UserPromptSubmit',
+ 'non-hook attachment root':(r:any[])=>r[0].attachment.type='environment',
+ 'non-attachment hook root':(r:any[])=>r[0].type='system',
+ 'sidechain hook':(r:any[])=>r[0].isSidechain=true,
+ 'agent hook':(r:any[])=>r[0].agentId='child',
+ 'foreign hook session':(r:any[])=>r[0].sessionId='foreign',
+ 'missing hook link':(r:any[])=>r.splice(1,1),
+ 'rootless hook':(r:any[])=>r[0].parentUuid=uuid(99),
+ 'assistant opener':(r:any[])=>r[2].message.role='assistant',
+ 'foreign opener cwd':(r:any[])=>r[2].cwd='/another/fixture',
+ 'non-hook record between notes and opener':(r:any[])=>{
+  r.splice(2,0,{...record(52,51),type:'system',subtype:'informational',message:undefined});r[3].parentUuid=uuid(52);},
+ 'hook chain from a second root':(r:any[])=>{r.splice(1,0,{...r[0],uuid:uuid(97)});r[2].parentUuid=uuid(97);},
+}))test('hook-rooted admission rejects '+name,()=>{
+ const owned=hookRows();change(owned);const got=readOwned(owned);
+ expect(got.events.some(e=>e.kind==='use'&&e.toolUseId==='read-owned')).toBe(false);
+ expect(got.events.some(e=>e.kind==='message'&&e.text==='Phase 1 complete.')).toBe(false);
+ const plain=hookRows();change(plain);const {events,transcript}=read(plain);
+ expect(events.some(e=>e.toolUseId==='read-owned')).toBe(false);
+ expect(autoplanPhaseCompletions(transcript,0)).toEqual([]);
+});
+for(const [name,change] of Object.entries({
+ 'competing hook root':(r:any[])=>r.push({...r[0],uuid:uuid(98)}),
+ 'competing user root':(r:any[])=>r.push(record(99,null,cwd,'user')),
+}))test('owned hook-rooted admission rejects '+name,()=>{
+ const r=hookRows();change(r);const got=readOwned(r);
+ expect(got.transcript.status).toBe('error');expect(got.events).toEqual([]);
+});
