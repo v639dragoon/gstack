@@ -28,7 +28,7 @@ function rows():any[]{return [
  record(6,5,cwd,'assistant',[{type:'tool_use',id:'dispatch',name:'Agent',input:{prompt:'You are the independent DESIGN reviewer for this phase.\nRead the bound methodology.'}}]),
 ];}
 function read(records:any[],options:{partial?:boolean,name?:string}={}){
- const config=fs.mkdtempSync(path.join(os.tmpdir(),'plan-cwd-'));dirs.push(config);
+ const config=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'plan-cwd-'));dirs.push(config);
  const project=path.join(config,'projects','owned');fs.mkdirSync(project,{recursive:true});
  const journal=path.join(project,(options.name??sid)+'.jsonl');
  const bytes=records.map(r=>JSON.stringify(r)).join('\n')+(options.partial?'':'\n');fs.writeFileSync(journal,bytes);
@@ -175,7 +175,7 @@ test('compact boundary does not admit a foreign later root or bypass failed meth
 // initial human/attachment prefix. UUID parents establish order; timestamps do
 // not. The complete original public replay and native failure remain retained.
 function readOwned(records:any[],partial=false){
- const config=fs.mkdtempSync(path.join(os.tmpdir(),'owned-causal-'));dirs.push(config);
+ const config=fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()),'owned-causal-'));dirs.push(config);
  const project=path.join(config,'projects','owned');fs.mkdirSync(project,{recursive:true});
  const journal=path.join(project,sid+'.jsonl');
  const bytes=records.map(r=>JSON.stringify(r)).join('\n')+(partial?'':'\n');fs.writeFileSync(journal,bytes);
