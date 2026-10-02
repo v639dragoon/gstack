@@ -418,7 +418,7 @@ pass: report it with its reason.
   suppressions; include this invocation's revalidated decisions.
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"COMMIT","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"COMMIT","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES}' --finish REVIEW_START
 ```
 
 Use ISO 8601 `TIMESTAMP` and `git rev-parse --short HEAD` for `COMMIT`.

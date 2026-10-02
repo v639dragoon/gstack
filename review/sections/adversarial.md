@@ -303,7 +303,7 @@ its original token. If it never started because it was unavailable, disabled or
 size-gated, omit `--finish PASS_START` and set completed/converged false.
 Do not create or borrow a token just to save a result.
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
 ```
 PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
 Fill fields from this attempt, not the parent's Step 5.8 result:
@@ -519,7 +519,7 @@ aggregates; gate telemetry retains tokens (from the `tokens used` line in
 stderr when present), `fix_cycle`, `rerun_cause`, and `manifest_wtree`:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","run_id":"{RUN_ID}","cycle":{N},"timestamp":"TIMESTAMP","status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
 ~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"review","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
