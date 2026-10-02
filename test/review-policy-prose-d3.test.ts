@@ -3,7 +3,7 @@ import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { generateReviewArmy } from '../scripts/resolvers/review-army';
-import { generateAdversarialStep, generateCodexDocReview } from '../scripts/resolvers/review';
+import { generateAdversarialStep, generateCodexDocReview } from '../scripts/resolvers/outside-voice-steps';
 import { generateQAReview, generateQAReviewPreflight } from '../scripts/resolvers/qa';
 import { HOST_PATHS, type TemplateContext } from '../scripts/resolvers/types';
 const read = (p: string) => readFileSync(join(import.meta.dir, '..', p), 'utf8');

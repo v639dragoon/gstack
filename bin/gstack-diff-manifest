@@ -8,7 +8,7 @@
 #                                                  bash blocks — one run, one id)
 #
 # Writes ONE JSON manifest per working-tree content to
-#   $GSTACK_HOME/projects/<slug>/manifests/<wtree12>.json
+#   $GSTACK_STATE_ROOT/projects/<slug>/manifests/<wtree12>.json
 # content-addressed by bin/gstack-wtree (wtree equality proves identical
 # content — the same premise land-and-deploy's content-first staleness rule
 # rests on). Same content → same file (reused); any content change → new file.
@@ -52,9 +52,9 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 2
 fi
 
-GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}"
-eval "$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
-MANIFEST_DIR="$GSTACK_HOME/projects/$SLUG/manifests"
+eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
+eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
+MANIFEST_DIR="$GSTACK_STATE_ROOT/projects/$SLUG/manifests"
 mkdir -p "$MANIFEST_DIR"
 
 # Base resolution mirrors gstack-diff-scope's default chain.
@@ -111,7 +111,7 @@ POLICY_PATH=""
 # touching git config; otherwise the outcome helper degrades to present:false.
 OUTCOME_JSON="${GDM_OUTCOME_JSON:-}"
 if [ -z "$OUTCOME_JSON" ]; then
-  OUTCOME_JSON=$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || true)
+  OUTCOME_JSON=$("$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || true)
 fi
 
 # All heavy lifting (glob matching, tier computation, fingerprint, JSON

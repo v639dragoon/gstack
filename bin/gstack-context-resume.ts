@@ -1,3 +1,4 @@
+import { resolveStateRoot } from '../lib/state-root';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
@@ -49,7 +50,7 @@ async function main() {
   try {
     const hook = JSON.parse(await Bun.stdin.text());
     const home =
-      process.env.GSTACK_HOME || process.env.GSTACK_STATE_DIR || path.join(process.env.HOME || '/', '.gstack');
+      resolveStateRoot();
     const cwd = typeof hook.cwd === 'string' && hook.cwd ? hook.cwd : process.cwd();
     const slugOut = spawnSync(path.join(path.dirname(Bun.fileURLToPath(import.meta.url)), 'gstack-slug'), {
       cwd,

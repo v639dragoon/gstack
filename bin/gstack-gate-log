@@ -51,19 +51,19 @@
 # signal that a manifest came from a different tree than the gate it logs.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}"
-eval "$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
-mkdir -p "$GSTACK_HOME/projects/$SLUG"
+eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
+eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
+mkdir -p "$GSTACK_STATE_ROOT/projects/$SLUG"
 
 INPUT="$1"
 
 # Governor identity stamps. These are authoritative just like commit/tree:
 # caller-supplied values are discarded. Missing metadata is stamped as null.
-OUTCOME_JSON=$(GSTACK_HOME="$GSTACK_HOME" "$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || printf '%s' '{"present":false}')
+OUTCOME_JSON=$("$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || printf '%s' '{"present":false}')
 MANIFEST_WTREE=$(printf '%s' "$INPUT" | bun -e 'try { const r=JSON.parse(await Bun.stdin.text()); if(typeof r.manifest_wtree==="string") process.stdout.write(r.manifest_wtree) } catch {}' 2>/dev/null || true)
 RISK_TIER=""
 if [ -n "$MANIFEST_WTREE" ]; then
-  MANIFEST_FILE="$GSTACK_HOME/projects/$SLUG/manifests/${MANIFEST_WTREE:0:12}.json"
+  MANIFEST_FILE="$GSTACK_STATE_ROOT/projects/$SLUG/manifests/${MANIFEST_WTREE:0:12}.json"
   if [ -f "$MANIFEST_FILE" ]; then
     RISK_TIER=$(bun -e 'try { const r=JSON.parse(await Bun.file(process.argv[1]).text()); process.stdout.write(r.routing?.risk_tier || "") } catch {}' "$MANIFEST_FILE" 2>/dev/null || true)
   fi
@@ -142,7 +142,7 @@ console.log(JSON.stringify(rec));
   exit 1
 }
 
-echo "$STAMPED" >> "$GSTACK_HOME/projects/$SLUG/$BRANCH-gates.jsonl"
+echo "$STAMPED" >> "$GSTACK_STATE_ROOT/projects/$SLUG/$BRANCH-gates.jsonl"
 
 # gbrain-sync: enqueue for cross-machine sync (no-op if sync is off).
 "$SCRIPT_DIR/gstack-brain-enqueue" "projects/$SLUG/$BRANCH-gates.jsonl" 2>/dev/null &
