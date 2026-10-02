@@ -142,6 +142,13 @@ function validQuestions(value: unknown): value is NativePlanQuestion[] {
       object(o) && typeof o.label === 'string' && o.label.trim()));
 }
 
+/** A SessionStart hook's own note (e.g. after /clear) can precede the first
+ * message as the journal root. It carries no message, so it is never a turn. */
+const sessionStartHookNote = (r: Record<string, any>, cwd: string): boolean =>
+  r.type === 'attachment' && r.message == null && r.cwd === cwd && object(r.attachment) &&
+  r.attachment.hookEvent === 'SessionStart' && typeof r.attachment.type === 'string' &&
+  r.attachment.type.startsWith('hook_');
+
 /** Native journal writes can flush children before parents. Owned snapshots
  * use causal order; ordinary readers only recover membership, keeping physical order. */
 function ownedCausalLines(lines: string[], cwd: string, filename: string): string[] {
@@ -170,6 +177,7 @@ function ownedCausalLines(lines: string[], cwd: string, filename: string): strin
   // later root. An unflushed/malformed ancestor supplies no ownership.
   let root = first;
   const ancestry = new Set<string>();
+  const chain = [first];
   while (true) {
     if (ancestry.has(root.record.uuid)) throw Error('cyclic owned native ancestry');
     ancestry.add(root.record.uuid);
@@ -178,11 +186,17 @@ function ownedCausalLines(lines: string[], cwd: string, filename: string): strin
     const next = byId.get(id);
     if (!next) return [];
     root = next;
+    chain.push(root);
   }
+  // The opening user message is the root, or sits directly below an unbroken
+  // run of this cwd's SessionStart hook notes that ends at the root.
+  let opener = chain.length - 1;
+  while (opener > 0 && sessionStartHookNote(chain[opener]!.record, cwd)) opener--;
+  const open = chain[opener]!.record;
   if (root.record.parentUuid !== null || root.record.cwd !== cwd ||
-      !object(root.record.message) || root.record.message.role !== 'user') return [];
-  if (nodes.some(x => x !== root && x.record.parentUuid === null &&
-      object(x.record.message) && x.record.message.role === 'user')) throw Error('competing owned native roots');
+      !object(open.message) || open.message.role !== 'user' || open.cwd !== cwd) return [];
+  if (nodes.some(x => x !== root && x.record.parentUuid === null && (sessionStartHookNote(x.record, cwd) ||
+      (object(x.record.message) && x.record.message.role === 'user')))) throw Error('competing owned native roots');
   // Stable topological traversal preserves physical order whenever two ready
   // records have no parent dependency. No timestamp provides ordering credit.
   const children = new Map<string, number[]>();
@@ -260,6 +274,10 @@ export function readPlanCountTranscript(configDir: string, cwd: string,
         // fixture's first parent user message; legacy records keep exact-cwd scoping.
         let originSeen = false;
         const ancestry = new Set<string>();
+        // SessionStart hook notes from this cwd that precede the first message,
+        // linked from one parentless root. They seed nothing until that message
+        // chains to them, so a hook note alone never establishes ownership.
+        const hookPrefix = new Set<string>();
         let causalMembership: Set<string> | undefined;
         const nativeUuid = (value: unknown): value is string =>
           typeof value === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
@@ -292,10 +310,16 @@ export function readPlanCountTranscript(configDir: string, cwd: string,
               // not discover a later root or reorder public uses and results.
               (!ownedSnapshot && record.cwd !== cwd && ancestry.size > 0 &&
                 recoveredMember(record.uuid)));
+          if (!originSeen && parentMetadata && sessionStartHookNote(record, cwd) && !hookPrefix.has(record.uuid) &&
+              (record.parentUuid === null ? hookPrefix.size === 0 : hookPrefix.has(record.parentUuid)))
+            hookPrefix.add(record.uuid);
           if (!originSeen && object(record.message) && ['user', 'assistant'].includes(record.message.role)) {
             originSeen = true;
             if (parentMetadata && record.cwd === cwd && record.message.role === 'user' &&
-                record.parentUuid === null) ancestry.add(record.uuid);
+                (record.parentUuid === null || hookPrefix.has(record.parentUuid))) {
+              if (record.parentUuid !== null) for (const id of hookPrefix) ancestry.add(id);
+              ancestry.add(record.uuid);
+            }
           }
           if (continuation) ancestry.add(record.uuid);
           // Native compaction resets parentUuid but links its prior owned
