@@ -3,5 +3,6 @@
 # inject the newest checkpoint head so continuity survives auto-compaction.
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GSTACK_HOME="${GSTACK_HOME:-${GSTACK_STATE_DIR:-$HOME/.gstack}}" bun "$SCRIPT_DIR/gstack-context-resume.ts"
+eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
+bun "$SCRIPT_DIR/gstack-context-resume.ts"
 exit 0
