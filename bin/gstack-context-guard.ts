@@ -1,3 +1,4 @@
+import { resolveStateRoot } from '../lib/state-root';
 import * as fs from 'fs';
 import * as path from 'path';
 /**
@@ -49,7 +50,7 @@ async function main() {
     const warn = Number(process.env.GSTACK_CONTEXT_WARN || 250000),
       handoff = Number(process.env.GSTACK_CONTEXT_HANDOFF || 300000);
     const dir = path.join(
-      process.env.GSTACK_HOME || process.env.GSTACK_STATE_DIR || path.join(process.env.HOME || '/', '.gstack'),
+      resolveStateRoot(),
       'context-guard',
     );
     fs.mkdirSync(dir, { recursive: true });
