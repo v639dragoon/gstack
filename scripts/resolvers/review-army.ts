@@ -10,53 +10,18 @@
  * Shipped as Release 2 of the self-learning roadmap (SELF_LEARNING_V0.md).
  */
 import type { TemplateContext } from './types';
+import { generateGovernorPlanBody, governorDispatchAccounting, governorRedTeamAccounting, governorSpecialistTelemetry } from './governor-accounting';
 import { CC_BACKGROUND_DEFAULT_SINCE, FOREGROUND_IF_AVAILABLE, BACKGROUND_RECOVERY } from './constants';
 import { learningsCapture, LEARNINGS_VERDICT } from './learnings';
 import { DEFENSIVE_REVIEW_FRAMING, FIXTURE_SUMMARY_MODE } from './defensive-review';
 
+const externalReview = (ctx: TemplateContext) => ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex';
+
 export function generateGovernorPlan(ctx: TemplateContext): string {
-  const ship = ctx.skillName === 'ship';
-  const selectStep = ship ? '9.1' : '4.5';
-  const mergeStep = ship ? '9.2' : '4.6';
+  if (!externalReview(ctx)) return generateGovernorPlanBody(ctx);
   return `### Governor manifest, plan, packet
 
-${ship ? `Reuse RUN_ID from the governed audit accounting. After Steps 7–8 finish their writes, refresh
-that run's manifest and plan, preserving its audit verdicts and attempt counts.
-Then build the shared packet from the final reviewed content:` : 'Create one manifest, deterministic reviewer plan, and shared packet:'}
-
-\`\`\`bash
-${ctx.paths.binDir}/gstack-diff-manifest <base>${ship ? ' "$RUN_ID"' : ''}
-${ctx.paths.binDir}/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host ${ctx.host}
-${ctx.paths.binDir}/gstack-review-budget resume "$RUN_ID"
-${ctx.paths.binDir}/gstack-review-packet "$RUN_ID" <base>
-\`\`\`
-
-Carry these printed values as literals for the rest of the invocation:
-\`RUN_ID\`, \`CYCLE\`, \`TIER\`, \`SLICE_KIND\`, \`REVIEWERS\`, \`PASSES\`, \`REPAIR_CYCLES_MAX\`,
-\`COVERAGE_AUDIT\`, \`PLAN_COMPLETION\`, \`DOC_RELEASE\`,
-\`CODEX_DOC_VOICE\`, \`UPSTREAM_SPECIALISTS\`, \`UPSTREAM_STRUCTURED\`, \`ADVERSARIAL_CLAUDE\`,
-\`CODEX_CHALLENGE\`, \`RED_TEAM_LOC_TRIGGER\`, \`GREPTILE\`, \`COVERAGE_RATING\`,
-\`AUDIT_REUSE\`, \`NON_CODE_DELTA\`, \`QA_SMOKE\`, \`FULL_LANES_REQUIRED\`, \`BUILD_GATE\`, \`CI_BACKSTOP\`, \`PACKET_PATH\`, \`DIFF_PATH\`, \`CI_GREEN\`, \`REUSED\` and \`RERUN\`.
-
-\`PASSES\` is the whole-workflow accounting for this run: every AI pass it may
-dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
-voice) with its model and effort; Upstream-required passes join its accounting through register-upstream; a pass absent from either record never runs. \`resume\`
-carries forward the terminal verdicts of a PRIOR run whose content
-fingerprint, base, policy, tier, reviewer list and slice kind all equal this
-plan's (a matching commit with a dirty tree never qualifies): print
-\`Reused from {RESUME_SOURCE}: {REUSED}\` when non-empty, do not dispatch a gate
-listed in \`REUSED\` (its dispatch would be refused as duplicate-slot), and
-dispatch only \`RERUN\`. Only clean and issues_found verdicts are reusable;
-error, timeout and missing verdicts are never carried.
-Also retain \`MANIFEST_WTREE\`, \`DOC_FP\`, \`OUTCOME_ID\`,
-\`OUTCOME_MISSING\`, \`MAX_ADVISORIES\`, \`AUTOFIX_INFORMATIONAL\`,
-\`BLOCKING_SEVERITIES\`, and \`BLOCKING_CATEGORIES\`.
-
-If \`OUTCOME_MISSING=true\`, print exactly:
-
-\`Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: ~/.claude/skills/gstack/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]\`.
-
-`;
+**STOP.** Read \`governor-structured.md\` beside this SKILL.md. Apply its accounting at matching steps; structured review runs at 4.8. Missing asset: INCOMPLETE, stop.`;
 }
 
 function generateSpecialistSelection(ctx: TemplateContext): string {
@@ -139,22 +104,7 @@ Note which specialists were selected, gated, and skipped. Print the selection:
 function generateSpecialistDispatch(ctx: TemplateContext): string {
   return `### Dispatch specialists in parallel
 
-Union upstream-selected specialists with planned \`specialist:*\` slots, retaining
-source labels. The small-diff bypass skips upstream specialists only; execute any
-governor-planned slots separately, then the parent Exploratory QA handoff.
-Never dispatch the same specialist twice: one result may satisfy both sources
-only when both dispatch records name the same frozen tree/SHA.
-Register upstream-only selected specialists with
-\`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>\`;
-then run \`gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>\`
-before each Agent call. Every allowed Agent is accounted before launch. Every specialist
-Agent sets \`model: "sonnet"\`. Each prompt starts: "Read the review packet at {PACKET_PATH} and the diff at {DIFF_PATH} first." CI_GREEN=true
-means do not repeat builds/tests. Record each terminal verdict with \`gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>\` and a best-effort
-\`gstack-gate-log\` row with model sonnet, effort agent-default, effort_source routed,
-fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream
-settlement and missing-coverage rules; the budget allows one corrected attempt.
-Routed codex-structured remains an additional Step ${ctx.skillName === 'ship' ? '11' : '4.8'} slot.
-
+${externalReview(ctx) ? 'Follow Dispatch accounting in `governor-structured.md` for the upstream/planned union; one attempt per frozen tree/SHA.' : governorDispatchAccounting(ctx)}
 
 For each selected specialist, launch an independent subagent via the Agent tool.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
@@ -332,17 +282,7 @@ sources and counting overlapping savings once. Keep actual specialist stats;
 core-only advice must not create a specialist dispatch or finding.
 Normal AUTO-FIX/ASK rules apply, with advice ASK-only. Missing coverage still blocks
 completion. Advice never permits edits while readers are active or replaces a required review.
-**Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
-Red Team, either path), append one gate record, substituting {placeholder}s
-with carried literals:
-
-\`\`\`bash
-${ctx.paths.binDir}/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-\`\`\`
-
-Telemetry is best-effort: a failed gate-log call never blocks or changes the
-review, and the aggregate \`specialists\` object still goes into reviews.jsonl
-unchanged.`;
+${externalReview(ctx) ? 'Follow Specialist telemetry in `governor-structured.md`.' : governorSpecialistTelemetry(ctx)}`;
 }
 
 function generateRedTeam(ctx: TemplateContext): string {
@@ -355,11 +295,7 @@ When \`RED_TEAM_LOC_TRIGGER=false\`, skip LOC activation. When \`UPSTREAM_SPECIA
 
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-Register upstream activation as \`upstream-specialist:red-team\` unless red-team
-already occupies a planned slot. Dispatch the chosen gate through review-budget
-before the Sonnet Agent call; record its verdict and gate row afterward. A planned
-red-team runs even without upstream activation. Upstream-required activation is
-accounted separately and does not consume the single routed escalation.
+${externalReview(ctx) ? 'Follow Red Team accounting in `governor-structured.md`.' : governorRedTeamAccounting(ctx)}
 
 Two dispatch paths, ONE activation condition — they differ only in WHEN:
 

@@ -1,3 +1,4 @@
+import { governorNativeRegistration, governorNativeVerdict } from './governor-accounting';
 import { generateGovernorStructured } from './governor-structured';
 import { adversarialPersistResult } from './adversarial-history';
 import { generateGovernorPlan } from './review-army';
@@ -135,11 +136,7 @@ reads, not when it saves its result. Include non-ignored untracked source in eac
 reviewer's context or read instructions (\`git ls-files --others --exclude-standard\`).
 Those files are part of the recorded content too.
 
-Register and dispatch the required native attempt before its Agent call:
-\`gstack-review-budget register-upstream "$RUN_ID" native-adversarial --cycle <n>\`,
-then \`gstack-review-budget dispatch "$RUN_ID" native-adversarial --cycle <n>\`.
-Registration records this upstream-required reviewer independently of routed slots.
-Every native call sets \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`.
+${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 'Before this Agent call, register/dispatch per Native accounting in `governor-structured.md`.' : governorNativeRegistration(ctx)}
 
 Dispatch via the Agent tool with ${FOREGROUND_IF_AVAILABLE} (background is the default since ${CC_BACKGROUND_DEFAULT_SINCE}); findings must arrive before review concludes. ${BACKGROUND_RECOVERY} Fresh context avoids checklist bias, but this is the same harness, not an independent model unless runtime identity proves otherwise.
 
@@ -153,12 +150,7 @@ Think like an attacker and a chaos engineer. Your job is to find ways this code 
 Present findings under an \`ADVERSARIAL REVIEW (${outsideVoiceFor(ctx).nativeLabel} subagent):\` header. **FIXABLE findings** ${isShip ? 'are queued for the parent; do not edit during Step 11' : "are queued for the parent's Fix-First handling at Step 5; do not edit during Step 4.8"}. **INVESTIGATE findings** are presented as informational.
 
 If the subagent fails or times out, record native coverage as incomplete. Continue independent passes and persistence, not release.
-Record \`gstack-review-budget verdict "$RUN_ID" native-adversarial <clean|issues_found|error|timeout> --cycle <n>\`
-and a best-effort \`gstack-gate-log\` row with gate native-adversarial, model sonnet,
-effort agent-default, effort_source routed, fix_cycle, rerun_cause and manifest_wtree.
-Keep its original PASS_START review-log record; Step ${isShip ? '11.5' : '5.8'} binds that native receipt.
-The upstream one-corrected-attempt recovery applies; terminal failure never certifies completion.
-
+${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 'Follow Native accounting in `governor-structured.md`; keep PASS_START and incomplete coverage.' : governorNativeVerdict(ctx)}
 
 ---`;
 }

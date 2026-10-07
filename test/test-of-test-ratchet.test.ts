@@ -195,6 +195,7 @@ const BASELINE = [
   'test/qa-functional-observer.test.ts', // landed in v1.91.7.0 before this ratchet: harness owner for its functional-QA/docsync paid evals
   'test/qa-supervision-selection.test.ts', // landed in v1.91.7.0 before this ratchet: harness owner for its functional-QA/docsync paid evals
   'test/question-log-hook.test.ts',
+  'test/red-team-scheduling.test.ts', // fork: pins rendered production Review Army sections and the red-team checklist; .md section reads are not recognized by this scanner
   'test/review-army-budget.test.ts',
   'test/review-consensus-lifecycle.test.ts',
   'test/review-count-markdown.test.ts',
