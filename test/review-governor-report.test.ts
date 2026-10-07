@@ -75,7 +75,7 @@ describe('outcome report', () => {
             triggers: ['api:app/api/x.ts'],
           },
         ]
-          .map(JSON.stringify)
+          .map(value => JSON.stringify(value))
           .join('\n') + '\n',
       );
       writeFileSync(
@@ -102,7 +102,7 @@ describe('outcome report', () => {
             findings: { informational: 2 },
           },
         ]
-          .map(JSON.stringify)
+          .map(value => JSON.stringify(value))
           .join('\n') + '\n',
       );
       writeFileSync(
@@ -144,7 +144,7 @@ describe('outcome report', () => {
             },
           },
         ]
-          .map(JSON.stringify)
+          .map(value => JSON.stringify(value))
           .join('\n') + '\n',
       );
       const env = {

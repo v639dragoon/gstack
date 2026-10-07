@@ -4,6 +4,23 @@
 
 When `DOC_RELEASE=false`, skip this pass: print `Documentation: skipped (tier A/B, no doc-impact)` and carry that exact status to Step 16's stage-3 table and the PR body. Do not launch or consume an attempt. C/D and doc-impact matches retain this blocking pre-commit gate.
 
+For that skip only, create the saved section expected by PR assembly:
+
+```bash
+_GT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.gstack/tmp"
+mkdir -p "$_GT" && chmod 700 "$_GT" || { echo "Not sent: cannot create $_GT for the text file." >&2; exit 1; }
+_EX=$(git rev-parse --git-path info/exclude 2>/dev/null) && mkdir -p "$(dirname "$_EX")" && { grep -qxF '/.gstack/tmp/' "$_EX" 2>/dev/null || echo '/.gstack/tmp/' >> "$_EX"; }
+DOCS_SECTION_FILE=$(mktemp "${_GT:?}/docs-skipped.XXXXXX") || { echo "Not sent: mktemp failed in $_GT." >&2; exit 1; }; echo "DOCS_SECTION_FILE: $DOCS_SECTION_FILE (name: ${DOCS_SECTION_FILE##*/})"
+```
+
+Write the text into each printed file with your file-write tool (Claude Code's Write tool needs a Read of the empty file first), exactly as it should appear. The text never goes into a shell command, heredoc or quoted argument. If a write fails or is refused, do not send: print the cause, the file path and the command below for sending by hand.
+
+Use the file-write tool to save exactly the `## Documentation` heading and the
+skip status above to this file. Keep its path as `DOCS_SECTION_FILE`; a missing or
+empty file blocks PR assembly. This creates no audit attempt. Then leave this
+section and continue the ship workflow.
+
+
 Store-only releases audit `read-only` before distribution, without branch gates or source-write authority.
 
 **Attempt budget:** an initial audit plus ONE repair/re-audit in the invocation record,

@@ -274,7 +274,7 @@ describe('review budgets', () => {
     const first = run(d, s, ['rerun-check', 'B', '--cycle', '0']);
     expect(first.status).toBe(0);
     expect(first.stdout).toContain('EFFECTIVE_REPAIR_CYCLE=2');
-    const ledger = readFileSync(join(project, 'B.ledger.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    const ledger = readFileSync(join(project, 'B.ledger.jsonl'), 'utf8').trim().split('\n').map(text => JSON.parse(text));
     expect(ledger[0].carried_cycles).toBe(2);
     expect(ledger[0].effective_cycle).toBe(2);
     run(d, s, ['plan', manifest(d, 'C', 'B'), '--cycle', '1']);
@@ -300,7 +300,7 @@ describe('review budgets', () => {
     expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=0');
     expect(b.stdout).toMatch(/^CARRIED_FROM=$/m);
     const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
-    const events = readFileSync(join(project, 'A.ledger.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    const events = readFileSync(join(project, 'A.ledger.jsonl'), 'utf8').trim().split('\n').map(text => JSON.parse(text));
     expect(events.filter((r: any) => r.record_type === 'complete')).toHaveLength(1);
   });
   test('a rerun after successful completion leaves the prior run unfinished', () => {

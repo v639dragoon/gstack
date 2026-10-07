@@ -53,7 +53,8 @@ describe('rendered skill mode branches', () => {
     expect(land).toContain('Post-merge claims no VERSION slot: skip to Step 3.5');
     expect(gate).toContain('**Wrong version**');
     expect(gate).toContain('In post-merge mode, skip this check');
-    expect(gate).toContain('Fragment: <FRAGMENT_PATH> present / MISSING');
+    expect(gate).toContain('`FRAGMENT_PATH` exists and is the single added fragment');
+    expect(gate).toContain('WARNING: changelog fragment missing');
     expect(gate).toContain('ALLOW_PATHS=$FRAGMENT_PATH');
     expect(review).toContain('Post-merge skips this advisory because it claims no VERSION');
     expect(docs).toContain('Post-merge:** Find the single added fragment');

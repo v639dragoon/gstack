@@ -526,7 +526,7 @@ describe('gstack-outcome-report model detail', () => {
 // ─── Rendered prose: both codex calls carry the model, the gate row records it
 
 describe('rendered routed step carries the model', () => {
-  const SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', 'test/fixtures/golden/factory-ship-SKILL.md'];
+  const SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/sections/adversarial.md'];
   const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
   for (const site of SITES) {
     test(`${site}: resolves the model once, pins it on both calls, records it, never re-runs on another model`, () => {
@@ -539,7 +539,7 @@ describe('rendered routed step carries the model', () => {
       const review = text.split('\n').filter((l) => /_gstack_codex_timeout_wrapper 540 codex review --base\b/.test(l));
       expect(exec).toHaveLength(1);
       expect(review).toHaveLength(1);
-      expect(exec[0]).toContain('codex exec {CODEX_MODEL_EXEC_FLAGS}');
+      expect(exec[0]).toContain('codex exec - {CODEX_MODEL_EXEC_FLAGS}');
       expect(exec[0]).toContain('model_reasoning_effort="{medium|high from REVIEWERS suffix}"');
       // Harness pass 2026-09-15: the governed slot renders NO frontier default; an
       // unrouted tier runs the project's own Codex config, never an inherited premium model.
