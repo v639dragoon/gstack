@@ -435,7 +435,7 @@ _gstack_codex_model_available() {
   esac
   local _codex_home="${CODEX_HOME:-$HOME/.codex}"
   local _gstack_home
-  _gstack_home="$(. "${BASH_SOURCE[0]%/*}/gstack-state-root.sh" 2>/dev/null && gstack_state_root)" || return 3
+  _gstack_home="$(. "$_GSTACK_CODEX_BIN/gstack-state-root.sh" 2>/dev/null && gstack_state_root)" || return 3
   local _cache="$_gstack_home/.codex-model-available-$_slug"
   local _cfg_m _auth_m _ver _sig
   _cfg_m=$(stat -c %Y "$_codex_home/config.toml" 2>/dev/null || stat -f %m "$_codex_home/config.toml" 2>/dev/null || echo 0)
@@ -558,49 +558,6 @@ _gstack_codex_timeout_wrapper() {
   # way a deadline reports timeout(1)'s exit 124; output already written stays.
   local _duration="$1"
   shift
-  # D4: immutable upstream autoplan phase drivers use the original command
-  # bytes. Route that call here, at execution, instead of editing those drivers.
-  # Current routed emitters have CODEX_MODEL_SOURCE; model probes have no
-  # _OUTSIDE_TMP. Neither enters this branch, so resolution cannot recurse.
-  if [ "${1:-}" = codex ] && [ -n "${_OUTSIDE_TMP:-}" ] && [ -z "${CODEX_MODEL_SOURCE:-}" ]; then
-    local _route_bin _route _route_rc _voice _arg _skip=0 _args=()
-    _route_bin="${GSTACK_BIN:-$_GSTACK_CODEX_BIN}"
-    _voice="${GSTACK_OUTSIDE_VOICE:-autoplan}"
-    _route_rc=0
-    _route=$(GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" \
-      _gstack_codex_timeout_wrapper "$_duration" "$_route_bin/gstack-codex-model" resolve --voice "$_voice" --effort medium </dev/null) || _route_rc=$?
-    if [ "$_route_rc" -ne 0 ]; then
-      [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
-      echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
-      return "$_route_rc"
-    fi
-    eval "$_route" || return 1
-    shift # codex executable; keep the upstream prompt/base and sandbox literal
-    for _arg in "$@"; do
-      if [ "$_skip" -eq 1 ]; then
-        _skip=0
-        case "$_arg" in model=*|review_model=*|model_reasoning_effort=*) continue ;; esac
-        _args+=( -c "$_arg" ); continue
-      fi
-      if [ "$_arg" = -c ]; then _skip=1; else _args+=( "$_arg" ); fi
-    done
-    # Resolve prints validated flags; use arrays to keep all prompt text literal.
-    if [ "${_args[0]:-}" = review ]; then
-      if [ -n "$CODEX_MODEL_REVIEW_FLAGS" ]; then _args+=( -c "model=\"$CODEX_MODEL\"" -c "review_model=\"$CODEX_MODEL\"" ); fi
-    elif [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _args+=( --model "$CODEX_MODEL" ); fi
-    _args+=( -c "model_reasoning_effort=\"$CODEX_EFFORT\"" )
-    local _started _result
-    _started=$(date +%s)
-    _result=0
-    _gstack_codex_timeout_wrapper "$_duration" codex "${_args[@]}" || _result=$?
-    # The legacy driver redirects stdout to this file. Validate completed
-    # content before recording coverage; transport success alone is insufficient.
-    if [ "$_result" -eq 0 ]; then
-      bun "$_route_bin/../lib/outside-review-result.ts" review "$_OUTSIDE_TMP/text" >&2 || _result=1
-    fi
-    "$_route_bin/gstack-voice-row" autoplan "$_voice" "$([ "$_result" -eq 0 ] && echo completed || echo unavailable)" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_started" >&2 || true
-    return "$_result"
-  fi
   local _grace="${_GSTACK_CODEX_KILL_AFTER:-10}"
   local _to _rc _start
   _to=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")

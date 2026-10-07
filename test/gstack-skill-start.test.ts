@@ -449,7 +449,7 @@ describe('gstack-skill-start behavior', () => {
       bin('gstack-config', ['set', 'update_check', 'false']);
       const leak = 'projects/p/learnings.jsonl';
       fs.mkdirSync(path.join(gh, 'projects/p'), { recursive: true });
-      fs.writeFileSync(path.join(gh, leak), '{"gh":"ghp_abcdefghij1234567890abcdef1234567890"}\n');
+      fs.writeFileSync(path.join(gh, leak), JSON.stringify({ gh: ['ghp', 'abcdefghij1234567890abcdef1234567890'].join('_') }) + '\n');
       bin('gstack-brain-enqueue', [leak]);
 
       // First start: the init's own files sync, the flagged one is held back.

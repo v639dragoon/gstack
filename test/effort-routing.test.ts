@@ -50,7 +50,7 @@ function rowLine(content: string, skill: string): string {
 }
 
 describe('effort routing (Phase 0)', () => {
-  const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/SKILL.md'];
+  const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/sections/adversarial.md'];
   for (const site of ADVERSARIAL_SITES) {
     test(`${site}: upstream passes coexist with the plan-routed slot`, () => {
       const content = read(site);
@@ -86,9 +86,9 @@ describe('effort routing (Phase 0)', () => {
       // default effort and the command consumes the resolved value, so the
       // policy may lower or raise it but never past high (resolver refuses).
       expect(content).toContain(`gstack-codex-model" resolve --voice 'plan-review' --effort medium`);
-      expect(codexLineWith(content, '_OUTSIDE_PROMPT')).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
-      expect(codexLineWith(content, '_OUTSIDE_PROMPT')).toContain('$CODEX_MODEL_EXEC_FLAGS');
-      expect(content).toContain(`gstack-voice-row" '${site.split('/')[0]}' 'plan-review' "$1"`);
+      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
+      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('${_CODEX_MODEL_ARGS[@]}');
+      expect(content).toContain(`gstack-voice-row" '${site.split('/')[0]}' 'plan-review' "\${1}"`);
       const row = rowLine(content, 'codex-plan-review');
       expect(row).toContain('"effort":"medium"');
       expect(row).toContain('"effort_source":"routed"');
@@ -98,8 +98,8 @@ describe('effort routing (Phase 0)', () => {
   test('document-release: the codex doc voice is routed to medium and records it', () => {
     const content = read('document-release/sections/release-body.md');
     expect(content).toContain(`gstack-codex-model" resolve --voice 'doc-release' --effort medium`);
-    expect(codexLineWith(content, '_OUTSIDE_PROMPT')).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
-    expect(content).toContain(`gstack-voice-row" 'document-release' 'doc-release' "$1"`);
+    expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
+    expect(content).toContain(`gstack-voice-row" 'document-release' 'doc-release' "\${1}"`);
     const row = rowLine(content, 'codex-doc-review');
     expect(row).toContain('"effort":"medium"');
     expect(row).toContain('"effort_source":"routed"');

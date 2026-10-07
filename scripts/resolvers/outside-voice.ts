@@ -119,15 +119,15 @@ export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOp
   // frontier constant is deliberately absent here so no voice runs a premium
   // model by omission (dohma harness pass, 2026-09-15).
   const codex = opts.structuredBase
-    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"\${_GSTACK_CODEX_SANDBOX:?}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG} $CODEX_MODEL_REVIEW_FLAGS -c "model_reasoning_effort=\\"$CODEX_EFFORT\\"" ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
-    : `codex exec - -C "$_REPO_ROOT" -s "\${_GSTACK_CODEX_SANDBOX:?}" ${CODEX_MODEL_CONFIG_FLAG} $CODEX_MODEL_EXEC_FLAGS -c "model_reasoning_effort=\\"$CODEX_EFFORT\\"" ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
+    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"\${_GSTACK_CODEX_SANDBOX:?}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG} "\${_CODEX_MODEL_ARGS[@]}" -c "model_reasoning_effort=\\"$CODEX_EFFORT\\"" ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
+    : `codex exec - -C "$_REPO_ROOT" -s "\${_GSTACK_CODEX_SANDBOX:?}" ${CODEX_MODEL_CONFIG_FLAG} "\${_CODEX_MODEL_ARGS[@]}" -c "model_reasoning_effort=\\"$CODEX_EFFORT\\"" ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
   const invocation = v.id === 'codex'
     ? `source "${bin}/gstack-codex-probe" && _gstack_codex_select_model ${opts.structuredBase ? 'review' : 'exec'} || exit 1
 _gstack_codex_sandbox_preflight >/dev/null || exit 1
 _gstack_codex_first_use_notice
 _OUTSIDE_T0=$(date +%s)
 _ROUTE_EXIT=0
-_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" _gstack_codex_timeout_wrapper ${Math.ceil(opts.timeoutMs / 1000)} "$GSTACK_BIN/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort} </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
+_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" _gstack_codex_timeout_wrapper ${Math.ceil(opts.timeoutMs / 1000)} "${bin}/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort} </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
 if [ "$_ROUTE_EXIT" -ne 0 ]; then
   cat "$_OUTSIDE_TMP/route-error" >&2
   cat "$_OUTSIDE_TMP/route-error"
@@ -136,6 +136,11 @@ if [ "$_ROUTE_EXIT" -ne 0 ]; then
   exit "$_ROUTE_EXIT"
 fi
 eval "$_CODEX_ROUTE" || exit 1
+# Preserve argv under bash and zsh; flags come only from the validated route.
+_CODEX_MODEL_ARGS=()
+if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
+${opts.structuredBase ? 'if [ -n "$CODEX_MODEL_REVIEW_FLAGS" ]; then _CODEX_MODEL_ARGS=(-c "model=\\\"$CODEX_MODEL\\\"" -c "review_model=\\\"$CODEX_MODEL\\\""); fi' : ''}
+_gstack_codex_select_model ${opts.structuredBase ? 'review' : 'exec'} "$CODEX_MODEL" || exit 1
 _OUTSIDE_EXIT=0
 _gstack_codex_timeout_wrapper ${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 ${opts.structuredBase ? 'cat "$_OUTSIDE_TMP/text"' : 'cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"'}`
@@ -164,7 +169,7 @@ ${v.id === 'codex' && ctx.skillName === 'autoplan' ? `if [ "$_OUTSIDE_EXIT" -eq 
   _gstack_codex_log_hang "autoplan" "0" || true
 fi` : ''}
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$GSTACK_BIN/gstack-voice-row" '${ctx.skillName}' ${sh(voice)} "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
+_row() { "${bin}/gstack-voice-row" '${ctx.skillName}' ${sh(voice)} "\${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 _OUTSIDE_RC=0
 bun "${root}/lib/outside-review-result.ts" --label '${v.label} outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" ${v.id === 'codex' && !opts.structuredBase ? '--events "$_OUTSIDE_TMP/events" ' : ''}${opts.gate ?? 'review'} "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 ${v.id === 'claude-code' ? '[ "$_OUTSIDE_RC" -eq 1 ] || cat "$_OUTSIDE_TMP/text" || exit 1\n' : ''}case "$_OUTSIDE_RC" in

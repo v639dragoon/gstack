@@ -50,6 +50,23 @@ process.exit(process.env.FAKE_MODE === 'nonzero' ? 4 : 0);
 fs.writeFileSync(FAKE_CLAUDE, fakeSource);
 fs.writeFileSync(path.join(BIN, 'codex'), `#!/usr/bin/env bun\n${fakeSource}`, {mode:0o755});
 
+// Supply the routed-model interface to the upstream emitter without paid probes.
+const shellQuote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
+fs.writeFileSync(path.join(BIN, 'gstack-codex-probe'), `source ${shellQuote(path.join(ROOT, 'bin/gstack-codex-probe'))}\n`);
+fs.writeFileSync(path.join(BIN, 'gstack-codex-model'), `#!/bin/bash
+model=$(bun ${shellQuote(path.join(ROOT, 'scripts/resolve-codex-generation-model.ts'))} --runtime exec) || exit 1
+model="\${model%%$'\\t'*}"
+exec_flags=; review_flags=
+if [ -n "\${FAKE_ROUTE_MODEL:-}" ]; then
+  model=$FAKE_ROUTE_MODEL
+  exec_flags="--model $model"
+  review_flags="-c model=\\\"$model\\\" -c review_model=\\\"$model\\\""
+fi
+printf "CODEX_MODEL='%s'\\nCODEX_MODEL_SOURCE='fixture'\\nCODEX_EFFORT='medium'\\nCODEX_MODEL_EXEC_FLAGS='%s'\\nCODEX_MODEL_REVIEW_FLAGS='%s'\\n" "$model" "$exec_flags" "$review_flags"
+`, { mode: 0o755 });
+fs.writeFileSync(path.join(BIN, 'gstack-voice-row'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+fs.writeFileSync(path.join(BIN, 'gstack-claude-code'), `#!/bin/sh\nexec ${shellQuote(path.join(ROOT, 'bin/gstack-claude-code'))} "$@"\n`, { mode: 0o755 });
+
 function environment(host: 'codex' | 'claude'): NodeJS.ProcessEnv {
   return {...process.env, GSTACK_ROOT:ROOT, GSTACK_BIN:path.join(ROOT,'bin'),
     GSTACK_CLAUDE_BIN:process.execPath, GSTACK_CLAUDE_BIN_ARGS:JSON.stringify([FAKE_CLAUDE]),
@@ -76,16 +93,37 @@ fs.appendFileSync(path.join(DIR,'changed.txt'),'working tree change\n');
 
 afterAll(() => fs.rmSync(TMP,{recursive:true,force:true}));
 
-function invoke(host: 'codex' | 'claude', options: Partial<OutsideCommandOptions> = {}, env: NodeJS.ProcessEnv = {}) {
+function invoke(host: 'codex' | 'claude', options: Partial<OutsideCommandOptions> = {}, env: NodeJS.ProcessEnv = {}, shell = 'bash') {
   fs.rmSync(CAPTURE,{force:true});
   // Env-var roots exercise installed runtime paths as well as the host choice.
-  const ctx: TemplateContext = {skillName:'review',tmplPath:'review/SKILL.md.tmpl',host,paths:HOST_PATHS.codex};
+  const ctx: TemplateContext = {skillName:'review',tmplPath:'review/SKILL.md.tmpl',host,paths:{ ...HOST_PATHS.codex, binDir:BIN }};
   const command = outsideVoiceCommand(ctx,{promptFile:PROMPT,timeoutMs:3000,...options});
-  return spawnSync('bash',['-c',command],{cwd:DIR,env:{...environment(host),...env},encoding:'utf8',timeout:10000});
+  return spawnSync(shell,['-c',command],{cwd:DIR,env:{...environment(host),...env},encoding:'utf8',timeout:10000});
 }
 function capture() { return JSON.parse(fs.readFileSync(CAPTURE,'utf8')); }
 
 describe('generated outside-review dispatch', () => {
+  for (const shell of ['bash', ...(Bun.which('zsh') ? ['zsh'] : [])]) {
+    test(`${shell}: routed model arguments remain distinct argv for exec and native review`, () => {
+      for (const structured of [false, true]) {
+        const result = invoke('claude', structured ? { structuredBase:'main', gate:'structured' } : {}, {
+          FAKE_ROUTE_MODEL:'routed-model', FAKE_RESPONSE: structured ? 'NO_FINDINGS' : 'Recommendation: approve because no findings remain.',
+        }, shell);
+        expect(result.status, result.stderr).toBe(0);
+        const args = capture().args;
+        if (structured) {
+          expect(args).toContain('model="routed-model"');
+          expect(args).toContain('review_model="routed-model"');
+        } else {
+          expect(args[args.indexOf('--model') + 1]).toBe('routed-model');
+          expect(capture().prompt).toBe(PROMPT_TEXT);
+        }
+        expect(args).toContain('model_reasoning_effort="medium"');
+        expect(args).toContain('skills.include_instructions=false');
+        expect(fs.existsSync(path.join(DIR,'NEVER'))).toBe(false);
+      }
+    });
+  }
   for (const host of ['codex', 'claude'] as const) {
     test(`${host}: creative direction retains the completed recommendation gate`, () => {
       const options = { purpose: 'design-direction' as const };
@@ -272,7 +310,7 @@ describe('generated outside-review dispatch', () => {
     const big = path.join(TMP, 'big-prompt.txt');
     const text = `${'x'.repeat(200_000)}\n"quotes" 'single' $(touch NEVER) \\ end\n`;
     fs.writeFileSync(big, text);
-    const ctx: TemplateContext = { skillName: 'review', tmplPath: 'review/SKILL.md.tmpl', host: 'claude', paths: HOST_PATHS.codex };
+    const ctx: TemplateContext = { skillName: 'review', tmplPath: 'review/SKILL.md.tmpl', host: 'claude', paths: { ...HOST_PATHS.codex, binDir:BIN } };
     const result = spawnSync('bash', ['-c', outsideVoiceCommand(ctx, { promptFile: big, timeoutMs: 5000 })], { cwd: DIR, env: environment('claude'), encoding: 'utf8', timeout: 15000 });
     expect(result.status).toBe(0);
     expect(capture().prompt).toBe(text);
@@ -331,16 +369,20 @@ describe('generated outside-review dispatch', () => {
 
   test('autoplan retains its Codex timeout event and hang record', () => {
     const events = path.join(TMP, 'autoplan-events');
-    const probe = path.join(BIN, 'gstack-codex-probe');
+    const autoplanBin = path.join(TMP, 'autoplan-bin');
+    fs.mkdirSync(autoplanBin);
+    fs.copyFileSync(path.join(BIN, 'gstack-codex-model'), path.join(autoplanBin, 'gstack-codex-model'));
+    fs.copyFileSync(path.join(BIN, 'gstack-voice-row'), path.join(autoplanBin, 'gstack-voice-row'));
+    const probe = path.join(autoplanBin, 'gstack-codex-probe');
     fs.writeFileSync(probe, `_gstack_codex_select_model() { _GSTACK_CODEX_SEL=gpt-6-astra; _GSTACK_CODEX_SANDBOX=read-only; }
 _gstack_codex_sandbox_preflight() { return 0; }
 _gstack_codex_first_use_notice() { :; }
-_gstack_codex_timeout_wrapper() { echo 'Partial finding'; return 124; }
+_gstack_codex_timeout_wrapper() { shift; if [ "$1" = codex ]; then echo 'Partial finding'; return 124; fi; "$@"; }
 _gstack_codex_log_event() { printf '%s %s\\n' "$1" "$2" >> "$FAKE_EVENTS"; }
 _gstack_codex_log_hang() { printf '%s %s\\n' "$1" "$2" >> "$FAKE_EVENTS"; }
 `);
     const ctx: TemplateContext = { skillName: 'autoplan', tmplPath: 'autoplan/SKILL.md.tmpl', host: 'claude',
-      paths: { ...HOST_PATHS.claude, binDir: BIN, skillRoot: ROOT } };
+      paths: { ...HOST_PATHS.claude, binDir: autoplanBin, skillRoot: ROOT } };
     const command = outsideVoiceCommand(ctx, { promptFile: PROMPT, timeoutMs: 600000 });
     const result = spawnSync('bash', ['-c', command], { cwd: DIR, env: { ...environment('claude'), FAKE_EVENTS: events }, encoding: 'utf8', timeout: 5000 });
     expect(result.status).toBe(124);
@@ -373,7 +415,7 @@ echo 'Partial finding before the deadline'
 sleep 30
 echo 'Recommendation: approve because the late answer arrived.'
 `, { mode: 0o755 });
-    const ctx: TemplateContext = { skillName: 'review', tmplPath: 'review/SKILL.md.tmpl', host: 'claude', paths: HOST_PATHS.codex };
+    const ctx: TemplateContext = { skillName: 'review', tmplPath: 'review/SKILL.md.tmpl', host: 'claude', paths: { ...HOST_PATHS.codex, binDir:BIN } };
     const command = outsideVoiceCommand(ctx, { promptFile: PROMPT, timeoutMs: 1000 });
     const started = Date.now();
     const result = spawnSync('bash', ['-c', command], { cwd: DIR, encoding: 'utf8', timeout: 10000,

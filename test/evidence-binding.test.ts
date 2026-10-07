@@ -6,8 +6,9 @@ import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-import { versionOnlyChange } from '../bin/gstack-evidence';
 const bin = join(import.meta.dir, '..', 'bin/gstack-evidence'), dirs: string[] = [];
+// Bun loads this extensionless executable; tsc cannot resolve it statically.
+const { versionOnlyChange } = await import(bin);
 afterAll(() => dirs.forEach((x) => rmSync(x, { recursive: true, force: true })));
 function setup() {
   const d = mkdtempSync(join(tmpdir(), 'ev-repo-')), s = mkdtempSync(join(tmpdir(), 'ev-state-'));

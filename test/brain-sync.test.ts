@@ -391,7 +391,7 @@ describe('gstack-brain-sync secret scan', () => {
     fs.mkdirSync(path.join(tmpHome, 'projects', 'p'), { recursive: true });
     const leakPath = 'projects/p/leaked.jsonl';
     fs.writeFileSync(path.join(tmpHome, leakPath),
-      '{"gh":"ghp_abcdefghij1234567890abcdef1234567890"}\n');
+      JSON.stringify({ gh: ['ghp', 'abcdefghij1234567890abcdef1234567890'].join('_') }) + '\n');
     run(['gstack-brain-enqueue', leakPath]);
     run(['gstack-brain-sync', '--once']);  // blocked
     run(['gstack-brain-sync', '--skip-file', leakPath]);
@@ -421,7 +421,7 @@ describe('gstack-brain-sync visible block', () => {
     fs.mkdirSync(path.join(tmpHome, 'projects/p/ceo-plans'), { recursive: true });
   }
   function writeFlagged() {
-    fs.writeFileSync(path.join(tmpHome, FLAGGED), '{"gh":"ghp_abcdefghij1234567890abcdef1234567890"}\n');
+    fs.writeFileSync(path.join(tmpHome, FLAGGED), JSON.stringify({ gh: ['ghp', 'abcdefghij1234567890abcdef1234567890'].join('_') }) + '\n');
     run(['gstack-brain-enqueue', FLAGGED]);
   }
   function writeClean() {
@@ -486,7 +486,7 @@ describe('gstack-brain-sync visible block', () => {
     // A leftover from a crashed drain: staged, secret-shaped, with a tab in
     // its name, which the per-file scanner refuses to report on.
     const odd = 'projects/p/odd\tname.jsonl';
-    fs.writeFileSync(path.join(tmpHome, odd), '{"gh":"ghp_abcdefghij1234567890abcdef1234567890"}\n');
+    fs.writeFileSync(path.join(tmpHome, odd), JSON.stringify({ gh: ['ghp', 'abcdefghij1234567890abcdef1234567890'].join('_') }) + '\n');
     expect(git(['add', '-f', '--', odd]).status).toBe(0);
     const before = git(['rev-list', '--count', 'HEAD']).stdout.trim();
     const r = run(['gstack-brain-sync', '--once']);

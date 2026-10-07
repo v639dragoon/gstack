@@ -124,7 +124,7 @@ try {
     .readFileSync(ep, 'utf8')
     .trim()
     .split('\n')
-    .map(JSON.parse)
+    .map(text => JSON.parse(text))
     .filter((r: any) => {
       const t = Date.parse(r.ts || r.timestamp || r.generated_at || '');
       return t >= cutoff;
@@ -158,7 +158,7 @@ try {
     .trim()
     .split('\n')
     .filter(Boolean)
-    .map(JSON.parse);
+    .map(text => JSON.parse(text));
 } catch {}
 const resolved = new Set(
   ledger.filter((r) => r.record_type === 'resolved').map((r) => r.fingerprint),

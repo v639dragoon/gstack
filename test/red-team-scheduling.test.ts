@@ -23,7 +23,7 @@ const ROOT = path.resolve(import.meta.dir, '..');
 const RENDERED_SITES = [
   'ship/sections/review-army.md',
   'review/sections/review-army.md',
-  '.factory/skills/gstack-ship/SKILL.md',
+  '.factory/skills/gstack-ship/sections/review-army.md',
 ];
 
 describe('Red Team scheduling (Phase 0)', () => {

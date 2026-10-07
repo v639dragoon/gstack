@@ -133,7 +133,7 @@ describe('codex frontier model flag is present', () => {
       for (const call of calls) expect(call).toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
     }
     for (const file of ['review/sections/adversarial.md', 'ship/sections/adversarial.md']) {
-      const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8');
+      const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8').split('### Governor codex-structured slot')[1]!;
       const calls = rendered.split('\n').filter(line => line.includes('codex review --base') && line.includes('2>'));
       expect(calls.length).toBeGreaterThan(0);
       for (const call of calls) expect(call).not.toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
@@ -157,16 +157,20 @@ describe('codex frontier model flag is present', () => {
       const rendered = fs.readFileSync(path.join(ROOT, 'autoplan', 'sections', file), 'utf-8');
       expect(rendered, `${file} lost the model flag`).toContain(CODEX_MODEL_CONFIG_FLAG);
       expect(rendered).not.toContain('{{CODEX_MODEL_CONFIG_FLAG}}');
-      expect(rendered, `${file} bypasses the routing wrapper`).toContain('_gstack_codex_timeout_wrapper 600 codex exec');
+      expect(rendered, `${file} bypasses the routing wrapper`).toContain('_gstack_codex_timeout_wrapper 540 codex exec');
     }
   });
 
-  test('the shared wrapper re-routes autoplan voices through gstack-codex-model at medium', () => {
-    // Fork: policy -> GSTACK_CODEX_MODEL -> project default, never the rendered frontier flag.
-    const probe = fs.readFileSync(path.join(ROOT, 'bin', 'gstack-codex-probe'), 'utf-8');
-    expect(probe).toContain('_voice="${GSTACK_OUTSIDE_VOICE:-autoplan}"');
-    expect(probe).toContain('gstack-codex-model" resolve --voice "$_voice" --effort medium');
-    expect(probe).toContain('model=*|review_model=*|model_reasoning_effort=*) continue');
+  test('the shared emitter routes autoplan voices through gstack-codex-model at medium', () => {
+    // D4: upstream replaced the private driver with the common stdin emitter.
+    for (const file of ['ceo-phase.md', 'design-phase.md', 'eng-phase.md', 'dx-phase.md']) {
+      const rendered = fs.readFileSync(path.join(ROOT, 'autoplan', 'sections', file), 'utf8');
+      expect(rendered).toContain('gstack-codex-model" resolve --voice');
+      expect(rendered).toContain('--effort medium');
+      expect(rendered).toContain('"${_CODEX_MODEL_ARGS[@]}"');
+      expect(rendered).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
+      expect(rendered).toContain('<"$_OUTSIDE_INPUT"');
+    }
   });
 });
 

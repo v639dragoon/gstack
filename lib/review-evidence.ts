@@ -185,7 +185,7 @@ function carriedAudit(runId: unknown, oldTree: string, env = process.env): Recor
   try {
     const plan = JSON.parse(readFileSync(join(env.GSTACK_REVIEW_DIR, 'budgets', `${runId}.json`), 'utf8'));
     if (JSON.stringify(plan.policy) !== JSON.stringify(policy)) return;
-    const rows = readFileSync(join(env.GSTACK_REVIEW_DIR, 'budgets', `${runId}.ledger.jsonl`), 'utf8').split('\n').filter(Boolean).map(JSON.parse);
+    const rows = readFileSync(join(env.GSTACK_REVIEW_DIR, 'budgets', `${runId}.ledger.jsonl`), 'utf8').split('\n').filter(Boolean).map(text => JSON.parse(text));
     const audit = rows.findLast(r => r.record_type === 'carry-forward' && r.run_id === runId &&
       r.old_wtree === oldTree && r.new_wtree === env.GSTACK_STAMP_WTREE &&
       r.branch_id === sha256(env.GSTACK_REVIEW_BRANCH || '') &&
@@ -209,7 +209,7 @@ function unchangedAdviceCoverage(repo: string, from: string, to: string, paths: 
 export function carryReviewRecords(runId: string, env = process.env): Record<string, any>[] {
   if (!env.GSTACK_REVIEW_LOG) return [];
   let rows: Record<string, any>[];
-  try { rows = readFileSync(env.GSTACK_REVIEW_LOG, 'utf8').split('\n').filter(Boolean).map(JSON.parse); }
+  try { rows = readFileSync(env.GSTACK_REVIEW_LOG, 'utf8').split('\n').filter(Boolean).map(text => JSON.parse(text)); }
   catch (error: any) { if (error.code === 'ENOENT') return []; throw error; }
   const carried: Record<string, any>[] = [];
   for (const [index, rec] of rows.entries()) {

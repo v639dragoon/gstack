@@ -36,8 +36,8 @@ function fixture(enabled = true, extra: any = {}) {
     const rec = { skill, run_id: 'run', cycle: 0, status: 'clean', completed: true, converged: true, issues_found: 0, critical: 0 };
     return { token, rec, finish: () => cli('gstack-review-log', JSON.stringify(rec), '--finish', token) };
   };
-  const ledger = () => readFileSync(join(s, 'projects', basename(d), 'budgets/run.ledger.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
-  const rows = () => readFileSync(join(s, 'projects', basename(d), 'main-reviews.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+  const ledger = () => readFileSync(join(s, 'projects', basename(d), 'budgets/run.ledger.jsonl'), 'utf8').trim().split('\n').map(text => JSON.parse(text));
+  const rows = () => readFileSync(join(s, 'projects', basename(d), 'main-reviews.jsonl'), 'utf8').trim().split('\n').map(text => JSON.parse(text));
   return { d, s, cli, git, write, plan, verdict, reviewers, log, ledger, rows, wtree, makePlan };
 }
 afterAll(() => dirs.forEach(d => rmSync(d, { recursive: true, force: true })));

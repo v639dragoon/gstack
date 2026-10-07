@@ -166,7 +166,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // wave's headline capability) grows the union to 1.195x. Deliberate:
     // the section is on-demand (loads only for Apple store targets), so
     // per-invocation cost for non-iOS ships is one manifest line.
-    maxSizeRatio: 1.495, // Shared advisory identity/dedup + critical-severity validation: 248,065 union bytes / 187,706 baseline = 1.3216 (2026-09-17). + test value bar in the lazy Step 7 section (value cards, weak paths, gate table, base control, machine checks; ~13.6KB): measured 1.396 (2026-09-29). + W1 guarded state-root resolution (`eval gstack-paths; : "${GSTACK_STATE_ROOT:?…}"`) in the Context Recovery preamble, the eureka log and each state-writing bash block; measured 1.401 (2026-09-30). + the shared QA review step's plan-check timing rule (plan checks and their revalidation run on --timeout-ms after smoke expiry); measured 1.4022 (2026-09-30). + the shared TEST_BOOTSTRAP owned-change undo rules (s03 H1-H3, M1) and the value-bar coverage wording (s03 M2/M3); measured 1.4044 (2026-10-02). + severe fix wave ship-review lane: G1 NO_VERSION dispatch, title and CHANGELOG arms (versionless repos ship without inventing a version), F1 parent-side plan binding before the audit dispatch (binding, docs/designs candidates, exact not-run line) and D3's data-not-instructions line; +2,126 union bytes, measured 1.4135 (2026-10-03). + INV-1 consumer lines (outside review `unverified`/`unavailable` is missing coverage in the readiness note and PR body); measured 1.4148 (2026-10-03). + v1.91.19.0 severe fix wave: verdict-form outside-review callers with sandbox preflight and first-use notice (INV-1/B1/Q2), P0/P1 gate and unverified wording, bound-plan discovery (F1), visible LEARNINGS failures (B5), carved external pointers; measured 267,752 / 187,706 = 1.4264 (2026-10-03). + v1.91.18.0 (#3023) merged into the v1.91.19.0 wave; measured 267,874 / 187,706 = 1.4271 (2026-10-04). + Oct 6 fix wave: quota_exhausted preflight branch (#3051) and quoted-heredoc issue template (#3046); measured 268,199 / 187,706 = 1.4288 (2026-10-06). + Step 10's inline no-PR check before the Greptile dispatch (#3020); measured 268,655 / 187,706 = 1.4313 (2026-10-06). + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); measured 275,422 / 187,706 = 1.4673 (2026-10-06). Combined Oct 6 wave head (B free-text files + D measure loop + A rework): measured 280,363 / 187,706 = 1.4936 (2026-10-06). + gate-once push rule (no second paid gate after a CI push); measured 280,573 / 187,706 = 1.4947 (2026-10-06).
+    maxSizeRatio: 1.763, // v1.91.32: upstream 280,597 + retained fork paragraphs 50,204 = 330,801 union bytes / 187,706 baseline = 1.7623; pinned governor, routing and post-merge contracts retained.
   },
   'plan-ceo-review': {
     skill: 'plan-ceo-review',
@@ -221,7 +221,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // 1.08 → 1.10: the scope-gate exceptions block (+ its adversarial-review
     // hardening: host-anchored mode signal, precedence, passing-mention
     // guards) and the plan-mode preamble reword land the union at 1.092.
-    maxSizeRatio: 1.185, // + clarity rules for saved decisions/setup gates + the Aside probe's failure reason; measured 1.1504. + test value bar and Tests to Retire in the lazy Test review section (~2.6KB); measured 1.168 + W1 guarded state-root resolution (`eval gstack-paths; : "${GSTACK_STATE_ROOT:?…}"`) in the Context Recovery preamble, the eureka log and each state-writing bash block; measured 1.173 (2026-09-30). + v1.91.12.0 merge of #2999 (headless rule: a disallowed question tool never qualifies) with #3002; measured 1.1741 (2026-10-01). + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); measured 146,905 / 124,597 = 1.1790 (2026-10-06). Combined Oct 6 wave head (A and B): measured 147,524 / 124,597 = 1.1840 (2026-10-06).
+    maxSizeRatio: 1.194, // v1.91.32: upstream 147,521 + retained fork paragraphs 1,182 = 148,703 union bytes / 124,597 baseline = 1.1935; pinned governor, routing and post-merge contracts retained.
   },
   'plan-design-review': {
     skill: 'plan-design-review',
@@ -243,7 +243,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     // tier-2+ skeleton (measured 89,184). Main's v1.64.0.0 adds ~340 B more
     // (telemetry --error-message/--failed-step preamble prose, PR #769).
     // Budget covers the sum of both waves.
-    maxSkeletonBytes: 84_700, // Harness-aware outside voice: validated dispatch and provenance. + v1.91.19.0 wave: design --version probe (B4) and verdict-form outside voice (INV-1) on top of v1.91.17.0's round accounting (#3022); measured 80,443 (2026-10-03). + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); skeleton measured 84,669 (2026-10-06).
+    maxSkeletonBytes: 85_900, // v1.91.32: upstream 84,660 + retained fork paragraphs 1,142 = 85,802 measured bytes.
     minUnionBytes: 99_200, // token-reduction Phases 1-2 (v1.69.x branch); measured union 110,293
     mustContain: ['design', 'visual'],
     maxSizeRatio: 1.12, // D1 1.104 + main's ~0.008
@@ -348,10 +348,10 @@ do not launch the downstream skill or open a browser.`,
     // the #538 opt-out + D1 evidence directive — ratio 1.104 measured.
     // #2499 project-scope MCP jq in the brain-sync block grew every tier-2+
     // skeleton ~1.5KB (entry resolution emitted once per SKILL.md).
-    maxSkeletonBytes: 92_600, // Office-hours + sketch outside voices include host guards and completion checks. + v1.91.19.0 wave: Q<N> open-question prose form (#2729, approved Q3), DESIGN_READY --version probe (B4), Aside ~/.local/bin fallback (E7), verdict-form outside voice (INV-1), plus v1.91.17.0's round accounting (#3022) merged in; measured 89,684 (2026-10-03). + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); skeleton measured 92,590 (2026-10-06).
+    maxSkeletonBytes: 94_900, // v1.91.32: upstream 92,581 + retained fork paragraphs 2,286 = 94,867 measured bytes.
     minUnionBytes: 115_800, // Phase 4 wave 4; measured union 118,175
     mustContain: ['design doc', 'problem statement'],
-    maxSizeRatio: 1.143, // + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); measured 149,758 / 131,110 = 1.1422 (2026-10-06).
+    maxSizeRatio: 1.16, // v1.91.32: upstream 149,749 + retained fork paragraphs 2,286 = 152,035 union bytes / 131,110 baseline = 1.1596; pinned governor, routing and post-merge contracts retained.
   },
   'document-release': {
     skill: 'document-release',
@@ -411,7 +411,7 @@ do not launch the downstream skill or open a browser.`,
     // eureka log, the office-hours lookup and the taste-profile read; measured
     // 1.0834 (2026-09-30). + named design-direction defaults to avoid in the native
     // subagent prompt (s02 H4a); measured 1.0911 (2026-10-02).
-    maxSizeRatio: 1.144, // + v1.91.19.0 wave: design --version probe (B4), taste-profile load (F3), verdict-form outside voice (INV-1), plus v1.91.17.0's round accounting and board/approval blocks (#3022) merged in; measured 100,446 / 90,375 = 1.1114 (2026-10-03). + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); measured 103,384 / 90,375 = 1.1439 (2026-10-06).
+    maxSizeRatio: 1.157, // v1.91.32: upstream 103,378 + retained fork paragraphs 1,151 = 104,529 union bytes / 90,375 baseline = 1.1566; pinned governor, routing and post-merge contracts retained.
   },
   cso: {
     skill: 'cso',
@@ -485,7 +485,7 @@ do not launch the downstream skill or open a browser.`,
     maxSkeletonBytes: 79_000, // upstream v1.91.12 74,881 + retained fork paragraphs 4,097 = 78,978 (2026-10-01); pinned fork behavior retained.
     minUnionBytes: 89_000, // Upstream floor restored under D4; measured union 148,957 (v1.91.9)
     mustContain: ['confidence', 'P1', 'P2', 'Review Army', 'adversarial'],
-    maxSizeRatio: 1.217, // Shared-code feature + critical-severity validation: 128,042 union bytes / 108,523 baseline = 1.1799; preserves content floors. + v1.91.12.0 merge of #2999 (above, plus plan-completion fallback intent and specialist checklist-by-path) with #3002; measured 1.1843 (2026-10-01). + v1.91.19.0 wave: verdict-form Codex callers with sandbox preflight (INV-1/B1), P0/P1 structured gate (B1b), bound-plan discovery and data-not-instructions guard (F1/D3), visible LEARNINGS failures (B5); measured 129,941 / 108,523 = 1.1974 (2026-10-03). + v1.91.18.0 (#3023) merged into the v1.91.19.0 wave; measured 130,025 / 108,523 = 1.1981 (2026-10-04). + Oct 6 fix wave: quota_exhausted preflight branch (#3051); measured 130,359 / 108,523 = 1.2012 (2026-10-06). + Oct 6 fix wave A3/CEO-12: free text reaches commands only through agent-written mktemp files (mktemp block, write rule, path rebuild and refusal at each posting, prompt and brief site); measured 131,314 / 108,523 = 1.2100 (2026-10-06). Combined Oct 6 wave head (A and B): measured 131,966 / 108,523 = 1.2160 (2026-10-06).
+    maxSizeRatio: 1.515, // v1.91.32: upstream 131,963 + retained fork paragraphs 32,422 = 164,385 union bytes / 108,523 baseline = 1.5147; pinned governor, routing and post-merge contracts retained.
   },
   codex: {
     skill: 'codex',
@@ -510,7 +510,7 @@ do not launch the downstream skill or open a browser.`,
       gateAfterStop: 'EXIT PLAN MODE GATE',
     },
     behavioral: 'prompt',
-    maxSkeletonBytes: 59_400, // upstream v1.91.12 58,778 + retained fork paragraphs 586 = 59,364 (2026-10-01); pinned fork behavior retained.
+    maxSkeletonBytes: 59_600, // v1.91.32: upstream 58,918 + retained fork paragraphs 586 = 59,504 measured bytes.
     minUnionBytes: 83_400, // Phase 4 wave 1; measured union 84,304
     mustContain: ['GATE: PASS', 'CROSS-MODEL ANALYSIS', 'codex exec resume', 'sandbox_mode="read-only"', 'mktemp'],
     maxSizeRatio: 1.06, // measured 1.040 vs the v1.64.1.0 parity baseline
@@ -537,7 +537,7 @@ do not launch the downstream skill or open a browser.`,
     },
     behavioral: 'prompt',
     maxSkeletonBytes: 74_500, // + Aside browser contract for Step 7 canary ({{ASIDE_SETUP}}); measured 73_523
-    maxSizeRatio: 1.100, // + v1.81 Aside contract + gstack-browser fallback block; measured 1.077. + both untrusted-content marker formats in the browser fallback (W7f) + the readiness gate's project test command and live eval-store paths (s06 H6/H7); measured 1.1076 (2026-10-02). Re-measured 1.0943 (2026-10-03); cap = measured + 0.005 headroom.
+    maxSizeRatio: 1.122, // v1.91.32: upstream 115,028 + retained fork paragraphs 2,265 = 117,293 union bytes / 104,578 baseline = 1.1216; pinned governor, routing and post-merge contracts retained.
     minUnionBytes: 91_000, // Phase 4 wave 1; estimated union ~94.9KB
     mustContain: ['readiness', 'merge', 'canary', 'revert', 'staging'],
   },
@@ -575,7 +575,7 @@ do not launch the downstream skill or open a browser.`,
     maxSkeletonBytes: 70_000, // Phase-specific outside coverage, native fallback, and harness guard.
     minUnionBytes: 85_000, // measured union 86,926
     mustContain: ['6 Decision Principles', 'TASTE DECISION', 'USER CHALLENGE', 'consensus', 'Restore Point'],
-    maxSizeRatio: 1.13, // 2026-09-15 harness pass: four routed voices (resolve + voice-row per phase) measured 1.126; four validated outside invocations replace raw CLI calls, phases keep independent coverage.
+    maxSizeRatio: 1.16, // v1.91.32: upstream 113,701 + retained fork paragraphs 4,504 = 118,205 union bytes / 101,979 baseline = 1.1591; pinned governor, routing and post-merge contracts retained.
   },
   spec: {
     skill: 'spec',
