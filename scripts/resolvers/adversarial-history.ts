@@ -1,5 +1,6 @@
 /** Persist upstream attempt receipts and fork per-gate telemetry. */
 import type { TemplateContext } from './types';
+import { governorAdversarialTelemetry } from './governor-accounting';
 import { outsideVoiceFor } from './outside-voice';
 
 export function adversarialPersistResult(ctx: TemplateContext, isShip: boolean): string {
@@ -31,20 +32,7 @@ Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.
   "informational" with completed:false when coverage is missing.
 The \`effort\` fields describe the CODEX passes — both stay at high; only plan and doc voices route to medium.
 
-**Persist per-gate telemetry (Phase 0):** one gate record per pass that ran,
-substituting carried literals (RUN_ID/MANIFEST_WTREE from the Step 9.1
-manifest; if none this run, run \`gstack-diff-manifest <base>\` now).
-\`tokens.total\` for a codex pass comes from the \`tokens used\` line in its
-stderr (read BEFORE \`rm -f\`); omit \`tokens\` when unavailable.
-
-\`\`\`bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-\`\`\`
-
-Emit records only for passes that dispatched — absence is the skip signal.
-Telemetry is best-effort: failures never block.
+${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 'Record each dispatched adversarial gate using the Adversarial telemetry section of `governor-structured.md`.' : governorAdversarialTelemetry(ctx)}
 
 ---`;
 }

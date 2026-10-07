@@ -446,6 +446,8 @@ settlement and missing-coverage rules; the budget allows one corrected attempt.
 Routed codex-structured remains an additional Step 11 slot.
 
 
+
+
 For each selected specialist, launch an independent subagent via the Agent tool.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
@@ -673,9 +675,11 @@ When `RED_TEAM_LOC_TRIGGER=false`, skip LOC activation. When `UPSTREAM_SPECIALIS
 
 Register upstream activation as `upstream-specialist:red-team` unless red-team
 already occupies a planned slot. Dispatch the chosen gate through review-budget
-before the Agent call; record its verdict and gate row afterward. A planned
+before the Sonnet Agent call; record its verdict and gate row afterward. A planned
 red-team runs even without upstream activation. Upstream-required activation is
 accounted separately and does not consume the single routed escalation.
+
+
 
 Two dispatch paths, ONE activation condition (the condition above is the whole trigger surface — the paths only change WHEN the dispatch happens):
 

@@ -526,26 +526,32 @@ describe('gstack-outcome-report model detail', () => {
 // ─── Rendered prose: both codex calls carry the model, the gate row records it
 
 describe('rendered routed step carries the model', () => {
-  const SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/sections/adversarial.md'];
+  const SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/sections/adversarial.md', '.factory/skills/gstack-review/governor-structured.md'];
   const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
   for (const site of SITES) {
     test(`${site}: resolves the model once, pins it on both calls, records it, never re-runs on another model`, () => {
       const union = read(site);
-      expect(union).toContain('adversarial subagent (always runs)');
+      const parent = site.endsWith('/governor-structured.md') ? read(site.replace('governor-structured.md', 'SKILL.md')) : union;
+      expect(parent).toContain('adversarial subagent (always runs)');
+      if (parent !== union) {
+        expect(parent).toContain('Before dispatch, Read `governor-structured.md`');
+        expect(parent).toContain('Missing or unreadable asset means INCOMPLETE');
+      }
       const text = union.slice(union.indexOf('### Governor codex-structured slot'));
       expect(text.length).toBeGreaterThan(1000);
       expect(text).toContain('gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}"');
-      const exec = text.split('\n').filter((l) => /_gstack_codex_timeout_wrapper 540 codex exec\b/.test(l));
-      const review = text.split('\n').filter((l) => /_gstack_codex_timeout_wrapper 540 codex review --base\b/.test(l));
+      const exec = text.split('\n').filter((l) => /run-with-timeout --effort "\{PLAN_EFFORT\}" 540 codex exec\b/.test(l));
+      const review = text.split('\n').filter((l) => /run-with-timeout --effort "\{PLAN_EFFORT\}" 540 codex review --base\b/.test(l));
       expect(exec).toHaveLength(1);
       expect(review).toHaveLength(1);
       expect(exec[0]).toContain('codex exec - {CODEX_MODEL_EXEC_FLAGS}');
-      expect(exec[0]).toContain('model_reasoning_effort="{medium|high from REVIEWERS suffix}"');
+      expect(exec[0]).toContain('run-with-timeout --effort "{PLAN_EFFORT}"');
       // Harness pass 2026-09-15: the governed slot renders NO frontier default; an
       // unrouted tier runs the project's own Codex config, never an inherited premium model.
       expect(review[0]).toContain('codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS}');
       expect(review[0]).not.toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
-      expect(review[0]).toContain('model_reasoning_effort="{medium|high from REVIEWERS suffix}"');
+      expect(review[0]).toContain('run-with-timeout --effort "{PLAN_EFFORT}"');
+      for (const call of [...exec, ...review]) expect(call).toContain('${_CODEX_SANDBOX_MODE:?}');
       expect(text).toContain('CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))');
       const gateRow = text.split('\n').find((l) => l.includes('gstack-gate-log') && l.includes('"gate":"codex-structured"') && l.includes('"trigger":"review-plan"'));
       expect(gateRow).toBeDefined();
