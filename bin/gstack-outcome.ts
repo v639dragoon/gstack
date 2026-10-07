@@ -12,10 +12,10 @@ const get = (suffix: string): string | null => {
   const r = git(['config', '--get', key(suffix)]);
   return r.status === 0 ? r.stdout.trim() : null;
 };
-const fail = (m: string) => {
+function fail(m: string): never {
   console.error(`gstack-outcome: ${m}`);
   process.exit(1);
-};
+}
 const option = (name: string): string | null => {
   const i = args.indexOf(name);
   return i >= 0 && i + 1 < args.length ? args[i + 1] : null;

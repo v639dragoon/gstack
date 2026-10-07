@@ -35,7 +35,7 @@ const records = (id: string): any[] => {
       .trim()
       .split('\n')
       .filter(Boolean)
-      .map(JSON.parse);
+      .map(text => JSON.parse(text));
   } catch {
     return [];
   }

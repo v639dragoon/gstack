@@ -41,7 +41,7 @@ describe('generated Codex plan-review shell invocation', () => {
     const rendered = generateCodexPlanReview({ ...reviewContext('claude'),
       paths: { ...HOST_PATHS.claude, binDir: bin, skillRoot: ROOT },
     });
-    const ready = rendered.slice(rendered.indexOf('**If `CODEX_MODE: ready` — run Codex:**'),
+    const ready = rendered.slice(rendered.indexOf('**If `CODEX_MODE: ready` (or `unverified`) — run Codex:**'),
       rendered.indexOf('Present the full output verbatim:'));
     const blocks = [...ready.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!);
     const prompt = path.join(dir, 'review-prompt.txt');
@@ -59,7 +59,8 @@ describe('generated Codex plan-review shell invocation', () => {
     fs.writeFileSync(stale, 'FOREIGN OLD REVIEW\n');
     fs.writeFileSync(staleError, 'FOREIGN OLD ERROR\n');
     const writeBin = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n' + body, { mode: 0o755 });
-    fs.copyFileSync(path.join(ROOT, 'bin/gstack-codex-probe'), path.join(bin, 'gstack-codex-probe'));
+    // Upstream's shared self-location must resolve the actual runtime script.
+    fs.writeFileSync(path.join(bin, 'gstack-codex-probe'), `#!/usr/bin/env bash\nexec ${quote(path.join(ROOT, 'bin/gstack-codex-probe'))} \"$@\"\n`, { mode: 0o755 });
     writeBin('gstack-codex-model', '[ \"$FAKE_ROUTE_FAIL\" != 1 ] || { echo unavailable-default >&2; exit 1; }; printf \"%s\\n\" \"CODEX_MODEL=fixture-model\" \"CODEX_MODEL_SOURCE=policy\" \"CODEX_EFFORT=medium\" \"CODEX_MODEL_EXEC_FLAGS=\"\n');
     writeBin('gstack-voice-row', 'exit 0\n');
     writeBin('git', 'printf "%s\\n" "$FAKE_REPO"\n');

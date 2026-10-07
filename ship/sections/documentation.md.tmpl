@@ -2,6 +2,16 @@
 
 When `DOC_RELEASE=false`, skip this pass: print `Documentation: skipped (tier A/B, no doc-impact)` and carry that exact status to Step 16's stage-3 table and the PR body. Do not launch or consume an attempt. C/D and doc-impact matches retain this blocking pre-commit gate.
 
+For that skip only, create the saved section expected by PR assembly:
+
+{{FREE_TEXT_FILE:DOCS_SECTION_FILE=docs-skipped}}
+
+Use the file-write tool to save exactly the `## Documentation` heading and the
+skip status above to this file. Keep its path as `DOCS_SECTION_FILE`; a missing or
+empty file blocks PR assembly. This creates no audit attempt. Then leave this
+section and continue the ship workflow.
+
+
 Store-only releases audit `read-only` before distribution, without branch gates or source-write authority.
 
 **Attempt budget:** an initial audit plus ONE repair/re-audit in the invocation record,
