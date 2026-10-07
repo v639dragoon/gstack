@@ -1,5 +1,5 @@
 {
-  "source": "Step and phase headings of the judged workflow skills, derived on 2026-10-04 from the generated Claude SKILL.md and sections (templates at the integration head). qa-only lists its template's own top-level headings. C1 calibration showed the workflow judges pass a bundle with a required step removed, so missing-step coverage lives here.",
+  "source": "Step and phase headings of the judged workflow skills, derived on 2026-10-04 from the generated Claude SKILL.md and sections (templates at the integration head). qa-only lists its template's own top-level headings. Fork exception: Step 5e records the opt-in NON_CODE_DELTA bounded verification step; upstream repeat remains the default. C1 calibration showed the workflow judges pass a bundle with a required step removed, so missing-step coverage lives here.",
   "skills": {
     "qa": {
       "SKILL.md": [
@@ -78,6 +78,7 @@
         "### Step 5b: Auto-fix all AUTO-FIX items",
         "### Step 5c: Batch-ask about ASK items",
         "### Step 5d: Apply user-approved fixes",
+        "### Step 5e: Bounded repair verification",
         "## Step 5.8: Persist Eng Review result",
         "### 1. Re-review after edits",
         "### 2. Fill the record"

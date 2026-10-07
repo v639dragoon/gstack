@@ -4,12 +4,14 @@
 
 When `AUDIT_REUSE=true`, `DISPATCH=blocked reason=reused` is satisfied: retain the saved report, counts, decisions and plan checks without another Agent. Supply `--inputs-hash <hash>` over the active external plan text and approved scope; changed inputs require a fresh audit. Continue Steps 8.1–8.2 and Prior Learnings.
 
+Carry the plan’s non-negative integer `CYCLE` into every budget command; the bin validates it.
+
 Run this step iff `PLAN_COMPLETION=true`. Otherwise print `Skipped on
 intermediate slice {SLICE_KIND}` and append a gate record with
 `verdict:"skipped:intermediate-slice"`.
 
 Before dispatch, run
-`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle <n>`.
+`~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" plan-completion --cycle "${CYCLE:?carry the plan cycle}"`.
 On exit 2 print its line and do not dispatch.
 
 Complete this section in order:
@@ -182,7 +184,7 @@ Counts map one-to-one to the classifications above and sum to total_items. No pl
 **Record the pass before anything else** (every AI pass in a ship run leaves a budget verdict and a gate row; a missing row is missing coverage, never a clean pass):
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" plan-completion <clean|issues_found|error|timeout> --cycle <n>
+~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" plan-completion <clean|issues_found|error|timeout> --cycle "${CYCLE:?carry the plan cycle}"
 ~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"plan-completion","purpose":"plan completion audit","trigger":"review-plan","model":"sonnet","effort":"agent-default","effort_source":"routed","budget":1,"retry":"inline-fallback","status":"{completed|unavailable}","verdict":"{clean|issues_found|error|timeout}","elapsed_s":{N},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 

@@ -39,6 +39,7 @@ import { generateTasksSectionEmit, generateTasksSectionAggregate } from './tasks
 import { SECTION, SECTION_INDEX } from './sections';
 import { generateRedactInvocationBlock } from './redact-doc';
 import { generateFreeTextFile } from './free-text-file';
+import { generateGovernorStructuredBody } from './governor-structured';
 import { FOREGROUND_DISPATCH_NOTE } from './constants';
 import { generateThirdPartyActions } from './third-party-actions';
 import { generateAsideSetup, generateAsideCookbook, generateAsideResearch, generateUntrustedContentWarning, asideExecPrelude, asideResearchSend } from './aside';
@@ -68,6 +69,7 @@ export const RESOLVERS: Record<string, ResolverFn> = {
   CLAUDE_MODEL_FLAG: generateClaudeModelFlag,
   REDACT_INVOCATION_BLOCK: generateRedactInvocationBlock,
   FREE_TEXT_FILE: generateFreeTextFile,
+  GOVERNOR_STRUCTURED_BODY: generateGovernorStructuredBody,
   THIRD_PARTY_ACTIONS: generateThirdPartyActions,
   DESIGN_DOC_DISCOVERY: generateDesignDocDiscovery,
   SHARED_LIBS_RUBRIC: generateSharedLibsRubric,

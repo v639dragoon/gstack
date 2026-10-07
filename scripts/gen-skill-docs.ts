@@ -894,8 +894,9 @@ function processSectionTemplate(
   skillDir: string,
   host: Host,
   options: RenderOptions,
+  embeddedTemplate?: string,
 ): { outputPath: string; content: string } {
-  const tmplContent = fs.readFileSync(sectionTmplPath, 'utf-8');
+  const tmplContent = embeddedTemplate ?? fs.readFileSync(sectionTmplPath, 'utf-8');
   const relTmplPath = path.relative(ROOT, sectionTmplPath);
   const hostConfig = getHostConfig(host);
 
@@ -1031,6 +1032,12 @@ export async function runGeneration(settings: GenerationOptions = {}): Promise<G
         }
         emit(result.outputPath, result.content, 'skill', host);
         if (result.metadata) emit(result.metadata.outputPath, result.metadata.content, 'metadata', host);
+        // Fork reference asset: external /review retains upstream's inline
+        // section policy and byte ceiling; its additional governor slot is Read.
+        if (skillDir === 'review' && host !== 'claude' && host !== 'codex') {
+          const asset = processSectionTemplate(path.join(ROOT, 'scripts/resolvers/governor-structured.ts'), skillDir, host, options, '{{GOVERNOR_STRUCTURED_BODY}}\n');
+          emit(path.join(path.dirname(result.outputPath), 'governor-structured.md'), asset.content, 'asset', host);
+        }
         if (skillDir === 'qa') {
           const report = fs.readFileSync(path.join(ROOT, 'qa', 'templates', 'functional-report-template.md'), 'utf-8');
           emit(path.join(path.dirname(result.outputPath), 'templates', 'functional-report-template.md'),
