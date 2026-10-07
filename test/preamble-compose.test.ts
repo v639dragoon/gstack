@@ -20,7 +20,7 @@ import { generatePreamble } from '../scripts/resolvers/preamble';
 function makeCtx(
   host: 'claude' | 'codex',
   tier: 1 | 2 | 3 | 4,
-  model?: string,
+  model?: TemplateContext['model'],
 ): TemplateContext {
   return {
     skillName: 'test-skill',

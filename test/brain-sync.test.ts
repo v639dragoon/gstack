@@ -412,7 +412,7 @@ describe('gstack-brain-sync secret scan', () => {
     fs.mkdirSync(path.join(tmpHome, 'projects', 'p'), { recursive: true });
     const leakPath = 'projects/p/leaked.jsonl';
     fs.writeFileSync(path.join(tmpHome, leakPath),
-      '{"gh":"ghp_abcdefghij1234567890abcdef1234567890"}\n');
+      JSON.stringify({ gh: ['ghp', 'abcdefghij1234567890abcdef1234567890'].join('_') }) + '\n');
     run(['gstack-brain-enqueue', leakPath]);
     run(['gstack-brain-sync', '--once']);  // blocked
     run(['gstack-brain-sync', '--skip-file', leakPath]);

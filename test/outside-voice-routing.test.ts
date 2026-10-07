@@ -133,11 +133,9 @@ test('automatic workflow templates delegate reviewer commands to shared resolver
 });
 
 for (const host of ['claude', 'codex'] as const) {
-  // dohma fork: on the claude host the review governor replaces the always-on
-  // adversarial workflow (and its free-form codex exec challenge) with the
-  // routed codex-structured slot, so there is no extractable always-on step to
-  // install; the codex host still renders upstream's step and stays covered.
-  (host === 'claude' ? test.skip : test)(`${host}: live E2E installs an executable extracted workflow from the actual host render`, () => {
+  // D4: upstream always-on passes now coexist with the governor slot, so
+  // extraction must remain executable on both hosts.
+  test(`${host}: live E2E installs an executable extracted workflow from the actual host render`, () => {
     const repo = mkdtempSync(join(tmpdir(), 'gstack-outside-fixture-'));
     try {
       const dir = installOutsideReviewFixture(output, host, repo, ROOT);

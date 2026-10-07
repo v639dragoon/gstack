@@ -51,7 +51,7 @@ test('the directory name is not an allowlist and returning to the original cwd k
  expect(autoplanPhaseCompletions(read(r).transcript,0).map(x=>x.phase)).toEqual([1,2]);
 });
 
-for(const [name,change] of Object.entries({
+for(const [name,change] of Object.entries<(r:any[])=>void>({
  'missing origin':(r:any[])=>r.shift(),
  'foreign origin':(r:any[])=>r[0].cwd='/another/fixture',
  'assistant origin':(r:any[])=>r[0].message.role='assistant',
@@ -105,7 +105,7 @@ test('a changed-cwd failed plan approval remains failed',()=>{
   record(8,7,archive,'user',[{type:'tool_result',tool_use_id:'exit',content:'Not approved.',is_error:true}]));
  const t=read(r).transcript;expect(t.planReadyRequests).toHaveLength(1);expect(t.planReadyRequests![0].failed).toBe(true);expect(t.calls).toEqual([]);
 });
-for(const [name,change] of Object.entries({
+for(const [name,change] of Object.entries<(r:any[])=>void>({
  'foreign file path':(r:any[])=>r[3].toolUseResult={file:{...file,filePath:'/other/methodology.md'}},
  'incorrect content':(r:any[])=>r[3].toolUseResult={file:{...file,content:'Omitted required instructions.'}},
  'error result':(r:any[])=>r[3].message.content[0].is_error=true,
@@ -136,7 +136,7 @@ test('compact boundary can repeat on the same owned append-order ancestry',()=>{
   record(32,31,archive,'assistant',[{type:'text',text:'Phase 2 complete.'}]));
  expect(autoplanPhaseCompletions(read(r).transcript,0).map(x=>x.phase)).toEqual([1,2]);
 });
-for(const [name,change] of Object.entries({
+for(const [name,change] of Object.entries<(r:any[])=>void>({
  'missing owned origin':(r:any[])=>r.shift(),
  'foreign owned origin':(r:any[])=>r[0].cwd='/other/fixture',
  'rootless later reset':(r:any[])=>{r[0].parentUuid=uuid(99);},
@@ -209,7 +209,7 @@ test('owned causal compaction follows the authenticated logical parent',()=>{
  const r=compactRows();expect(readOwned([r[4],r[3],r[2],r[0],r[1],...r.slice(5)])).toEqual(readOwned(r));
  expect(readOwned(r).events.some(e=>e.kind==='use'&&e.toolUseId==='read-owned')).toBe(true);
 });
-for(const [name,change] of Object.entries({
+for(const [name,change] of Object.entries<(r:any[])=>void>({
  'missing root':(r:any[])=>r.splice(1,1),
  'foreign root cwd':(r:any[])=>r[1].cwd='/another/fixture',
  'sidechain root':(r:any[])=>r[1].isSidechain=true,
@@ -258,7 +258,7 @@ test('a journal that starts with this cwd\'s SessionStart hook notes is owned li
  expect(designAudit(d.events)?.passed).toBe(true);
  expect(autoplanPhaseCompletions(d.transcript,0)).toEqual([{phase:1,ts:Date.parse(time)}]);
 });
-for(const [name,change] of Object.entries({
+for(const [name,change] of Object.entries<(r:any[])=>void>({
  'foreign hook root cwd':(r:any[])=>r[0].cwd='/another/fixture',
  'foreign linking hook cwd':(r:any[])=>r[1].cwd='/another/fixture',
  'non-SessionStart hook':(r:any[])=>r[1].attachment.hookEvent='UserPromptSubmit',
@@ -282,7 +282,7 @@ for(const [name,change] of Object.entries({
  expect(events.some(e=>e.toolUseId==='read-owned')).toBe(false);
  expect(autoplanPhaseCompletions(transcript,0)).toEqual([]);
 });
-for(const [name,change] of Object.entries({
+for(const [name,change] of Object.entries<(r:any[])=>void>({
  'competing user root':(r:any[])=>r.push(record(99,null,cwd,'user')),
 }))test('owned hook-rooted admission rejects '+name,()=>{
  const r=hookRows();change(r);const got=readOwned(r);

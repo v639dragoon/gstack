@@ -71,7 +71,7 @@ _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" show-first-use-notice
 _OUTSIDE_T0=$(date +%s)
 _ROUTE_EXIT=0
-_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout 540 "$GSTACK_BIN/gstack-codex-model" resolve --voice 'autoplan' --effort high </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
+_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout 540 "$HOME/.claude/skills/gstack/bin/gstack-codex-model" resolve --voice 'autoplan' --effort medium </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
 if [ "$_ROUTE_EXIT" -ne 0 ]; then
   cat "$_OUTSIDE_TMP/route-error" >&2
   cat "$_OUTSIDE_TMP/route-error"
@@ -80,15 +80,22 @@ if [ "$_ROUTE_EXIT" -ne 0 ]; then
   exit "$_ROUTE_EXIT"
 fi
 eval "$_CODEX_ROUTE" || exit 1
+# Preserve argv under bash and zsh; flags come only from the validated route.
+_CODEX_MODEL_ARGS=()
+if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
+
+_CODEX_OUT=$("$_CODEX_PROBE" select-model exec --model "$CODEX_MODEL") || exit 1
+_CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
+_CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false $CODEX_MODEL_EXEC_FLAGS -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 if [ "$_OUTSIDE_EXIT" -eq 124 ]; then
   "$_CODEX_PROBE" log-event codex_timeout "540" || true
   "$_CODEX_PROBE" log-hang autoplan 0 || true
 fi
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$GSTACK_BIN/gstack-voice-row" 'autoplan' 'autoplan' "$1" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
+_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'autoplan' 'autoplan' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in

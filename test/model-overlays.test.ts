@@ -16,7 +16,7 @@ import { generateCompletenessSection } from '../scripts/resolvers/preamble/gener
 import { generateSetupCommand } from '../scripts/resolvers/utility';
 
 describe('model-overlay-fable-5', () => {
-function makeCtx(model: string): TemplateContext {
+function makeCtx(model: TemplateContext['model']): TemplateContext {
   return {
     skillName: 'test-skill',
     tmplPath: 'test.tmpl',
@@ -230,7 +230,7 @@ describe('GPT-6 Astra model profile', () => {
 });
 
 describe('model-overlay-opus-4-7', () => {
-function makeCtx(model: string): TemplateContext {
+function makeCtx(model: TemplateContext['model']): TemplateContext {
   return {
     skillName: 'test-skill',
     tmplPath: 'test.tmpl',
@@ -305,7 +305,7 @@ describe('Opus 4.7 overlay — pacing directive', () => {
 });
 
 describe('model-overlay-opus-4-8', () => {
-function makeCtx(model: string): TemplateContext {
+function makeCtx(model: TemplateContext['model']): TemplateContext {
   return {
     skillName: 'test-skill',
     tmplPath: 'test.tmpl',
@@ -380,7 +380,7 @@ describe('Opus 4.8 overlay — pacing directive', () => {
 });
 
 describe('model-overlay-sonnet-5', () => {
-function makeCtx(model: string): TemplateContext {
+function makeCtx(model: TemplateContext['model']): TemplateContext {
   return {
     skillName: 'test-skill',
     tmplPath: 'test.tmpl',

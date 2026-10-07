@@ -23,7 +23,7 @@ function fixture(policy: any = {}) {
   write('x.ts'); write('README.md'); write('test/old.test.ts'); write('VERSION', '1.0.0\n'); write('package.json', '{"version":"1.0.0","scripts":{"test":"x"}}');
   git('add', '.'); git('commit', '-m', 'seed');
   const ledger = (id = 'run') => {
-    try { return readFileSync(join(s, 'projects', basename(d), 'budgets', `${id}.ledger.jsonl`), 'utf8').trim().split('\n').map(JSON.parse); }
+    try { return readFileSync(join(s, 'projects', basename(d), 'budgets', `${id}.ledger.jsonl`), 'utf8').trim().split('\n').map(text => JSON.parse(text)); }
     catch { return []; }
   };
   const run = (...args: string[]) => cmd(budget, args);
@@ -171,7 +171,7 @@ test('D3 audit input sets: plan test edits reusable; coverage additions only aft
     ['doc-release', 'clean', 'README.md', false],
     ['plan-completion', 'clean', 'x.ts', false],
     ['coverage-audit', 'clean', 'README.md', true],
-  ]) {
+  ] as const) {
     const f = fixture({ routing: { passes: { audit_reuse: true } } });
     f.plan(); f.verdict(gate, verdict); f.write(file, 'changed\n'); f.plan('C', 1);
     expect(f.run('dispatch', 'run', gate, '--cycle', '1').stdout.includes('reason=reused')).toBe(expected);
