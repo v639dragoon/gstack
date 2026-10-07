@@ -273,7 +273,7 @@ for(const [name,change] of Object.entries({
  'foreign opener cwd':(r:any[])=>r[2].cwd='/another/fixture',
  'non-hook record between notes and opener':(r:any[])=>{
   r.splice(2,0,{...record(52,51),type:'system',subtype:'informational',message:undefined});r[3].parentUuid=uuid(52);},
- 'hook chain from a second root':(r:any[])=>{r.splice(1,0,{...r[0],uuid:uuid(97)});r[2].parentUuid=uuid(97);},
+ 'two hook preambles carrying turns':(r:any[])=>{r.splice(1,0,{...r[0],uuid:uuid(97)});r[2].parentUuid=uuid(97);r.push(record(98,50,cwd,'user'));},
 }))test('hook-rooted admission rejects '+name,()=>{
  const owned=hookRows();change(owned);const got=readOwned(owned);
  expect(got.events.some(e=>e.kind==='use'&&e.toolUseId==='read-owned')).toBe(false);
@@ -283,7 +283,6 @@ for(const [name,change] of Object.entries({
  expect(autoplanPhaseCompletions(transcript,0)).toEqual([]);
 });
 for(const [name,change] of Object.entries({
- 'competing hook root':(r:any[])=>r.push({...r[0],uuid:uuid(98)}),
  'competing user root':(r:any[])=>r.push(record(99,null,cwd,'user')),
 }))test('owned hook-rooted admission rejects '+name,()=>{
  const r=hookRows();change(r);const got=readOwned(r);

@@ -272,7 +272,7 @@ function ownedCausalLines(lines: string[], cwd: string, filename: string): Owned
   };
   const candidates = new Set<Node>([root, ...nodes.filter(({ record: r }) => r.parentUuid === null &&
     (object(r.message) ? r.message.role === 'user' : sessionStartRecord(r))).filter(n =>
-    object(n.record.message) || carriesTurn(n) || (sessionStartRecord(n.record) && sameNativePath(n.record.cwd, cwd)))]);
+    object(n.record.message) || carriesTurn(n))]);
   if (candidates.size > 1) return { reason: 'competing_root', shape: shape() };
   for (const node of genesis ? [root] : top.slice(0, turn + 1)) if (!sameNativePath(node.record.cwd, cwd))
     return { reason: sameRealPath(node.record.cwd, cwd) ? 'unrecognized_shape:cwd_spelling' : 'foreign_cwd', shape: shape() };
