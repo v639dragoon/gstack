@@ -333,7 +333,7 @@ export function ownedCausalOrder(metas: readonly RecordMeta[], cwd: string): Own
     return false;
   };
   const candidates = new Set<RecordMeta>([root, ...nodes.filter(m => m.parentNull &&
-    (m.message ? m.role === 'user' : m.sessionStart)).filter(n => n.message || carriesTurn(n) || (n.sessionStart && sameNativePath(n.cwd, cwd)))]);
+    (m.message ? m.role === 'user' : m.sessionStart)).filter(n => n.message || carriesTurn(n))]);
   if (candidates.size > 1) return { reason: 'competing_root', shape: shape() };
   for (const node of genesis ? [root] : top.slice(0, turn + 1)) if (!sameNativePath(node.cwd, cwd))
     return { reason: sameRealPath(node.cwd, cwd) ? 'unrecognized_shape:cwd_spelling' : 'foreign_cwd', shape: shape() };
