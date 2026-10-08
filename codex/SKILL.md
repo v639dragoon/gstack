@@ -546,8 +546,7 @@ uses ~23x more tokens than `high` and causes 50+ minute hangs on large context t
 
 **Web search:** All codex commands pass `-c 'web_search="cached"'` so `codex exec`
 invocations can look up docs and APIs during review. This is OpenAI's cached index —
-fast, no extra cost. Unlike the legacy `--enable`-based spelling (deprecated by
-codex >=0.144), the `-c` form explicitly overrides any top-level
+fast, no extra cost. The `-c` form explicitly overrides any top-level
 `web_search` setting in `~/.codex/config.toml`.
 
 If the user specifies a model (e.g., `/codex review -m gpt-6.1-sol` or

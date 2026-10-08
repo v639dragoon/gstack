@@ -78,7 +78,7 @@ accounted separately and does not consume the single routed escalation.
 }
 
 export function governorSpecialistTelemetry(ctx: TemplateContext): string {
-  return `**Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
+  return `**Persist per-gate telemetry:** for EACH dispatched specialist (and
 Red Team, either path), append one gate record, substituting {placeholder}s
 with carried literals:
 
@@ -92,7 +92,7 @@ unchanged.`;
 }
 
 export function governorAdversarialTelemetry(ctx: TemplateContext): string {
-  return `**Persist per-gate telemetry (Phase 0):** one gate record per pass that ran,
+  return `**Persist per-gate telemetry:** one gate record per pass that ran,
 substituting carried literals (RUN_ID/MANIFEST_WTREE from the Step 9.1
 manifest; if none this run, run \`gstack-diff-manifest <base>\` now).
 \`tokens.total\` for a codex pass comes from the \`tokens used\` line in its

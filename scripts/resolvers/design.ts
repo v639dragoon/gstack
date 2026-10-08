@@ -422,17 +422,9 @@ Evaluate:
 
 ### Goodwill Reservoir (track across the flow)
 
-Keep a heuristic goodwill meter starting at 70/100; the drains and fills matter, not the number. Drains: hidden information the user wants (pricing, contact, shipping) −15; interstitials, splash screens or forced tours −15; format punishment (rejecting dashes in a phone number) −10; unnecessary information requests −10; sloppy appearance −10; each ambiguous choice −5. Fills: top tasks obvious +10; graceful error recovery with a specific fix +10; upfront about costs and limits +5; each saved step (direct links, smart defaults, autofill) +5; apologizes when things go wrong +5.
+As you walk the user flow, keep track of goodwill qualitatively. Note each friction that drains it: hidden information the user would want (pricing, contact, shipping), format punishment (rejecting valid input such as dashes in phone numbers), unnecessary information requests, interstitials, splash screens or forced tours blocking the task, sloppy or unprofessional appearance, and ambiguous choices that require thinking. Note each thing that replenishes it: obvious and prominent top tasks, upfront honesty about costs and limitations, saved steps (direct links, smart defaults, autofill), graceful error recovery with specific fix instructions, and apologies when things go wrong.
 
-Report it as a dashboard, one line per step:
-
-\`\`\`
-Goodwill: 70 ████████████████████░░░░░░░░░░
-  Step 1: Dashboard   70 → 55  (-15 interstitial tour popup)
-  FINAL: 55/100
-\`\`\`
-
-Below 30 = critical UX debt, 30-60 = needs work, above 60 = healthy. File the biggest drains and fills as findings.
+Report the biggest drains and fills as specific findings, naming the step where each occurred, and close with a verdict: healthy, needs work, or critical UX debt.
 
 ---
 
@@ -772,7 +764,7 @@ Fill in each cell from the ${outsideVoiceFor(ctx).label} and subagent outputs. C
 **Handoff:** Retain every completed proposal (two, one, or none) with its source/status. Do not choose a direction here. Q2 compares these proposals with your earlier draft.` : `
 **Synthesis — Litmus scorecard:**
 
-Use the same scorecard format as /plan-design-review (shown above). Fill in from both outputs.
+Tabulate the seven Litmus checks from the Design Hard Rules with columns for ${outsideVoiceFor(ctx).nativeLabel}, ${outsideVoiceFor(ctx).label} and Consensus (CONFIRMED = both agree, DISAGREE = they differ, NOT SPEC'D = not enough info to evaluate), then list the hard rejections triggered. Fill in from both outputs.
 Merge findings into the triage with \`[${outsideVoiceFor(ctx).id}]\` / \`[subagent]\` / \`[cross-model]\` tags.`;
 
 
@@ -1050,10 +1042,10 @@ ${litmusItems}
 - One job per section
 - "If deleting 30% of the copy improves it, keep deleting"
 - Cards earn their existence — no decorative card grids
-- NEVER use small, low-contrast type (body text < 16px or contrast ratio < 4.5:1 on body text)
-- NEVER put labels inside form fields as the only label (placeholder-as-label pattern — labels must be visible when the field has content)
-- ALWAYS preserve visited vs unvisited link distinction (visited links must have a different color)
-- NEVER float headings between paragraphs (heading must be visually closer to the section it introduces than to the preceding section)
+- Body text is at least 16px with at least 4.5:1 contrast (smaller or fainter text is unreadable on phones)
+- Every form field keeps a visible label once it has content; a placeholder is not a label
+- Visited and unvisited links differ in color so users can see where they have been
+- A heading sits visually closer to the section it introduces than to the preceding section
 
 **Reflexes no detector catches** (check by hand, every time):
 ${reflexBlock}
@@ -1149,8 +1141,7 @@ ${designReadyProbe(ctx)}
 
 ${ctx.host === 'codex' && ctx.skillName === 'design-shotgun' ? CODEX_SHOTGUN_SETUP : `${ctx.skillName === 'design-consultation' ? `If \`DESIGN_NOT_AVAILABLE\`: use Phase 5 Path B (HTML preview). Mockups are optional.
 
-For interactive feedback, use \`compare --serve\` and its printed HTTP URL; opening board HTML directly is only a static preview.` : `If \`DESIGN_NOT_AVAILABLE\`: skip visual mockup generation and fall back to the
-existing HTML wireframe approach (\`DESIGN_SKETCH\`). Design mockups are a
+For interactive feedback, use \`compare --serve\` and its printed HTTP URL; opening board HTML directly is only a static preview.` : `If \`DESIGN_NOT_AVAILABLE\`: skip visual mockup generation. Design mockups are a
 progressive enhancement, not a hard requirement.
 
 Comparison boards are local HTML files: open them with \`open file://...\` on macOS

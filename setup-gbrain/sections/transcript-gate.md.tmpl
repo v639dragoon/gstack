@@ -64,9 +64,9 @@ and the destination brain from Step 4: the user's Supabase brain (Paths 1,
 >
 > Multi-machine note: with brain sync enabled, transcript pages sync across
 > your machines. Deleting a page later removes it from gbrain, but git
-> history keeps it in earlier commits. Use `gstack-transcript-prune` to
-> delete in bulk, and `git filter-repo` on the brain remote to remove it
-> from history."
+> history keeps it in earlier commits. Delete pages one at a time with
+> `gbrain delete_page <slug>` (there is no bulk helper), and run `git filter-repo`
+> on the brain remote to remove them from history."
 
 Options:
 - A) Yes, last 90 days (`recent`)
