@@ -21,13 +21,14 @@ const fail = (m: string, code = 1) => {
 };
 const planPath = (id: string) => path.join(budgetDir, `${id}.json`);
 const ledgerPath = (id: string) => path.join(budgetDir, `${id}.ledger.jsonl`);
-const loadPlan = (id: string) => {
+const readPlan = (id: string): any => {
   try {
     return JSON.parse(fs.readFileSync(planPath(id), 'utf8'));
   } catch {
-    fail('plan not found');
+    return null;
   }
 };
+const loadPlan = (id: string) => readPlan(id) ?? fail('plan not found');
 const records = (id: string): any[] => {
   try {
     return fs
@@ -74,22 +75,29 @@ const requestedCycle = () => {
   if (!/^\d+$/.test(raw)) fail('cycle must be a non-negative integer');
   return Number(raw);
 };
-const cyclePlan = (plan: any, cycle: number) => {
-  const selected = plan.cyclePlans?.[String(cycle)] ?? (plan.cycle === cycle ? plan : null);
-  if (!selected) fail(`cycle ${cycle} not planned`);
-  return selected;
+const findCyclePlan = (plan: any, cycle: number) =>
+  plan.cyclePlans?.[String(cycle)] ?? (plan.cycle === cycle ? plan : null);
+const cyclePlan = (plan: any, cycle: number) => findCyclePlan(plan, cycle) || fail(`cycle ${cycle} not planned`);
+/** Filled by priorRunFinished: why it returned false, and the cycle it judged. */
+type RunJudgement = {
+  reason?: 'repair-budget-exhausted' | 'no-completion' | 'blocking-open' | 'fix-unverified';
+  cycle?: number;
 };
-const priorRunFinished = (ledger: any[], plan: any): boolean => {
+const priorRunFinished = (ledger: any[], plan: any, judged: RunJudgement = {}): boolean => {
+  const no = (reason: NonNullable<RunJudgement['reason']>) => {
+    judged.reason = reason;
+    return false;
+  };
   const lastRerunIndex = ledger.findLastIndex((r) => r.record_type === 'rerun-check');
   const lastRerun = ledger[lastRerunIndex];
   if (lastRerun) {
     const rerunPlan = plan.cyclePlans?.[String(lastRerun.cycle)] ?? plan;
-    if ((lastRerun.effective_cycle ?? lastRerun.cycle) > rerunPlan.repairCyclesMax) return false;
+    if ((lastRerun.effective_cycle ?? lastRerun.cycle) > rerunPlan.repairCyclesMax) return no('repair-budget-exhausted');
   }
   const after = ledger.slice(lastRerunIndex + 1);
   const completion = after.filter((r) => r.record_type === 'complete').at(-1);
-  if (!completion && lastRerun?.full_rerun !== false) return false;
-  const cycle = completion ? completion.cycle : lastRerun.cycle;
+  if (!completion && lastRerun?.full_rerun !== false) return no('no-completion');
+  const cycle = judged.cycle = completion ? completion.cycle : lastRerun.cycle;
   const blockingFindings = ledger.filter((r) =>
     r.record_type === 'finding' && r.blocking === true && r.cycle <= cycle,
   );
@@ -98,7 +106,7 @@ const priorRunFinished = (ledger: any[], plan: any): boolean => {
   ).at(-1);
   if (blockingFindings.some((f) =>
     f.cycle < cycle && !['fixed', 'skipped', 'accepted'].includes(resolutionFor(f.fingerprint)?.action),
-  )) return false;
+  )) return no('blocking-open');
   const findings = blockingFindings.filter((f) => f.cycle === cycle);
   const criticalByGateCycle = new Map<string, number>();
   for (const verdict of ledger.filter((r) => r.record_type === 'verdict' && r.cycle <= cycle && !r.carry_forward)) {
@@ -110,7 +118,7 @@ const priorRunFinished = (ledger: any[], plan: any): boolean => {
     const count = new Set(blockingFindings.filter((f) =>
       f.cycle === findingCycle && f.gate === gate,
     ).map((f) => f.fingerprint)).size;
-    if (critical > count) return false;
+    if (critical > count) return no('blocking-open');
   }
   const pending = new Map<string, any[]>();
   const verified = new Set<string>();
@@ -130,11 +138,11 @@ const priorRunFinished = (ledger: any[], plan: any): boolean => {
   for (const finding of new Map(findings.map((f) => [f.fingerprint, f])).values()) {
     const resolution = resolutionFor(finding.fingerprint);
     if (resolution?.action === 'skipped' || resolution?.action === 'accepted') continue;
-    if (resolution?.action !== 'fixed') return false;
-    if (!verified.has(JSON.stringify([finding.gate, cycle, finding.fingerprint]))) return false;
+    if (resolution?.action !== 'fixed') return no('blocking-open');
+    if (!verified.has(JSON.stringify([finding.gate, cycle, finding.fingerprint]))) return no('fix-unverified');
     cleanVerifications++;
   }
-  return !!completion || cleanVerifications > 0;
+  return !!completion || cleanVerifications > 0 || no('no-completion');
 };
 
 if (command === 'policy-flags') {
@@ -790,6 +798,49 @@ if (command === 'complete') {
 }
 
 /**
+ * converged <run_id> [--json]: read-only answer to "did this run's review
+ * converge?", so a caller such as a self-merge check never re-implements the
+ * rules. Converged when all of these hold:
+ *   1. priorRunFinished: the last rerun-check is within the repair budget, a
+ *      completion follows it (or it was a narrow delta with clean
+ *      verifications), no blocking finding is open or fixed-but-unverified,
+ *      and no verdict's critical count exceeds its recorded findings.
+ *   2. The cycle it judged owes nothing `complete --final --require-native`
+ *      would owe. /ship never passes --final, so the doc-release audit runs
+ *      after the last `complete`; its LAST verdict decides, and error,
+ *      timeout or no verdict is not converged.
+ *   3. A non-code-delta plan's working tree is unchanged (as `complete`).
+ * Prints CONVERGED=true|false and REASON=<code>, one of converged,
+ * repair-budget-exhausted, blocking-open, fix-unverified,
+ * audit-incomplete:<first owed gate>, working-tree-changed, no-completion,
+ * plan-not-found; --json prints {"converged","reason"}. Exit 0 converged, 2
+ * not, 1 usage. Never appends to the ledger or writes a plan.
+ */
+if (command === 'converged') {
+  const id = argv[0];
+  if (!id || id.startsWith('--')) fail('run id required');
+  function answer(reason: string): never {
+    const converged = reason === 'converged';
+    if (has('--json')) console.log(JSON.stringify({ converged, reason }));
+    else {
+      console.log(`CONVERGED=${converged}`);
+      console.log(`REASON=${reason}`);
+    }
+    process.exit(converged ? 0 : 2);
+  }
+  const root = readPlan(id);
+  if (!root) answer('plan-not-found');
+  const ledger = records(id);
+  const judged: RunJudgement = {};
+  if (!priorRunFinished(ledger, root, judged)) answer(judged.reason!);
+  const p = findCyclePlan(root, judged.cycle!);
+  if (!p) answer('plan-not-found');
+  if (p.nonCodeDelta && currentWtree() !== p.wtree) answer('working-tree-changed');
+  const incomplete = incompleteGates(p, ledger, judged.cycle!, { final: true, requireNative: true });
+  answer(incomplete.length ? `audit-incomplete:${incomplete[0]}` : 'converged');
+}
+
+/**
  * resume <run_id> [--json]: reuse terminal verdicts from a PRIOR run of the
  * SAME inputs. A prior cycle-0 plan qualifies only when its content
  * fingerprint (wtree), base, merge-base, policy sha256, tier, reviewer
@@ -1115,4 +1166,4 @@ if (command === 'report') {
   );
   process.exit(0);
 }
-fail('usage: plan|dispatch|verdict|complete|resume|rerun-check|finding|resolve|report');
+fail('usage: plan|dispatch|verdict|complete|converged|resume|rerun-check|finding|resolve|report');

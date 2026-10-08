@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
@@ -642,3 +642,205 @@ test('complete owes the same gates through the shared owed-gate function', () =>
   ok('plan', bound);
   incomplete('cw', ['--require-audits'], 'INCOMPLETE=codex-structured');
 }, 60_000); // ~40 isolated CLI calls at ~100-170ms each
+
+/**
+ * One final-slice tier-B /ship run `ship` (repair cycles max 1). Its manifest
+ * lives outside the repo so rerun-check and gstack-wtree see only real edits.
+ * `expectReason` checks both output forms and that the budgets directory is
+ * byte-identical across every `converged` call.
+ */
+function shipRun(policy?: any) {
+  const { d, s } = setup(policy);
+  const budgets = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
+  const cli = (...a: string[]) => run(d, s, a);
+  const ok = (...a: string[]) => {
+    const r = cli(...a);
+    expect(r.status, `${a.join(' ')}\n${r.stdout}${r.stderr}`).toBe(0);
+    return r;
+  };
+  const plan = (cycle = 0, withWtree = false) => {
+    const mp = manifest(d, 'B', 'ship', {}, finalSlice);
+    const raw = JSON.parse(readFileSync(mp, 'utf8'));
+    rmSync(mp);
+    if (withWtree)
+      raw.wtree = spawnSync(join(import.meta.dir, '..', 'bin/gstack-wtree'), [], {
+        cwd: d, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' },
+      }).stdout.trim();
+    const out = join(s, `manifest-${cycle}.json`);
+    writeFileSync(out, JSON.stringify(raw));
+    ok('plan', out, '--cycle', String(cycle));
+  };
+  /** Steps 9-11.5: both audits, the routed reviewer (verdict args `codex`), native, then `complete`. */
+  const review = (cycle = 0, codex: string[] = ['clean'], finish = true) => {
+    const c = ['--cycle', String(cycle)];
+    for (const gate of ['coverage-audit', 'plan-completion']) {
+      ok('dispatch', 'ship', gate, ...c);
+      ok('verdict', 'ship', gate, 'clean', ...c);
+    }
+    ok('dispatch', 'ship', 'codex-structured', ...c);
+    ok('verdict', 'ship', 'codex-structured', ...codex, ...c);
+    ok('register-upstream', 'ship', 'native-adversarial', ...c);
+    ok('dispatch', 'ship', 'native-adversarial', ...c);
+    ok('verdict', 'ship', 'native-adversarial', 'clean', ...c);
+    if (finish)
+      expect(ok('complete', 'ship', ...c, '--require-audits', '--require-native').stdout).toBe('COMPLETE=true\n');
+  };
+  /** Step 14.5, after `complete`: /ship never passes --final. */
+  const docRelease = (verdict = 'clean', cycle = 0) => {
+    ok('dispatch', 'ship', 'doc-release', '--cycle', String(cycle));
+    ok('verdict', 'ship', 'doc-release', verdict, '--cycle', String(cycle));
+  };
+  const finding = (fp: string) =>
+    ok('finding', 'ship', JSON.stringify({ severity: 'P1', fingerprint: fp, gate: 'codex-structured', summary: fp }));
+  const snapshot = () => existsSync(budgets)
+    ? readdirSync(budgets).sort().map((f) => [f, readFileSync(join(budgets, f), 'utf8')])
+    : [];
+  const expectReason = (reason: string) => {
+    const converged = reason === 'converged';
+    const before = snapshot();
+    const text = cli('converged', 'ship');
+    expect(text.stdout).toBe(`CONVERGED=${converged}\nREASON=${reason}\n`);
+    expect(text.status).toBe(converged ? 0 : 2);
+    const json = cli('converged', 'ship', '--json');
+    expect(JSON.parse(json.stdout)).toEqual({ converged, reason });
+    expect(json.status).toBe(converged ? 0 : 2);
+    expect(snapshot()).toEqual(before);
+  };
+  return { d, s, budgets, cli, ok, plan, review, docRelease, finding, expectReason };
+}
+describe('converged <run_id>', () => {
+  test('a clean shipped run converges once its doc-release audit is terminal', () => {
+    const f = shipRun();
+    f.plan();
+    f.review();
+    f.expectReason('audit-incomplete:doc-release');
+    f.docRelease('clean');
+    f.expectReason('converged');
+  }, 60_000);
+  test('a doc-release error or timeout after complete does not converge: the last verdict decides', () => {
+    const f = shipRun();
+    f.plan();
+    f.review();
+    f.docRelease('error');
+    f.expectReason('audit-incomplete:doc-release');
+    f.docRelease('clean');
+    f.expectReason('converged');
+    f.docRelease('timeout');
+    f.expectReason('audit-incomplete:doc-release');
+  }, 60_000);
+  test('a /review-path completion still owes native and every planned audit', () => {
+    const f = shipRun();
+    f.plan();
+    f.ok('dispatch', 'ship', 'codex-structured');
+    f.ok('verdict', 'ship', 'codex-structured', 'clean');
+    expect(f.ok('complete', 'ship').stdout).toBe('COMPLETE=true\n');
+    f.expectReason('audit-incomplete:native-adversarial');
+  }, 60_000);
+  test('an exhausted repair budget does not converge, even with complete', () => {
+    const f = shipRun();
+    f.plan(0);
+    f.plan(2);
+    f.review(2);
+    f.docRelease('clean', 2);
+    f.expectReason('converged');
+    const exhausted = f.cli('rerun-check', 'ship', '--cycle', '2');
+    expect(exhausted.status).toBe(3);
+    expect(exhausted.stdout).toContain('REPAIR_CYCLES_EXHAUSTED=true');
+    f.expectReason('repair-budget-exhausted');
+    expect(f.ok('complete', 'ship', '--cycle', '2', '--require-audits', '--require-native').stdout)
+      .toBe('COMPLETE=true\n');
+    f.expectReason('repair-budget-exhausted');
+  }, 60_000);
+  test('an unrecorded critical count or an unresolved blocking finding is blocking-open', () => {
+    const f = shipRun();
+    f.plan();
+    f.review(0, ['issues_found', '--critical', '1']);
+    f.docRelease();
+    f.expectReason('blocking-open');
+    f.finding('fp');
+    f.expectReason('blocking-open');
+    f.ok('resolve', 'ship', 'fp', '--action', 'accepted');
+    f.expectReason('converged');
+  }, 60_000);
+  test('a fixed finding converges only after a clean --verify-of re-dispatch', () => {
+    const f = shipRun();
+    f.plan();
+    f.review(0, ['issues_found', '--critical', '1']);
+    f.finding('fp');
+    f.ok('resolve', 'ship', 'fp', '--action', 'fixed');
+    f.docRelease();
+    f.expectReason('fix-unverified');
+    f.ok('dispatch', 'ship', 'codex-structured', '--verify-of', 'fp');
+    f.expectReason('fix-unverified');
+    f.ok('verdict', 'ship', 'codex-structured', 'clean');
+    f.expectReason('converged');
+    const dirty = shipRun();
+    dirty.plan();
+    dirty.review(0, ['issues_found', '--critical', '1']);
+    dirty.finding('fp');
+    dirty.ok('resolve', 'ship', 'fp', '--action', 'fixed');
+    dirty.docRelease();
+    dirty.ok('dispatch', 'ship', 'codex-structured', '--verify-of', 'fp');
+    dirty.ok('verdict', 'ship', 'codex-structured', 'issues_found');
+    dirty.expectReason('fix-unverified');
+  }, 60_000);
+  test('a narrow fix verified after the last rerun-check converges on that cycle', () => {
+    const f = shipRun();
+    f.plan();
+    f.review(0, ['issues_found', '--critical', '1']);
+    f.finding('fp');
+    f.ok('resolve', 'ship', 'fp', '--action', 'fixed');
+    f.docRelease();
+    writeFileSync(join(f.d, 'x.ts'), 'fixed\n');
+    expect(f.ok('rerun-check', 'ship').stdout).toContain('FULL_RERUN=false');
+    f.expectReason('fix-unverified');
+    f.ok('dispatch', 'ship', 'codex-structured', '--verify-of', 'fp');
+    f.ok('verdict', 'ship', 'codex-structured', 'clean');
+    f.expectReason('converged');
+  }, 60_000);
+  test('no complete, or a full rerun after complete, is no-completion', () => {
+    const f = shipRun();
+    f.plan();
+    f.review(0, ['clean'], false);
+    f.docRelease();
+    f.expectReason('no-completion');
+    expect(f.ok('complete', 'ship', '--require-audits', '--require-native').stdout).toBe('COMPLETE=true\n');
+    f.expectReason('converged');
+    mkdirSync(join(f.d, 'lib', 'auth'), { recursive: true });
+    writeFileSync(join(f.d, 'lib', 'auth', 'new.ts'), 'x\n');
+    expect(f.ok('rerun-check', 'ship').stdout).toContain('FULL_RERUN=true');
+    f.expectReason('no-completion');
+  }, 60_000);
+  test('a non-code-delta plan stops converging when the working tree changes', () => {
+    const f = shipRun({ version: 1, auth_surfaces: [], d_surfaces: [], routing: { passes: { non_code_delta: true } } });
+    f.plan(0, true);
+    f.review();
+    f.docRelease();
+    f.expectReason('converged');
+    writeFileSync(join(f.d, 'x.ts'), 'edited after review\n');
+    f.expectReason('working-tree-changed');
+    expect(f.cli('complete', 'ship', '--require-audits', '--require-native').stdout)
+      .toBe('INCOMPLETE=working-tree-changed\n');
+  }, 60_000);
+  test('a missing plan is plan-not-found; a missing run id is a usage error', () => {
+    const f = shipRun();
+    f.expectReason('plan-not-found');
+    expect(f.cli('converged').status).toBe(1);
+    expect(f.cli('converged', '--json').status).toBe(1);
+  }, 60_000);
+  test('converged leaves the ledger and plan byte-identical', () => {
+    const f = shipRun();
+    f.plan();
+    f.review();
+    f.docRelease();
+    const ledger = join(f.budgets, 'ship.ledger.jsonl'), plan = join(f.budgets, 'ship.json');
+    for (const [verdict, status] of [['clean', 0], ['error', 2]] as const) {
+      if (verdict === 'error') f.docRelease('error');
+      const before = [readFileSync(ledger), readFileSync(plan)];
+      for (const args of [[], ['--json']]) expect(f.cli('converged', 'ship', ...args).status).toBe(status);
+      expect(readFileSync(ledger).equals(before[0])).toBe(true);
+      expect(readFileSync(plan).equals(before[1])).toBe(true);
+    }
+    expect(readdirSync(f.budgets).sort()).toEqual(['ship.json', 'ship.ledger.jsonl']);
+  }, 60_000);
+});
