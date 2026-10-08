@@ -45,7 +45,7 @@ describe('section TemplateContext parity (skillName pinned to parent)', () => {
   test('review-army section rendered CONFIDENCE_CALIBRATION + REVIEW_ARMY (gated resolvers)', () => {
     const content = readSection('review-army.md');
     expect(content).toContain('Confidence Calibration');
-    expect(content).toContain('confidence score');
+    expect(content).toContain('score every finding (1-10)');
   });
 
   test('tests section rendered TEST_BOOTSTRAP + TEST_FAILURE_TRIAGE', () => {

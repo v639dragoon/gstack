@@ -148,7 +148,7 @@ Output headers: `CODEX SAYS (design source audit):` and `CLAUDE SUBAGENT (design
 
 **Synthesis — Litmus scorecard:**
 
-Use the same scorecard format as /plan-design-review (shown above). Fill in from both outputs.
+Tabulate the seven Litmus checks from the Design Hard Rules with columns for Claude, Codex and Consensus (CONFIRMED = both agree, DISAGREE = they differ, NOT SPEC'D = not enough info to evaluate), then list the hard rejections triggered. Fill in from both outputs.
 Merge findings into the triage with `[codex]` / `[subagent]` / `[cross-model]` tags.
 
 **Log the result:**

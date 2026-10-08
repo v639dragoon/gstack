@@ -157,7 +157,7 @@ describe('/spec fail-closed redaction (shared engine)', () => {
   });
   test('/spec points to the full taxonomy without inlining the catalog', () => {
     expect(SEC_GEN).toMatch(/Full taxonomy.*lib\/redact-patterns\.ts|\/cso/);
-    expect(SEC_GEN).toMatch(/~30 secret\/PII\/legal patterns/);
+    expect(SEC_GEN).toMatch(/the secret\/PII\/legal patterns across 3 tiers/);
   });
   test('redaction routes through the shared gstack-redact bin, not inline regex', () => {
     expect(SEC_GEN).toContain('gstack-redact');

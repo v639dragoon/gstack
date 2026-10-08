@@ -17,7 +17,7 @@
 import type { TemplateContext } from './types';
 
 export function generateConfidenceCalibration(_ctx: TemplateContext): string {
-  if (_ctx.skillName === 'review') return `## Confidence Calibration
+  if (_ctx.skillName === 'review' || _ctx.skillName === 'ship') return `## Confidence Calibration
 
 Verify evidence first, then score every finding (1-10) and apply its display rule.
 
