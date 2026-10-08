@@ -87,20 +87,7 @@ ${FREE_TEXT_WRITE_RULE} Prompt file text: \`the best [runtime] test framework in
 ${asideResearchSend(ctx)}
 \`\`\`
 
-If Aside is not installed or not running (\`command -v aside\` prints nothing, or the request fails), run the same lookup with the WebSearch tool when the host provides it: \`"[runtime] best test framework {current year}"\` and \`"[framework A] vs [framework B] comparison"\`. If neither is available, use this built-in knowledge table:
-
-| Runtime | Primary recommendation | Alternative |
-|---------|----------------------|-------------|
-| Ruby/Rails | minitest + fixtures + capybara | rspec + factory_bot + shoulda-matchers |
-| Node.js | vitest + @testing-library | jest + @testing-library |
-| Next.js | vitest + @testing-library/react + playwright | jest + cypress |
-| Python | pytest + pytest-cov | unittest |
-| Django | pytest + pytest-django | Django's built-in \`manage.py test\` (unittest) |
-| Go | stdlib testing + testify | stdlib only |
-| JVM (Maven/Gradle) | JUnit 5 + AssertJ | JUnit 5 only |
-| Rust | cargo test (built-in) + mockall | — |
-| PHP | phpunit + mockery | pest |
-| Elixir | ExUnit (built-in) + ex_machina | — |
+If Aside is not installed or not running (\`command -v aside\` prints nothing, or the request fails), run the same lookup with the WebSearch tool when the host provides it: \`"[runtime] best test framework {current year}"\` and \`"[framework A] vs [framework B] comparison"\`. If neither is available, recommend from your own knowledge of the runtime's current standard test runner and say that no live research was possible.
 
 ### B3. Framework selection
 

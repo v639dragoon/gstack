@@ -436,19 +436,19 @@ sections. Read a section in full before doing its step; do not work from memory.
 
 Gather context before forming any hypothesis.
 
-1. **Collect symptoms:** Read the error messages, stack traces, and reproduction steps. If the user hasn't provided enough context, ask ONE question at a time via AskUserQuestion.
+Collect what you need to form a hypothesis: the error messages, stack traces and reproduction steps (if the user hasn't provided enough context, ask ONE question at a time via AskUserQuestion); the code path from the symptom back to candidate causes; and a deterministic reproduction (if you cannot trigger the bug, gather more evidence before proceeding).
 
-2. **Read the code:** Trace the code path from the symptom back to potential causes. Use Grep to find all references, Read to understand the logic. Before calling two queries, helpers or code paths duplicates, read their call sites: what looks identical usually differs in a caller's guard, transaction or scope, and the "duplicate" is the one that is right.
+Read the code: Trace the code path from the symptom back to potential causes. Use Grep to find all references, Read to understand the logic. Before calling two queries, helpers or code paths duplicates, read their call sites: what looks identical usually differs in a caller's guard, transaction or scope, and the "duplicate" is the one that is right.
 
-3. **Check recent changes:**
-   ```bash
-   git log --oneline -20 -- <affected-files>
-   ```
-   Was this working before? What changed? A regression means the root cause is in the diff.
+Check recent changes to the affected files; a regression means the root cause is in the diff:
 
-4. **Reproduce:** Can you trigger the bug deterministically? If not, gather more evidence before proceeding. Before timing anything that spawns git in a benchmark or bisect worktree, run `git update-index --refresh` there: a stale index makes the first `git status`/`git diff` pay a full refresh and the measurement lies.
+```bash
+git log --oneline -20 -- <affected-files>
+```
 
-5. **Check investigation history:** Search prior learnings for investigations on the same files. Recurring bugs in the same area are an architectural smell. If prior investigations exist, note patterns and check if the root cause was structural.
+Before timing anything that spawns git in a benchmark or bisect worktree, run `git update-index --refresh` there: a stale index makes the first `git status`/`git diff` pay a full refresh and the measurement lies.
+
+Also check investigation history: search prior learnings for investigations on the same files. Recurring bugs in the same area are an architectural smell. If prior investigations exist, note patterns and check if the root cause was structural.
 
 ## Prior Learnings
 
@@ -592,16 +592,7 @@ Sanitize every query before it leaves the machine: strip hostnames, IPs, file pa
 
 ## Phase 2: Pattern Analysis
 
-Check if this bug matches a known pattern:
-
-| Pattern | Signature | Where to look |
-|---------|-----------|---------------|
-| Race condition | Intermittent, timing-dependent | Concurrent access to shared state |
-| Nil/null propagation | NoMethodError, TypeError | Missing guards on optional values |
-| State corruption | Inconsistent data, partial updates | Transactions, callbacks, hooks |
-| Integration failure | Timeout, unexpected response | External API calls, service boundaries |
-| Configuration drift | Works locally, fails in staging/prod | Env vars, feature flags, DB state |
-| Stale cache | Shows old data, fixes on cache clear | Redis, CDN, browser cache, Turbo |
+Check whether this bug matches a familiar failure category: race condition, nil/null propagation, state corruption, integration failure, configuration drift, or stale cache.
 
 Also check:
 - `TODOS.md` for related known issues

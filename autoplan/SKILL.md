@@ -540,7 +540,7 @@ sections. Read a section in full before doing its step; do not work from memory.
 
 1. **Choose completeness** — Ship the whole thing; pick the approach covering more edge cases.
 2. **Boil lakes** — Fix everything in the blast radius (files this plan modifies + direct importers). Auto-approve expansions in blast radius AND < 1 day CC effort (< 5 files, no new infra).
-3. **Pragmatic** — Two options fix the same thing? Pick the cleaner one, in seconds.
+3. **Pragmatic** — Two options fix the same thing? Pick the cleaner one.
 4. **DRY** — Duplicates existing functionality? Reject; reuse what exists.
 5. **Explicit over clever** — 10-line obvious fix > 200-line abstraction; pick what a new contributor reads at a glance.
 6. **Bias toward action** — Merge > review cycles > stale deliberation. Flag concerns, don't block.

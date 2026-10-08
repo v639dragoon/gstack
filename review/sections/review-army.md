@@ -300,7 +300,7 @@ sources and counting overlapping savings once. Keep actual specialist stats;
 core-only advice must not create a specialist dispatch or finding.
 Normal AUTO-FIX/ASK rules apply, with advice ASK-only. Missing coverage still blocks
 completion. Advice never permits edits while readers are active or replaces a required review.
-**Persist per-gate telemetry (Phase 0):** for EACH dispatched specialist (and
+**Persist per-gate telemetry:** for EACH dispatched specialist (and
 Red Team, either path), append one gate record, substituting {placeholder}s
 with carried literals:
 

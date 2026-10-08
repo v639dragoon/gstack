@@ -80,7 +80,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    `resolve`. Governor classification is telemetry; upstream AUTO-FIX/ASK governs
    action and advice remains ASK-only.
 
-   - **Track the fix-cycle index (Phase 0 telemetry):** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only — the loop is unchanged.
+   - **Track the fix-cycle index:** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only: it never alters the loop.
 
    **Gate findings** (any finding with a `gate` tag) never take Fix/Skip. Ask
    `review-gate-disposition` (include `<gstack-qid:review-gate-disposition>`; one-way,
