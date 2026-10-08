@@ -20,7 +20,7 @@ allowed-tools:
 ## When to invoke this skill
 
 Opens a visible browser window where you can watch every action in real time.
-The sidebar shows a live activity feed and chat. Anti-bot stealth built in.
+The sidebar is a live Claude Code terminal. Anti-bot stealth built in.
 Use when asked to "open gstack browser", "launch browser", "connect chrome",
 "open chrome", "real browser", "launch chrome", "side panel", or "control my browser".
 
@@ -270,7 +270,7 @@ This launches GStack Browser (rebranded Chromium) in headed mode with:
 - The gstack sidebar extension auto-loaded via `launchPersistentContext`
 - Anti-bot stealth patches (sites like Google and NYTimes work without captchas)
 - Custom user agent and GStack Browser branding in Dock/menu bar
-- A sidebar agent process for chat commands
+- A Terminal pane in the Side Panel running a Claude Code session
 
 The `connect` command auto-discovers the extension from the gstack install
 directory. It always uses port **34567** so the extension can auto-connect.
@@ -318,7 +318,7 @@ Use AskUserQuestion:
 >    already show the gstack icon if the extension loaded successfully
 > 2. Click the **puzzle piece** → find **gstack browse** → click the **pin icon**
 > 3. Click the pinned **gstack icon** in the toolbar
-> 4. The Side Panel should open on the right showing a live activity feed
+> 4. The Side Panel should open on the right showing a Claude Code terminal
 >
 > **Port:** 34567 (auto-detected — the extension connects automatically in the
 > Playwright-controlled Chrome).
@@ -368,22 +368,17 @@ Wait 2 seconds, then:
 $B snapshot -i
 ```
 
-Tell the user: "Check the Side Panel — you should see the `goto` and `snapshot`
-commands appear in the activity feed. Every command Claude runs shows up here
-in real time."
+Tell the user: "Open the Side Panel's `debug` toggle in the footer and pick Activity.
+You should see the `goto` and `snapshot` commands appear there. Every command
+Claude runs shows up in that feed in real time."
 
-## Step 5: Sidebar chat
+## Step 5: Terminal pane
 
-After the activity feed demo, tell the user about the sidebar chat:
+After the Activity demo, tell the user about the terminal pane:
 
-> The Side Panel also has a **chat tab**. Try typing a message like "take a
-> snapshot and describe this page." A sidebar agent (a child Claude instance)
-> executes your request in the browser — you'll see the commands appear in
-> the activity feed as they happen.
->
-> The sidebar agent can navigate pages, click buttons, fill forms, and read
-> content. Each task gets up to 5 minutes. It runs in an isolated session, so
-> it won't interfere with this Claude Code window.
+> The Side Panel's main pane is a live Claude Code session. Try typing a message
+> like "take a snapshot and describe this page." The commands appear in the
+> Activity view (footer `debug` toggle) as they happen.
 
 ## Step 6: What's next
 
@@ -393,12 +388,12 @@ Tell the user:
 >
 > **Watch Claude work in real time:**
 > - Run any gstack skill (`/qa`, `/design-review`, `/benchmark`) and watch
->   every action happen in the visible Chrome window + Side Panel feed
+>   every action happen in the visible Chrome window + the Side Panel's Activity view
 > - No cookie import needed — the Playwright browser shares its own session
 >
 > **Control the browser directly:**
-> - **Sidebar chat** — type natural language in the Side Panel and the sidebar
->   agent executes it (e.g., "fill in the login form and submit")
+> - **Terminal pane**: type natural language into the Side Panel's Claude Code
+>   session (e.g., "fill in the login form and submit")
 > - **Browse commands** — `$B goto <url>`, `$B click <sel>`, `$B fill <sel> <val>`,
 >   `$B snapshot -i` — all visible in Chrome + Side Panel
 >

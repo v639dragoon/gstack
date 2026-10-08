@@ -4124,7 +4124,7 @@ describe('CONFIDENCE_CALIBRATION resolver', () => {
     test(`${skill} generated SKILL.md contains confidence calibration`, () => {
       const content = readSkillUnion(skill); // ship: moved to sections/review-army.md
       expect(content).toContain('Confidence Calibration');
-      expect(content).toContain(skill === 'review' ? 'score every finding (1-10)' : 'confidence score');
+      expect(content).toContain(skill === 'plan-eng-review' ? 'confidence score' : 'score every finding (1-10)');
     });
   }
 

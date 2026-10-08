@@ -31,7 +31,7 @@ Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.
   "informational" with completed:false when coverage is missing.
 The \`effort\` fields describe the CODEX passes — both stay at high; only plan and doc voices route to medium.
 
-**Persist per-gate telemetry (Phase 0):** one gate record per pass that ran,
+**Persist per-gate telemetry:** one gate record per pass that ran,
 substituting carried literals (RUN_ID/MANIFEST_WTREE from the Step 9.1
 manifest; if none this run, run \`gstack-diff-manifest <base>\` now).
 \`tokens.total\` for a codex pass comes from the \`tokens used\` line in its

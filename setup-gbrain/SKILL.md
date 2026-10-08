@@ -996,27 +996,6 @@ At end: `unset SUPABASE_ACCESS_TOKEN`. Revocation reminder.
 
 ---
 
-## Telemetry
-
-The preamble's Telemetry block logs skill success/failure at exit. When
-emitting the event, add these enumerated categorical values to the
-telemetry payload (SAFE — no free-form secrets, never the URL or PAT):
-
-- `scenario`: `supabase-existing` | `supabase-auto-provision` |
-  `supabase-manual` | `pglite-local` | `switch-to-supabase` |
-  `switch-to-pglite` | `repo-flip-only` | `cleanup-orphans` |
-  `resume-provision`
-- `install_performed`: `yes` | `no` (existing checkout reused) | `skipped` (pre-existing)
-- `mcp_registered`: `yes` | `no` | `claude-missing`
-- `trust_tier_set`: `read-write` | `read-only` | `deny` |
-  `skip-for-now` | `n/a` (outside git repo)
-
-Never pass `SUPABASE_ACCESS_TOKEN`, `DB_PASS`, `GBRAIN_POOLER_URL`,
-`GBRAIN_DATABASE_URL`, or any `postgresql://` substring to the telemetry
-invocation.
-
----
-
 ## Important Rules
 
 - **One rule for every secret.** PAT, DB_PASS, pooler URL: env-var only,

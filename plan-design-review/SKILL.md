@@ -470,7 +470,7 @@ only under the Step 0.5 conditions (no UI scope, designer unavailable, or the us
 
 Commands: `generate` (single mockup), `variants` (multiple directions), `compare`
 (side-by-side review board), `iterate` (refine with feedback), `check` (cross-model
-quality gate via GPT-4o vision), `evolve` (improve from screenshot).
+vision quality gate), `evolve` (improve from screenshot).
 
 Setup is handled by the DESIGN SETUP section below. If `DESIGN_READY` is printed,
 the designer is available and you should use it.
@@ -655,8 +655,7 @@ case "$_RC" in
 esac
 ```
 
-If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation and fall back to the
-existing HTML wireframe approach (`DESIGN_SKETCH`). Design mockups are a
+If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation. Design mockups are a
 progressive enhancement, not a hard requirement.
 
 Comparison boards are local HTML files: open them with `open file://...` on macOS

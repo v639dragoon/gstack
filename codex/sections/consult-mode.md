@@ -74,8 +74,8 @@ PROMPT_FILE=$(mktemp "${_GT:?}/codex-prompt.XXXXXX") || { echo "Not sent: mktemp
 Write the text into each printed file with your file-write tool (Claude Code's Write tool needs a Read of the empty file first), exactly as it should appear. The text never goes into a shell command, heredoc or quoted argument. If a write fails or is refused, do not send: print the cause, the file path and the command below for sending by hand.
 
 **Session-cost reality (measured):** every `codex exec` call — resumed
-or fresh — pays Codex's ~21K-token session prelude (its skill catalogue +
-instructions); `resume` does NOT amortize it (a measured resume came in
+or fresh, pays Codex's session start-up cost; `resume` does NOT
+amortize it (a measured resume came in
 slightly ABOVE a fresh call). Resume buys conversational continuity, never
 token savings. So: prefer ONE codex call per skill where the workflow allows,
 batch questions into that call, and reach for resume only when the follow-up

@@ -111,9 +111,7 @@ from the work being done.
 Try to determine how long this session has been active:
 
 ```bash
-if [ -n "$_TEL_START" ]; then
-  START_EPOCH="$_TEL_START"
-elif [ -n "$PPID" ]; then
+if [ -n "$PPID" ]; then
   _LSTART=$(ps -o lstart= -p "$PPID" 2>/dev/null)
   # BSD date (macOS) parses with -jf; GNU date (Linux) with -d. Never parse an
   # empty start: GNU date -d "" means today at midnight.

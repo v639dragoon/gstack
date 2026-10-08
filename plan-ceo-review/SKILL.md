@@ -1042,7 +1042,7 @@ In expansion modes, extend 0F's pending list.
 For both expansion modes, ask separately for each addition, in turn, no pacing menu: **A)** Add to this plan's scope **B)** Defer to TODOS.md **C)** Skip. Accepted items govern the remaining sections.
 
 **For HOLD SCOPE** — run this:
-1. Complexity check: at more than 8 files or more than 2 new classes/services, challenge whether fewer moving parts achieve the same goal.
+1. Complexity check: at 8+ files or 2+ new classes/services, challenge whether fewer moving parts achieve the same goal.
 2. Find the minimum changes for the goal; flag work deferrable without blocking it.
 3. Keep stated invariants and acceptance criteria; repairs needed to meet them are in scope.
 

@@ -333,7 +333,7 @@ test('review confidence uses its severity labels without an undefined P0 excepti
   expect(confidence.indexOf('Pre-emit verification gate')).toBeLessThan(confidence.indexOf('| Score |'));
   expect(confidence).not.toContain('FP classes the gate kills');
   expect(confidence).not.toContain('1539-framework-aware-review.md');
-  expectMentions(generateConfidenceCalibration({ ...ctx, skillName: 'ship' }), [['only', 'severity', 'report']], 'section');
+  expect(generateConfidenceCalibration({ ...ctx, skillName: 'ship' })).toBe(confidence);
 });
 
 test('review names the lifecycle and record owners before using their persistence rules', () => {

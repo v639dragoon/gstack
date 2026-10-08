@@ -469,7 +469,7 @@ explicit.
 
    **Contributor framing (only if `_CONTRIB=true`):**
    > You're a gstack contributor. Question tuning isn't on by default for
-   > anyone, but contributors are the cohort whose data most helps v2 work
+   > anyone, but contributors are the cohort whose data most helps future work
    > (skills adapting to your steering style). Enabling logs every
    > AskUserQuestion outcome locally to
    > `~/.gstack/projects/<slug>/question-log.jsonl` — nothing leaves your
@@ -600,11 +600,8 @@ Parse the JSON. Present in **plain English**, not raw floats:
   "**scope_appetite:** declared 0.8 (boil the ocean) ↔ observed 0.72 (close)"
   Use words for the gap: 0.0-0.1 "close", 0.1-0.3 "drift", 0.3+ "mismatch".
 
-  This display gate is intentionally lower than the E1 **promotion gate**
-  (90+ days stable across 3+ skills, per `docs/designs/PLAN_TUNING_V0.md`).
-  Displaying inferred values is a UI affordance; shipping behavior-adapting
-  defaults based on the profile is consequential and needs a much higher
-  bar. Do NOT use the display gate as a green light for v2 E1 work.
+  Displaying inferred values is a UI affordance only; the profile never
+  changes a skill's defaults.
 
 - If the calibration gate isn't met, say: "Not enough observed data yet —
   need N more events across M more skills before we can show your observed
@@ -746,7 +743,7 @@ Parse the JSON. For each dimension where both declared and inferred exist:
   Consider updating your declared value, or reflect on whether your behavior
   is actually what you want."
 
-Never auto-update declared based on the gap. In v1 the gap is reporting only —
+Never auto-update declared based on the gap. The gap is reporting only —
 the user decides whether declared is wrong or behavior is wrong.
 
 ---
@@ -951,12 +948,10 @@ invokes via `/plan-tune distill` / `dream`.
    ~/.claude/skills/gstack/bin/gstack-distill-free-text
    ```
 
-2. If `RATE_CAPPED`: tell the user "You've hit today's 3 distills/day cap.
-   Run again tomorrow, or `/plan-tune stats` for run history."
-3. If `NO_FREE_TEXT`: tell the user "No free-text answers since the last
+2. If `NO_FREE_TEXT`: tell the user "No free-text answers since the last
    distill. Keep using gstack — `Other` responses on AskUserQuestion feed
    this loop."
-4. If success: print the proposals count + estimated cost, then route into
+3. If success: print the proposals count + estimated cost, then route into
    `Dream cycle review` above for the user to approve each.
 
 For background mode (e.g., the user wants to keep working):

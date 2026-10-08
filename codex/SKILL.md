@@ -798,8 +798,7 @@ tasks (OpenAI issues #8545, #8402, #6931). Users can override with `--xhigh` fla
 
 **Web search:** All codex commands pass `-c 'web_search="cached"'` so `codex exec`
 invocations can look up docs and APIs during review. This is OpenAI's cached index —
-fast, no extra cost. Unlike the legacy `--enable`-based spelling (deprecated by
-codex >=0.144), the `-c` form explicitly overrides any top-level
+fast, no extra cost. The `-c` form explicitly overrides any top-level
 `web_search` setting in `~/.codex/config.toml`. Note: native `codex review` disables
 web search regardless of configuration, so on the default Review path the flag is a
 harmless no-op — only exec-based modes actually search.

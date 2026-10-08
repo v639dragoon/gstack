@@ -287,7 +287,7 @@ One rule for every secret this skill touches: **env var only, never argv, never 
 - CI grep test in `test/skill-validation.test.ts` fails the build if `$SUPABASE_ACCESS_TOKEN` or `$GBRAIN_DATABASE_URL` appears in an argv position
 - CI grep test fails if `--insecure`, `-k`, or `NODE_TLS_REJECT_UNAUTHORIZED=0` appear in `bin/gstack-gbrain-supabase-provision`
 - `set +x` at the top of the provision helper prevents debug tracing from leaking PAT
-- Telemetry payload contains only enumerated categorical values (scenario, install result, MCP opt-in, trust tier) — never free-form strings that could contain secrets
+- The setup skill adds no setup-specific telemetry fields; skill telemetry carries a fixed set of fields, and error messages pass through the redaction engine before they touch disk
 
 **Enforced via tests:**
 

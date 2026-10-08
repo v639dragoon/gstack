@@ -179,10 +179,10 @@ Review these as UI requirements in the plan, approved mockups, and referenced ex
 - One job per section
 - "If deleting 30% of the copy improves it, keep deleting"
 - Cards earn their existence — no decorative card grids
-- NEVER use small, low-contrast type (body text < 16px or contrast ratio < 4.5:1 on body text)
-- NEVER put labels inside form fields as the only label (placeholder-as-label pattern — labels must be visible when the field has content)
-- ALWAYS preserve visited vs unvisited link distinction (visited links must have a different color)
-- NEVER float headings between paragraphs (heading must be visually closer to the section it introduces than to the preceding section)
+- Body text is at least 16px with at least 4.5:1 contrast (smaller or fainter text is unreadable on phones)
+- Every form field keeps a visible label once it has content; a placeholder is not a label
+- Visited and unvisited links differ in color so users can see where they have been
+- A heading sits visually closer to the section it introduces than to the preceding section
 
 **Reflexes no detector catches** (check by hand, every time):
 - **Browser surfaces carry the design.** Selection color, caret, scrollbars, focus rings, underline offset, tabular numerals all ship with browser defaults that belong to no design system. Theme them from the palette. Cheapest tell that a page was designed rather than assembled, and the one models skip most.

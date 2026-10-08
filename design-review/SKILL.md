@@ -611,20 +611,7 @@ PROMPT_FILE="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.gstack/tmp/<pr
 _aside_exec "Search the web for $(cat "$PROMPT_FILE") Read-only: do not sign in, submit, or change anything. Then stop." && rm -f "$PROMPT_FILE"
 ```
 
-If Aside is not installed or not running (`command -v aside` prints nothing, or the request fails), run the same lookup with the WebSearch tool when the host provides it: `"[runtime] best test framework {current year}"` and `"[framework A] vs [framework B] comparison"`. If neither is available, use this built-in knowledge table:
-
-| Runtime | Primary recommendation | Alternative |
-|---------|----------------------|-------------|
-| Ruby/Rails | minitest + fixtures + capybara | rspec + factory_bot + shoulda-matchers |
-| Node.js | vitest + @testing-library | jest + @testing-library |
-| Next.js | vitest + @testing-library/react + playwright | jest + cypress |
-| Python | pytest + pytest-cov | unittest |
-| Django | pytest + pytest-django | Django's built-in `manage.py test` (unittest) |
-| Go | stdlib testing + testify | stdlib only |
-| JVM (Maven/Gradle) | JUnit 5 + AssertJ | JUnit 5 only |
-| Rust | cargo test (built-in) + mockall | — |
-| PHP | phpunit + mockery | pest |
-| Elixir | ExUnit (built-in) + ex_machina | — |
+If Aside is not installed or not running (`command -v aside` prints nothing, or the request fails), run the same lookup with the WebSearch tool when the host provides it: `"[runtime] best test framework {current year}"` and `"[framework A] vs [framework B] comparison"`. If neither is available, recommend from your own knowledge of the runtime's current standard test runner and say that no live research was possible.
 
 ### B3. Framework selection
 
@@ -749,8 +736,7 @@ case "$_RC" in
 esac
 ```
 
-If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation and fall back to the
-existing HTML wireframe approach (`DESIGN_SKETCH`). Design mockups are a
+If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation. Design mockups are a
 progressive enhancement, not a hard requirement.
 
 Comparison boards are local HTML files: open them with `open file://...` on macOS
@@ -1333,38 +1319,9 @@ Evaluate:
 
 ### Goodwill Reservoir (track across the flow)
 
-As you walk the user flow, maintain a mental goodwill meter (starts at 70/100).
-These scores are heuristic, not measured. The value is in identifying specific
-drains and fills, not in the final number.
+As you walk the user flow, keep track of goodwill qualitatively. Note each friction that drains it: hidden information the user would want (pricing, contact, shipping), format punishment (rejecting valid input such as dashes in phone numbers), unnecessary information requests, interstitials, splash screens or forced tours blocking the task, sloppy or unprofessional appearance, and ambiguous choices that require thinking. Note each thing that replenishes it: obvious and prominent top tasks, upfront honesty about costs and limitations, saved steps (direct links, smart defaults, autofill), graceful error recovery with specific fix instructions, and apologies when things go wrong.
 
-Subtract points for:
-- Hidden information the user would want (pricing, contact, shipping): subtract 15
-- Format punishment (rejecting valid input like dashes in phone numbers): subtract 10
-- Unnecessary information requests: subtract 10
-- Interstitials, splash screens, forced tours blocking the task: subtract 15
-- Sloppy or unprofessional appearance: subtract 10
-- Ambiguous choices that require thinking: subtract 5 each
-
-Add points for:
-- Top user tasks are obvious and prominent: add 10
-- Upfront about costs and limitations: add 5
-- Saves steps (direct links, smart defaults, autofill): add 5 each
-- Graceful error recovery with specific fix instructions: add 10
-- Apologizes when things go wrong: add 5
-
-Report the final goodwill score with a visual dashboard:
-
-```
-Goodwill: 70 ████████████████████░░░░░░░░░░
-  Step 1: Login page        70 → 75  (+5 obvious primary action)
-  Step 2: Dashboard          75 → 60  (-15 interstitial tour popup)
-  Step 3: Settings           60 → 50  (-10 format punishment on phone)
-  Step 4: Billing            50 → 35  (-15 hidden pricing info)
-  FINAL: 35/100 ⚠️ CRITICAL UX DEBT
-```
-
-Below 30 = critical UX debt. 30-60 = needs work. Above 60 = healthy.
-Include the biggest drains and fills as specific findings.
+Report the biggest drains and fills as specific findings, naming the step where each occurred, and close with a verdict: healthy, needs work, or critical UX debt.
 
 ---
 
@@ -1549,10 +1506,10 @@ Tie everything to user goals and product objectives. Always suggest specific imp
 - One job per section
 - "If deleting 30% of the copy improves it, keep deleting"
 - Cards earn their existence — no decorative card grids
-- NEVER use small, low-contrast type (body text < 16px or contrast ratio < 4.5:1 on body text)
-- NEVER put labels inside form fields as the only label (placeholder-as-label pattern — labels must be visible when the field has content)
-- ALWAYS preserve visited vs unvisited link distinction (visited links must have a different color)
-- NEVER float headings between paragraphs (heading must be visually closer to the section it introduces than to the preceding section)
+- Body text is at least 16px with at least 4.5:1 contrast (smaller or fainter text is unreadable on phones)
+- Every form field keeps a visible label once it has content; a placeholder is not a label
+- Visited and unvisited links differ in color so users can see where they have been
+- A heading sits visually closer to the section it introduces than to the preceding section
 
 **Reflexes no detector catches** (check by hand, every time):
 - **Depth has an offset.** Shadows are offset plus soft blur. A zero-offset colored halo is decoration, not depth.
@@ -1735,7 +1692,7 @@ Output headers: `CODEX SAYS (design source audit):` and `CLAUDE SUBAGENT (design
 
 **Synthesis — Litmus scorecard:**
 
-Use the same scorecard format as /plan-design-review (shown above). Fill in from both outputs.
+Tabulate the seven Litmus checks from the Design Hard Rules with columns for Claude, Codex and Consensus (CONFIRMED = both agree, DISAGREE = they differ, NOT SPEC'D = not enough info to evaluate), then list the hard rejections triggered. Fill in from both outputs.
 Merge findings into the triage with `[codex]` / `[subagent]` / `[cross-model]` tags.
 
 **Log the result:**
@@ -1859,9 +1816,9 @@ interactive state issues.
 
 For CSS-only fixes: skip entirely. CSS regressions are caught by re-running /design-review.
 
-If the fix involved JS behavior: follow the same procedure as /qa Phase 8e.5 (study existing
-test patterns, write a regression test encoding the exact bug condition, run it, commit if
-passes or defer if fails). Commit format: `test(design): regression test for FINDING-NNN`.
+If the fix involved JS behavior: follow /qa Phase 8a.5 for the test (apply its test value bar,
+match 2-3 nearby tests, encode the exact bug condition in a new test file), run it, and
+commit if it passes or defer if it fails. Commit format: `test(design): regression test for FINDING-NNN`.
 
 ### 8f. Self-Regulation (STOP AND EVALUATE)
 

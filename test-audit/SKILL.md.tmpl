@@ -57,6 +57,7 @@ DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null |
 echo "REPORT: $REPORT"
 echo "DEFAULT_BRANCH: ${DEFAULT_BRANCH:-unknown}"
 git ls-files | grep -cE '(^|/)(tests?|spec|__tests__)/|(^|/)test_[^/]+\.py$|_test\.(go|py|rb|ts|js|exs)$|\.(test|spec)\.[jt]sx?$|_spec\.rb$|Test\.(java|kt)$' | sed 's/^/TESTFILES:/'
+BRANCH=$(~/.claude/skills/gstack/bin/gstack-slug --get BRANCH 2>/dev/null)
 ls -t "$GSTACK_STATE_ROOT"/projects/$SLUG/*-"$BRANCH"-eng-review-test-plan-*.md 2>/dev/null | head -1 | sed 's/^/SEED_PLAN:/'
 ```
 

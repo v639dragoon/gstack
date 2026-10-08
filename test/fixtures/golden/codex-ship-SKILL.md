@@ -1232,8 +1232,7 @@ Log metrics for `/retro` through `gstack-review-log`; it handles project/branch 
 JSON validation, storage and sync. It takes **no path argument**; do not build one.
 
 (Per-gate
-telemetry lives separately in `<branch>-gates.jsonl` via `gstack-gate-log`;
-this reviews.jsonl row is unchanged.)
+telemetry is separate: `<branch>-gates.jsonl` via `gstack-gate-log`.)
 
 ```bash
 [ -d "${GSTACK_ROOT:-/-}/bin" ]&&[ -d "$GSTACK_ROOT/lib" ]||{ _r=$(git rev-parse --show-toplevel 2>/dev/null)/.agents/skills/gstack;[ -d "$_r/bin" ]||_r=${CODEX_HOME:-~/.codex}/skills/gstack;[ -d "$_r/bin" ]||{ echo "gstack: no install found (tried $_r). Fix: ./setup --host codex from your gstack checkout; ./setup --status shows it.">&2;exit 1;};GSTACK_ROOT=$_r;}

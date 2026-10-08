@@ -400,8 +400,7 @@ case "$_RC" in
 esac
 ```
 
-If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation and fall back to the
-existing HTML wireframe approach (`DESIGN_SKETCH`). Design mockups are a
+If `DESIGN_NOT_AVAILABLE`: skip visual mockup generation. Design mockups are a
 progressive enhancement, not a hard requirement.
 
 Comparison boards are local HTML files: open them with `open file://...` on macOS

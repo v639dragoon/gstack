@@ -119,7 +119,7 @@ test('only an explicit user selection or enabled successful mode check bypasses 
   expect(s).toContain('offer all four modes in one AskUserQuestion');
   expect(s).toContain("using step 2's recommendation");
   expect(s).toContain('For >15 planned changed files, recommend SCOPE REDUCTION');
-  expect(document).toContain('more than 8 files or more than 2 new classes/services');
+  expect(document).toContain('8+ files or 2+ new classes/services');
   expect(s.replace(/\s+/g,' ')).toContain('ask about each proposed addition or cut, including those prompted by file-count thresholds');
   expect(s.replace(/\s+/g,' ')).toContain('Count distinct planned file additions, edits and deletions');
   expect(s.replace(/\s+/g,' ')).toContain('mark estimated counts as estimates');

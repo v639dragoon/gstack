@@ -810,7 +810,7 @@ output; a generic health check cannot certify a new deployment.
 
 ### Common: Timing and failure handling
 
-Record deploy start time. Show progress every 2 minutes: "Deploy is still running... ({X}m so far). This is normal for most platforms."
+Record deploy start time. While polling, tell the user what is being checked and how long the deploy has run.
 
 Matching revision successfully deployed: record `DEPLOY_STATUS=PASSED`, duration,
 and evidence. Continue to Step 7, or Step 5's URL question if none is available.
@@ -1023,7 +1023,7 @@ Recheck read-only evidence; never redo a merge/deploy because a section was miss
 
 - Never force-push, bypass CI, replay a confirmed merge, or hide missing evidence.
 - Auto-detect facts; ask when unknown or when an explicit approval gate applies.
-- Poll at each step's stated interval and deadline (4-minute CI rounds in Step 3; 30 seconds for merge readback and deploy status), with its progress messages.
+- Poll at each step's stated interval and deadline (4-minute CI rounds in Step 3; 30 seconds for merge readback and deploy status), narrating progress while you wait.
 - After merge failures, offer approved rollback when appropriate; never revert a rollback automatically.
 - Verify once; `/canary` provides extended monitoring. Rechecks require the user's choice.
 - Use `--delete-branch`; reconcile failed cleanup non-destructively with confirmation.

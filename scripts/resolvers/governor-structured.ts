@@ -136,7 +136,6 @@ may satisfy the slot. P0/P1 findings block. Failure, refusal, empty output or mi
 error/timeout, never clean/PASS. For a completed response, \`[P0]\`/\`[P1]\` markers:
 found → \`GATE: FAIL\`, absent → \`GATE: PASS\`. FAIL →
 AskUserQuestion with A) investigate and fix now (recommended), B) continue.
-The [P1] gate semantics are unchanged.
 
 After Codex returns, record its terminal result immediately:
 

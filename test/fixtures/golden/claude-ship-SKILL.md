@@ -1209,8 +1209,7 @@ Log metrics for `/retro` through `gstack-review-log`; it handles project/branch 
 JSON validation, storage and sync. It takes **no path argument**; do not build one.
 
 (Per-gate
-telemetry lives separately in `<branch>-gates.jsonl` via `gstack-gate-log`;
-this reviews.jsonl row is unchanged.)
+telemetry is separate: `<branch>-gates.jsonl` via `gstack-gate-log`.)
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"ship","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","coverage_pct":COVERAGE_PCT,"coverage_schema":2,"coverage_pct_value":COVERAGE_PCT_VALUE,"weak_gaps":WEAK_GAPS,"tests_extended":TESTS_EXTENDED,"tests_rejected":TESTS_REJECTED,"regression_proof":REGRESSION_PROOF,"plan_items_total":PLAN_TOTAL,"plan_items_done":PLAN_DONE,"verification_result":"VERIFY_RESULT","version":"VERSION","branch":"'"$(git rev-parse --abbrev-ref HEAD)"'"}'
