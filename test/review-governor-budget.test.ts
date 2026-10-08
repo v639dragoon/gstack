@@ -582,3 +582,63 @@ test('D4 native and upstream reviewer accounting cannot substitute for routed sl
   expect(run(d, s, ['plan', file]).status).toBe(0);
   expect(run(d, s, ['complete', 'd4', '--require-native']).status).toBe(2);
 }, 30_000); // 37 isolated CLI calls; observed >5s sandbox launch time, without changing any per-child or model budget.
+
+const finalSlice = {
+  outcome: { present: true, outcome_id: 'o', slice_number: 2, is_final_slice: true, is_flag_flip: false },
+};
+test('complete owes the same gates through the shared owed-gate function', () => {
+  const { d, s } = setup();
+  const ok = (...a: string[]) => {
+    const r = run(d, s, a);
+    expect(r.status, `${a.join(' ')}\n${r.stdout}${r.stderr}`).toBe(0);
+    return r;
+  };
+  const incomplete = (id: string, flags: string[], line: string) => {
+    const r = run(d, s, ['complete', id, ...flags]);
+    expect(r.stdout).toBe(`${line}\n`);
+    expect(r.status).toBe(2);
+  };
+  ok('plan', manifest(d, 'B', 'cc', {}, finalSlice));
+  incomplete('cc', [], 'INCOMPLETE=codex-structured');
+  incomplete('cc', ['--require-native'], 'INCOMPLETE=codex-structured,native-adversarial');
+  incomplete('cc', ['--require-audits'], 'INCOMPLETE=codex-structured,coverage-audit,plan-completion');
+  incomplete('cc', ['--final'], 'INCOMPLETE=codex-structured,coverage-audit,plan-completion,doc-release');
+  incomplete('cc', ['--final', '--require-native'],
+    'INCOMPLETE=codex-structured,native-adversarial,coverage-audit,plan-completion,doc-release');
+  // A dispatched pre-review audit is owed on every path; doc-release only under --final.
+  ok('dispatch', 'cc', 'coverage-audit');
+  ok('dispatch', 'cc', 'doc-release');
+  incomplete('cc', [], 'INCOMPLETE=codex-structured,coverage-audit');
+  ok('dispatch', 'cc', 'codex-structured');
+  ok('verdict', 'cc', 'codex-structured', 'clean');
+  ok('verdict', 'cc', 'coverage-audit', 'error');
+  incomplete('cc', [], 'INCOMPLETE=coverage-audit');
+  ok('dispatch', 'cc', 'coverage-audit');
+  ok('verdict', 'cc', 'coverage-audit', 'clean');
+  expect(ok('complete', 'cc').stdout).toBe('COMPLETE=true\n');
+  incomplete('cc', ['--final'], 'INCOMPLETE=plan-completion,doc-release');
+  ok('verdict', 'cc', 'doc-release', 'issues_found');
+  incomplete('cc', ['--final'], 'INCOMPLETE=plan-completion');
+  const project = join(s, 'projects', d.split('/').at(-1)!, 'budgets');
+  const ledger = readFileSync(join(project, 'cc.ledger.jsonl'), 'utf8').trim().split('\n').map(text => JSON.parse(text));
+  expect(ledger.filter((r: any) => r.record_type === 'complete')).toHaveLength(1);
+  // An intermediate slice owes no unplanned audit; doc-release stays planned by default.
+  ok('plan', manifest(d, 'B', 'ci'));
+  ok('dispatch', 'ci', 'codex-structured');
+  ok('verdict', 'ci', 'codex-structured', 'clean');
+  expect(ok('complete', 'ci', '--require-audits').stdout).toBe('COMPLETE=true\n');
+  incomplete('ci', ['--final'], 'INCOMPLETE=doc-release');
+  // Semantic verdicts bind to the plan's tree and SHA; audits do not.
+  const bound = manifest(d, 'B', 'cw', {}, finalSlice);
+  const raw = JSON.parse(readFileSync(bound, 'utf8'));
+  writeFileSync(bound, JSON.stringify({ ...raw, wtree: 'w1' }));
+  ok('plan', bound);
+  for (const gate of ['coverage-audit', 'plan-completion', 'codex-structured']) {
+    ok('dispatch', 'cw', gate);
+    ok('verdict', 'cw', gate, 'clean');
+  }
+  expect(ok('complete', 'cw', '--require-audits').stdout).toBe('COMPLETE=true\n');
+  writeFileSync(bound, JSON.stringify({ ...raw, wtree: 'w2' }));
+  ok('plan', bound);
+  incomplete('cw', ['--require-audits'], 'INCOMPLETE=codex-structured');
+}, 60_000); // ~40 isolated CLI calls at ~100-170ms each

@@ -475,9 +475,10 @@ if (command === 'plan') {
 
 // D4: upstream-required attempts are accounted in their own bounded slots.
 // They neither consume nor substitute for the unchanged routed reviewer budget.
-const upstreamGates = (id: string, cycle: number): string[] => [...new Set(records(id)
+const registeredUpstream = (ledger: any[], cycle: number): string[] => [...new Set(ledger
   .filter(r => r.record_type === 'upstream-reviewer' && r.cycle === cycle)
   .map(r => r.gate))];
+const upstreamGates = (id: string, cycle: number) => registeredUpstream(records(id), cycle);
 function gateDisabled(p: any, gate: string): boolean {
   return gate === 'native-adversarial' && p.adversarialClaude === false ||
     gate === 'upstream-outside:challenge' && p.codexChallenge === false ||
@@ -731,6 +732,42 @@ function auditPlanned(p: any, gate: string): boolean {
   return !!flag[gate];
 }
 
+/**
+ * The gates `complete` owes for one cycle plan that lack a terminal verdict
+ * (the gate's LAST verdict in the cycle is clean or issues_found), in owed
+ * order. --require-audits: the ship path also owes a terminal verdict for every
+ * planned pre-review audit (coverage, plan completion); --final adds the
+ * doc-release pass. A dispatched-but-unfinished audit is incomplete on every
+ * path. /review dispatches none, so it passes neither flag. A semantic
+ * verdict must also be bound to the plan's wtree and head_sha.
+ */
+function incompleteGates(p: any, ledger: any[], cycle: number,
+  opts: { requireAudits?: boolean; final?: boolean; requireNative?: boolean }): string[] {
+  const rs = ledger.filter(
+    (r) => r.record_type === 'verdict' && Number(r.cycle ?? 0) === cycle,
+  );
+  const requireAudits = opts.requireAudits || opts.final;
+  const audits = ['coverage-audit', 'plan-completion', ...(opts.final ? ['doc-release'] : [])];
+  const dispatched = new Set(
+    ledger
+      .filter((r) => r.record_type === 'dispatch' && r.allowed && Number(r.cycle ?? 0) === cycle)
+      .map((r) => r.gate),
+  );
+  const owed = [...new Set([
+    ...p.reviewers.map((r: any) => r.gate),
+    ...ledger.filter(r => r.record_type === 'upstream-reviewer' && r.cycle === cycle && r.required !== false).map(r => r.gate),
+    ...(opts.requireNative && p.adversarialClaude !== false ? ['native-adversarial'] : []),
+    ...audits.filter((g) => (requireAudits && auditPlanned(p, g)) || dispatched.has(g)),
+  ])];
+  return owed
+    .filter((gate: string) => {
+      const result = rs.filter((r) => r.gate === gate).at(-1);
+      const semantic = registeredUpstream(ledger, cycle).includes(gate) || p.reviewers.some((r: any) => r.gate === gate);
+      return !['clean', 'issues_found'].includes(result?.verdict) ||
+        (semantic && p.wtree && (result?.wtree !== p.wtree || result?.reviewed_sha !== p.head_sha));
+    });
+}
+
 if (command === 'complete') {
   const id = argv[0];
   if (!id) fail('run id required');
@@ -740,33 +777,9 @@ if (command === 'complete') {
     console.log('INCOMPLETE=working-tree-changed');
     process.exit(2);
   }
-  const rs = records(id).filter(
-    (r) => r.record_type === 'verdict' && Number(r.cycle ?? 0) === cycle,
-  );
-  // --require-audits: the ship path also owes a terminal verdict for every
-  // planned pre-review audit (coverage, plan completion); --final adds the
-  // doc-release pass. A dispatched-but-unfinished audit is incomplete on
-  // every path. /review dispatches none, so it passes neither flag.
-  const requireAudits = has('--require-audits') || has('--final');
-  const audits = ['coverage-audit', 'plan-completion', ...(has('--final') ? ['doc-release'] : [])];
-  const dispatched = new Set(
-    records(id)
-      .filter((r) => r.record_type === 'dispatch' && r.allowed && Number(r.cycle ?? 0) === cycle)
-      .map((r) => r.gate),
-  );
-  const owed = [...new Set([
-    ...p.reviewers.map((r: any) => r.gate),
-    ...records(id).filter(r => r.record_type === 'upstream-reviewer' && r.cycle === cycle && r.required !== false).map(r => r.gate),
-    ...(has('--require-native') && p.adversarialClaude !== false ? ['native-adversarial'] : []),
-    ...audits.filter((g) => (requireAudits && auditPlanned(p, g)) || dispatched.has(g)),
-  ])];
-  const incomplete = owed
-    .filter((gate: string) => {
-      const result = rs.filter((r) => r.gate === gate).at(-1);
-      const semantic = upstreamGates(id, cycle).includes(gate) || p.reviewers.some((r: any) => r.gate === gate);
-      return !['clean', 'issues_found'].includes(result?.verdict) ||
-        (semantic && p.wtree && (result?.wtree !== p.wtree || result?.reviewed_sha !== p.head_sha));
-    });
+  const incomplete = incompleteGates(p, records(id), cycle, {
+    requireAudits: has('--require-audits'), final: has('--final'), requireNative: has('--require-native'),
+  });
   if (incomplete.length) {
     console.log(`INCOMPLETE=${incomplete.join(',')}`);
     process.exit(2);
