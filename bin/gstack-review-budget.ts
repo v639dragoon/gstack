@@ -931,16 +931,24 @@ if (command === 'carry-forward') {
   if (p.adversarialClaude !== false) required.add('native-adversarial');
   const candidates = [...new Set([...required, ...registrations.map(r => r.gate)])];
   const copies: { dispatch: any; verdict: any }[] = [];
+  const bound = (r: any) => r.wtree === p.wtree && r.reviewed_sha === p.head_sha;
   for (const gate of candidates) {
     const ds = old.filter(r => r.record_type === 'dispatch' && r.allowed && r.gate === gate && inCycle(r));
     const vs = old.filter(r => r.record_type === 'verdict' && r.gate === gate && inCycle(r));
     const dispatch = ds.at(-1), verdict = vs.at(-1);
     const valid = dispatch && verdict && ds.length === vs.length &&
       ['clean', 'issues_found'].includes(verdict.verdict) &&
-      [dispatch, verdict].every(r => r.wtree === p.wtree && r.reviewed_sha === p.head_sha);
+      [dispatch, verdict].every(bound);
     if (!valid) { if (required.has(gate)) block(`incomplete:${gate}`); continue; }
     if (verdict.critical > new Set(old.filter(r => r.record_type === 'finding' && r.blocking && r.gate === gate && inCycle(r)).map(r => r.fingerprint)).size)
       block(`untracked-critical:${gate}`);
+    // `converged` counts a --verify-of only after the last rerun-check, so a
+    // docs-only delta carries every clean one on the departing tree, not just
+    // the gate's last pair (dohma #917). ds[i] is answered by vs[i]. Added
+    // tests are code: across them only the last pair carries, as before.
+    if (delta.docOnly) ds.slice(0, -1).forEach((d, i) => {
+      if (d.verify_of && vs[i].verdict === 'clean' && [d, vs[i]].every(bound)) copies.push({ dispatch: d, verdict: vs[i] });
+    });
     copies.push({ dispatch, verdict });
   }
   for (const f of old.filter(r => r.record_type === 'finding' && r.blocking)) {

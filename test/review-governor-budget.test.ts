@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-const bin = join(import.meta.dir, '..', 'bin/gstack-review-budget'),
+const bin =join(import.meta.dir, '..', 'bin/gstack-review-budget'),
   dirs: string[] = [];
 function setup(
   policy: any = { version: 1, auth_surfaces: ['lib/auth/**'], d_surfaces: ['danger/**'] },
@@ -706,8 +706,18 @@ function shipRun(policy?: any) {
     expect(json.status).toBe(converged ? 0 : 2);
     expect(snapshot()).toEqual(before);
   };
-  return { d, s, budgets, cli, ok, plan, review, docRelease, finding, expectReason };
+  /** Write `file` and commit it, as /ship's fix, fragment and doc writers do. */
+  const commit = (file: string, text: string) => {
+    mkdirSync(join(d, file, '..'), { recursive: true });
+    writeFileSync(join(d, file), text);
+    for (const a of [['add', '--', file], ['commit', '-qm', file]]) {
+      const r = spawnSync('git', a, { cwd: d, encoding: 'utf8', timeout: 30_000, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } });
+      expect(r.status, r.stderr).toBe(0);
+    }
+  };
+  return { d, s, budgets, cli, ok, plan, review, docRelease, finding, expectReason, commit };
 }
+type ShipRun = ReturnType<typeof shipRun>;
 describe('converged <run_id>', () => {
   test('a clean shipped run converges once its doc-release audit is terminal', () => {
     const f = shipRun();
@@ -843,4 +853,88 @@ describe('converged <run_id>', () => {
     }
     expect(readdirSync(f.budgets).sort()).toEqual(['ship.json', 'ship.ledger.jsonl']);
   }, 60_000);
+});
+
+/**
+ * dohma #917: /ship's last tree change is usually docs-only (Step 13's
+ * changelog fragment, Step 14.5's doc edits), carried forward at Step 16
+ * stage 2 after Step 11.5's `complete`. The fixtures follow dohma run 13070
+ * (re-checks recorded before the fragment).
+ */
+describe('converged after a docs-only carry-forward (dohma #917)', () => {
+  const nonCode = (passes: any = {}) =>
+    ({ version: 1, auth_surfaces: [], d_surfaces: [], routing: { passes: { non_code_delta: true, ...passes } } });
+  /** Step 16 stage 2: rerun-check, then carry-forward of a `kind`-only delta. */
+  const carry = (f: ShipRun, kind: 'DOC_ONLY' | 'TEST_ONLY') => {
+    const check = f.ok('rerun-check', 'ship').stdout;
+    expect(check).toContain('FULL_RERUN=false');
+    expect(check).toContain(`${kind}=true`);
+    expect(f.ok('carry-forward', 'ship').stdout).toContain('CARRY_FORWARD=true');
+  };
+  const complete = (f: ShipRun) =>
+    expect(f.ok('complete', 'ship', '--require-audits', '--require-native').stdout).toBe('COMPLETE=true\n');
+  const verify = (f: ShipRun, fp: string) => {
+    f.ok('dispatch', 'ship', 'codex-structured', '--verify-of', fp);
+    f.ok('verdict', 'ship', 'codex-structured', 'clean');
+  };
+  /** Run 13070 up to its fragment: two docs fixes carried, completed, then each re-checked clean. */
+  const verifiedFixes = () => {
+    const f = shipRun(nonCode({ doc_release_by_impact: true }));
+    f.plan(0, true);
+    f.review(0, ['issues_found', '--critical', '2'], false);
+    for (const fp of ['fp1', 'fp2']) {
+      f.finding(fp);
+      f.ok('resolve', 'ship', fp, '--action', 'fixed');
+    }
+    f.commit('TODOS.md', 'both fixes\n');
+    carry(f, 'DOC_ONLY');
+    complete(f);
+    f.expectReason('fix-unverified');
+    verify(f, 'fp1');
+    verify(f, 'fp2');
+    complete(f);
+    f.expectReason('converged');
+    return f;
+  };
+  test('re-checks recorded before the changelog fragment stay verified once it is carried', () => {
+    const f = verifiedFixes();
+    f.commit('changelog.d/main.md', '- entry\n');
+    carry(f, 'DOC_ONLY');
+    complete(f);
+    f.expectReason('converged');
+    // Re-running a re-check after the fragment is no alternative: one per finding per cycle.
+    expect(f.cli('dispatch', 'ship', 'codex-structured', '--verify-of', 'fp1').status).toBe(2);
+  }, 60_000);
+  test('code changed after a re-check never counts as verified', () => {
+    // Added tests are code: neither their carry nor a later docs carry keeps fp1's re-check.
+    const f = verifiedFixes();
+    f.commit('test/added.test.ts', 'added\n');
+    carry(f, 'TEST_ONLY');
+    complete(f);
+    f.expectReason('fix-unverified');
+    f.commit('changelog.d/main.md', '- entry\n');
+    carry(f, 'DOC_ONLY');
+    complete(f);
+    f.expectReason('fix-unverified');
+    // A source edit cannot be carried: it is a full rerun and complete refuses the changed tree.
+    const g = verifiedFixes();
+    g.commit('x.ts', 'code after the re-check\n');
+    expect(g.cli('carry-forward', 'ship').status).toBe(2);
+    expect(g.ok('rerun-check', 'ship').stdout).toContain('FULL_RERUN=true');
+    expect(g.cli('complete', 'ship', '--require-audits', '--require-native').stdout)
+      .toBe('INCOMPLETE=working-tree-changed\n');
+    g.expectReason('no-completion');
+    // Without the non-code exception, a narrow code fix after the re-check reads fix-unverified.
+    const n = shipRun();
+    n.plan();
+    n.review(0, ['issues_found', '--critical', '1']);
+    n.finding('fp');
+    n.ok('resolve', 'ship', 'fp', '--action', 'fixed');
+    n.docRelease();
+    verify(n, 'fp');
+    n.expectReason('converged');
+    writeFileSync(join(n.d, 'x.ts'), 'code after the re-check\n');
+    expect(n.ok('rerun-check', 'ship').stdout).toContain('FULL_RERUN=false');
+    n.expectReason('fix-unverified');
+  }, 120_000);
 });
