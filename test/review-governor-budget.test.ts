@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
+import { between, compact, expectMentions, expectOrdered, expectTokens } from './helpers/prompt-structure';
 const bin =join(import.meta.dir, '..', 'bin/gstack-review-budget'),
   dirs: string[] = [];
 function setup(
@@ -858,8 +859,9 @@ describe('converged <run_id>', () => {
 /**
  * dohma #917: /ship's last tree change is usually docs-only (Step 13's
  * changelog fragment, Step 14.5's doc edits), carried forward at Step 16
- * stage 2 after Step 11.5's `complete`. The fixtures follow dohma run 13070
- * (re-checks recorded before the fragment).
+ * stage 2 after Step 11.5's `complete`. The fixtures follow dohma runs 27498
+ * and 66200 (no completion after the carry) and 13070 (re-checks recorded
+ * before the fragment).
  */
 describe('converged after a docs-only carry-forward (dohma #917)', () => {
   const nonCode = (passes: any = {}) =>
@@ -896,6 +898,34 @@ describe('converged after a docs-only carry-forward (dohma #917)', () => {
     f.expectReason('converged');
     return f;
   };
+  test('a doc-release edit carried after complete converges once Step 16 completes again; code after that does not', () => {
+    const f = shipRun(nonCode());
+    f.plan(0, true);
+    f.review();
+    f.docRelease('issues_found');
+    f.commit('docs/guide.md', 'doc-release edit\n');
+    carry(f, 'DOC_ONLY');
+    f.expectReason('no-completion');
+    complete(f);
+    f.expectReason('converged');
+    writeFileSync(join(f.d, 'x.ts'), 'code after complete\n');
+    f.expectReason('working-tree-changed');
+    expect(f.cli('carry-forward', 'ship').status).toBe(2);
+    expect(f.ok('rerun-check', 'ship').stdout).toContain('FULL_RERUN=true');
+    expect(f.cli('complete', 'ship', '--require-audits', '--require-native').stdout)
+      .toBe('INCOMPLETE=working-tree-changed\n');
+    f.expectReason('no-completion');
+  }, 60_000);
+  test('a changelog fragment carried after complete, with no doc-release, converges once Step 16 completes again', () => {
+    const f = shipRun(nonCode({ doc_release_by_impact: true }));
+    f.plan(0, true);
+    f.review();
+    f.commit('changelog.d/main.md', '- entry\n');
+    carry(f, 'DOC_ONLY');
+    f.expectReason('no-completion');
+    complete(f);
+    f.expectReason('converged');
+  }, 60_000);
   test('re-checks recorded before the changelog fragment stay verified once it is carried', () => {
     const f = verifiedFixes();
     f.commit('changelog.d/main.md', '- entry\n');
@@ -937,4 +967,15 @@ describe('converged after a docs-only carry-forward (dohma #917)', () => {
     expect(n.ok('rerun-check', 'ship').stdout).toContain('FULL_RERUN=false');
     n.expectReason('fix-unverified');
   }, 120_000);
+  test('/ship Step 16 completes again after a carry-forward, before documentation freshness', () => {
+    const ship = readFileSync(join(import.meta.dir, '..', 'ship', 'SKILL.md.tmpl'), 'utf8');
+    const route = compact(between(ship, '### 2. Choose the change route', '### 3. Resolve documentation freshness'));
+    expectOrdered(route, [
+      'gstack-review-budget rerun-check "$RUN_ID" --cycle <n>',
+      'gstack-review-budget carry-forward "$RUN_ID" --cycle <n>',
+      'gstack-review-budget complete "$RUN_ID" --cycle <n> --require-audits --require-native',
+    ], 'ship Step 16 stage 2');
+    expectTokens(route, ['COMPLETE=true', 'INCOMPLETE='], 'ship Step 16 stage 2');
+    expectMentions(route, [['exit 2', 'stop']], 'ship Step 16 stage 2');
+  });
 });
