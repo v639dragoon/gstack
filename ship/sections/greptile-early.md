@@ -2,6 +2,8 @@
 <!-- Regenerate: bun run gen:skill-docs -->
 ## Step 6.5: Early Greptile PR (after the free tests pass)
 
+When `GREPTILE=false`, skip this entire pass and continue to Step 7.
+
 When the repo uses Greptile, push and open the PR now so Greptile reviews while
 Steps 7–9 run; Step 10 collects its comments. Without Greptile nothing changes.
 

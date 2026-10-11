@@ -153,12 +153,12 @@ describe('codex frontier model flag is present', () => {
 
   test('rendered autoplan phase sections resolve the model token at every inline site', () => {
     // D4: the rendered autoplan bytes are upstream's; the fork routes the
-    // actual call inside _gstack_codex_timeout_wrapper (pinned below).
+    // actual call through the public send carrier (pinned below).
     for (const file of ['ceo-phase.md', 'design-phase.md', 'eng-phase.md', 'dx-phase.md']) {
       const rendered = fs.readFileSync(path.join(ROOT, 'autoplan', 'sections', file), 'utf-8');
       expect(rendered, `${file} lost the model flag`).toContain(CODEX_MODEL_CONFIG_FLAG);
       expect(rendered).not.toContain('{{CODEX_MODEL_CONFIG_FLAG}}');
-      expect(rendered, `${file} bypasses the routing wrapper`).toContain('_gstack_codex_timeout_wrapper 540 codex exec');
+      expect(rendered, `${file} bypasses the routing wrapper`).toContain('run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec');
     }
   });
 
@@ -169,7 +169,7 @@ describe('codex frontier model flag is present', () => {
       expect(rendered).toContain('gstack-codex-model" resolve --voice');
       expect(rendered).toContain('--effort medium');
       expect(rendered).toContain('"${_CODEX_MODEL_ARGS[@]}"');
-      expect(rendered).toContain('model_reasoning_effort=\\"$CODEX_EFFORT\\"');
+      expect(rendered).toContain('run-with-timeout --effort "$CODEX_EFFORT"');
       expect(rendered).toContain('<"$_OUTSIDE_INPUT"');
     }
   });

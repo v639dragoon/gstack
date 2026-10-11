@@ -19,7 +19,7 @@
 #   - effort "xhigh", "max" or "ultra" REQUIRES effort_source:"user-override"
 #     (and so a reason): effort above high is never selected automatically
 #   - a Lead-ASSIGNED gpt-6-astra record (anything but gate codex-structured
-#     with effort_source "routed") REQUIRES a non-empty model_reason: Astra replaces an existing
+#     with routed model identity) REQUIRES a non-empty model_reason: Astra replaces an existing
 #     worker or reviewer only for complex state transitions, interacting
 #     contracts or a demonstrated reasoning failure, and the reason is part of
 #     the record (dohma ruling 2026-09-04). Routed C/D reviews carry their
@@ -110,7 +110,11 @@ if ((rec.effort === 'xhigh' || rec.effort === 'max' || rec.effort === 'ultra') &
 // The exemption is the ROUTED REVIEW SLOT itself (gate codex-structured with
 // effort_source routed), never the label alone: a worker record that merely
 // says effort_source \"routed\" still owes its reason (ship red-team, 2026-09-04).
-const routedReviewSlot = rec.gate === 'codex-structured' && rec.effort_source === 'routed';
+// Upstream resolves effective effort from env/config; that must not erase the
+// planned model route. Only canonical carrier sources accept the explicit slot marker.
+const carrierSource = ['default', 'config', 'env', 'user-override'].includes(rec.effort_source);
+const routedReviewSlot = rec.gate === 'codex-structured'
+  && (rec.effort_source === 'routed' || (rec.model_routed === true && carrierSource));
 // An outside voice routed by the repo POLICY (routing.models[\"outside-voice\"]) carries
 // its justification in the policy entry; an env or hand-picked Astra voice still owes one.
 const policyRoutedVoice = typeof rec.gate === 'string' && rec.gate.startsWith('outside-voice:') && rec.model_source === 'policy';

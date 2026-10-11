@@ -181,6 +181,7 @@ if [ "$_ROUTE_EXIT" -ne 0 ]; then
   exit "$_ROUTE_EXIT"
 fi
 eval "$_CODEX_ROUTE" || exit 1
+
 # Preserve argv under bash and zsh; flags come only from the validated route.
 _CODEX_MODEL_ARGS=()
 if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
@@ -189,11 +190,11 @@ _CODEX_OUT=$("$_CODEX_PROBE" select-model exec --model "$CODEX_MODEL") || exit 1
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json" "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'ship' 'adversarial' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
+_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'ship' 'adversarial' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json"; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
@@ -269,6 +270,7 @@ if [ "$_ROUTE_EXIT" -ne 0 ]; then
   exit "$_ROUTE_EXIT"
 fi
 eval "$_CODEX_ROUTE" || exit 1
+
 # Preserve argv under bash and zsh; flags come only from the validated route.
 _CODEX_MODEL_ARGS=()
 if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
@@ -277,11 +279,11 @@ _CODEX_OUT=$("$_CODEX_PROBE" select-model review --model "$CODEX_MODEL") || exit
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex review --base '<base>' -c "sandbox_mode=\"${_CODEX_SANDBOX_MODE:?}\"" -c "review_model=\"${_CODEX_SEL:?}\"" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json" "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 540 codex review --base '<base>' -c "sandbox_mode=\"${_CODEX_SANDBOX_MODE:?}\"" -c "review_model=\"${_CODEX_SEL:?}\"" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' < /dev/null >"$_OUTSIDE_TMP/text" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'ship' 'adversarial' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
+_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'ship' 'adversarial' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json"; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" structured "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
@@ -329,7 +331,7 @@ its original token. If it never started because it was unavailable, disabled or
 size-gated, omit `--finish PASS_START` and set completed/converged false.
 Do not create or borrow a token just to save a result.
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"high","effort_source":"default","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
 ```
 PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
 Fill fields from this attempt, not the parent's Step 9.4 result:
@@ -344,7 +346,7 @@ Fill fields from this attempt, not the parent's Step 9.4 result:
 - GATE is "informational" for adversarial passes. For structured review, use
   "pass" or "fail" from its completed result, "skipped" when size-gated, or
   "informational" with completed:false when coverage is missing.
-The `effort` fields describe the CODEX passes — both stay at high; only plan and doc voices route to medium.
+For Codex, carry the printed CODEX_EFFORT_DECISION fields; native effort is agent-default.
 
 **Persist per-gate telemetry:** one gate record per pass that ran,
 substituting carried literals (RUN_ID/MANIFEST_WTREE from the Step 9.1
@@ -354,8 +356,8 @@ stderr (read BEFORE `rm -f`); omit `tokens` when unavailable.
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"high","effort_source":"default","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
 Emit records only for passes that dispatched — absence is the skip signal.
@@ -512,7 +514,8 @@ _CODEX_T0=$(date +%s)
 _CODEX_RC=0
 STRUCTURED_PROMPT_FILE="$(git rev-parse --show-toplevel 2>/dev/null || pwd)/.gstack/tmp/<prompt-file-name>"
 [ -s "$STRUCTURED_PROMPT_FILE" ] || { echo "Not sent: $STRUCTURED_PROMPT_FILE is missing or empty, so the text was never written. Write it, then send by hand: codex exec - < saved-prompt-file" >&2; exit 1; }
-~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex exec - {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" --add-dir "$(dirname "{PACKET_PATH}")" -c 'web_search="cached"' -c 'skills.include_instructions=false' --json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE" >"$TMPEVENTS" 2>"$TMPERR" || _CODEX_RC=$?
+GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort" ~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex exec - {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" --add-dir "$(dirname "{PACKET_PATH}")" -c 'web_search="cached"' -c 'skills.include_instructions=false' --json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE" >"$TMPEVENTS" 2>"$TMPERR" || _CODEX_RC=$?
+cat "$TMPERR.effort" 2>/dev/null || true
 echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 cat "$TMPANSWER"; cat "$TMPERR" >&2
 _CODEX_GATE_RC=0
@@ -534,15 +537,16 @@ _CODEX_SANDBOX_MODE=$(echo "$_CODEX_SANDBOX_OUT" | sed -n 's/^CODEX_SANDBOX: //p
 ~/.claude/skills/gstack/bin/gstack-codex-probe show-first-use-notice
 _CODEX_T0=$(date +%s)
 _CODEX_RC=0
-~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c "sandbox_mode=\"${_CODEX_SANDBOX_MODE:?}\"" -c 'web_search="cached"' -c 'skills.include_instructions=false' < /dev/null >"$TMPANSWER" 2>"$TMPERR" || _CODEX_RC=$?
+GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort" ~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c "sandbox_mode=\"${_CODEX_SANDBOX_MODE:?}\"" -c 'web_search="cached"' -c 'skills.include_instructions=false' < /dev/null >"$TMPANSWER" 2>"$TMPERR" || _CODEX_RC=$?
+cat "$TMPERR.effort" 2>/dev/null || true
 echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 cat "$TMPANSWER"; cat "$TMPERR" >&2
 _CODEX_GATE_RC=0
 bun ~/.claude/skills/gstack/lib/outside-review-result.ts --label 'Governor codex-structured' --exit "$_CODEX_RC" --stderr "$TMPERR" structured "$TMPANSWER" || _CODEX_GATE_RC=$?
 ```
 
-Either way the cap stays 540s. The effort is `medium` for tiers A/B/C and
-`high` for tier D. The model is the one `gstack-codex-model` resolved:
+Either way the cap stays 540s. The gate default is `medium` for tiers A/B/C and
+`high` for tier D; upstream env/config overrides it. The model is the one `gstack-codex-model` resolved:
 `{CODEX_MODEL_EXEC_FLAGS}` / `{CODEX_MODEL_REVIEW_FLAGS}` are empty on the
 default route (the project's own Codex config then decides; no frontier
 model is rendered here, so an unrouted tier never inherits a premium model)
@@ -574,19 +578,18 @@ A user request for "full review" permits ONE extra dispatch only:
 This consumes the run's single escalation; no other escalation may dispatch
 afterward. It does not change upstream outside-review requirements.
 
-Persist both logs. The review row and gate row must carry the plan's literal
-effort and `effort_source:"routed"`; the gate row also carries the resolved
+Persist both logs. Read `$TMPERR.effort` and carry its effective effort, source and reason into both rows; the gate row also carries the resolved
 model, the requested model, whether it was substituted and why, and the wall time.
 Gate telemetry retains tokens (from the `tokens used` line in
 stderr when present), `fix_cycle`, `rerun_cause`, and `manifest_wtree`:
 
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_routed":true,"model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ```
 
 Failures and timeouts are missing coverage, never a clean result. Remove
-`$TMPERR`, `$TMPANSWER`, `$TMPEVENTS` and your private prompt after recording both logs, then continue the upstream adversarial phase; the final
+`$TMPERR`, `$TMPANSWER`, `$TMPEVENTS`, `$TMPERR.effort` and your private prompt after recording both logs, then continue the upstream adversarial phase; the final
 governor completion gate at Step 11.5 uses `INCOMPLETE=` means STOP with a blocker report.
 
 ### Finish the adversarial phase

@@ -162,13 +162,14 @@ describe('gstack-codex-probe subcommands', () => {
       const unset = probe(f, 'check-effort high');
       expect([unset.code, unset.stdout]).toEqual([0, 'CODEX_EFFORT: high\n']);
       expect(probe(f, 'check-effort medium').stdout).toBe('CODEX_EFFORT: medium\n');
-      const max = probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'max' });
+      const max = probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'max', GSTACK_CODEX_EFFORT_REASON: 'Explicit owner request for the difficult review' });
       expect([max.code, max.stdout]).toEqual([0, 'CODEX_EFFORT: max\n']);
       expect(max.stderr).toBe('CODEX_EFFORT: max (source: env GSTACK_CODEX_EFFORT)\n');
       fs.writeFileSync(path.join(f.state, 'config.yaml'), 'codex_effort: low\n');
       const config = probe(f, 'check-effort high');
       expect([config.code, config.stdout, config.stderr]).toEqual([0, 'CODEX_EFFORT: low\n', 'CODEX_EFFORT: low (source: config codex_effort)\n']);
-      expect(probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'xhigh' }).stdout).toBe('CODEX_EFFORT: xhigh\n');
+      expect(probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'xhigh' }).code).toBe(1);
+      expect(probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'xhigh', GSTACK_CODEX_EFFORT_REASON: 'Owner requested extra reasoning' }).stdout).toBe('CODEX_EFFORT: xhigh\n');
       fs.writeFileSync(path.join(f.state, 'config.yaml'), 'codex_effort: bogus\n');
       const badConfig = probe(f, 'check-effort high');
       expect([badConfig.code, badConfig.stdout]).toEqual([1, '']);
@@ -190,13 +191,34 @@ describe('gstack-codex-probe subcommands', () => {
     } finally { fs.rmSync(f.home, { recursive: true, force: true }); }
   });
 
+  test('effective effort is guarded before sending, and the receipt records upstream env/config/default precedence', () => {
+    const f = fixture();
+    try {
+      for (const level of ['xhigh', 'max', 'ultra']) {
+        expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { GSTACK_CODEX_EFFORT: level }).code).toBe(1);
+        fs.writeFileSync(path.join(f.state, 'config.yaml'), `codex_effort: ${level}\n`);
+        expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -').code).toBe(1);
+      }
+      expect(calls(f)).toEqual([]);
+      fs.writeFileSync(path.join(f.state, 'config.yaml'), 'codex_effort: low\n');
+      const receipt = path.join(f.home, 'effort.json');
+      expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { GSTACK_CODEX_EFFORT_RECEIPT: receipt }).code).toBe(0);
+      expect(JSON.parse(fs.readFileSync(receipt, 'utf8'))).toEqual({ effort: 'low', effort_source: 'config', effort_reason: '' });
+      const overrideReceipt = path.join(f.home, 'override.json');
+      const reason = 'Owner requested "extra" reasoning';
+      expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { GSTACK_CODEX_EFFORT: 'xhigh', GSTACK_CODEX_EFFORT_REASON: reason, GSTACK_CODEX_EFFORT_RECEIPT: overrideReceipt }).code).toBe(0);
+      expect(JSON.parse(fs.readFileSync(overrideReceipt, 'utf8'))).toEqual({ effort: 'xhigh', effort_source: 'user-override', effort_reason: reason });
+      expect(calls(f)).toHaveLength(2);
+    } finally { fs.rmSync(f.home, { recursive: true, force: true }); }
+  });
+
   test('run-with-timeout --effort appends the resolved effort to the codex command; a bad level or non-codex command never runs', () => {
     const f = fixture();
     try {
       expect(probe(f, 'run-with-timeout --effort high 20 codex exec - --json').code).toBe(0);
       fs.writeFileSync(path.join(f.state, 'config.yaml'), 'codex_effort: low\n');
       expect(probe(f, 'run-with-timeout --user-invoked --effort high 20 codex review --base main').code).toBe(0);
-      expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { GSTACK_CODEX_EFFORT: 'xhigh' }).code).toBe(0);
+      expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { GSTACK_CODEX_EFFORT: 'xhigh', GSTACK_CODEX_EFFORT_REASON: 'Owner requested extra reasoning' }).code).toBe(0);
       expect(calls(f)).toEqual([
         'exec - --json -c model_reasoning_effort="high"',
         'review --base main -c model_reasoning_effort="low"',

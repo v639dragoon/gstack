@@ -965,6 +965,7 @@ if [ "$_ROUTE_EXIT" -ne 0 ]; then
   exit "$_ROUTE_EXIT"
 fi
 eval "$_CODEX_ROUTE" || exit 1
+
 # Preserve argv under bash and zsh; flags come only from the validated route.
 _CODEX_MODEL_ARGS=()
 if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
@@ -973,11 +974,11 @@ _CODEX_OUT=$("$_CODEX_PROBE" select-model exec --model "$CODEX_MODEL") || exit 1
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json" "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'plan-eng-review' 'plan-review' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0"; }
+_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'plan-eng-review' 'plan-review' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json"; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
@@ -1064,9 +1065,9 @@ For these questions, use the following four-option menus instead of the ordinary
 
 Report all findings, dispositions and remaining disagreements after resolving the questions. An answer to one row does not resolve the finding's other pending rows. Preserve /autoplan's authorized auto-decisions, audit trail and User Challenge rules; challenges wait for its final gate.
 
-**Persist the result:**
+Carry CODEX_EFFORT_DECISION into effort fields. **Persist the result:**
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","commit":"'"$(git rev-parse --short HEAD)"'"}'
 ```
 
 Substitute: STATUS = "clean" only if a reviewer completed and found no issues; "issues_found" if findings exist, or "unavailable" if neither reviewer completed. Never count missing coverage as a clean review. A completed native fallback uses SOURCE=in-host, OUTSIDE_STATUS=unavailable, and STATUS=clean or issues_found from its findings. These findings are the reviewer's, even if later resolved by the parent.

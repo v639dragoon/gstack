@@ -651,9 +651,9 @@ ${codexPlanReviewRun(ctx, ceo, needsApprovalReadiness)}
 
 ${codexPlanBoundedWait(ctx, ceo, needsApprovalReadiness)}
 
-${codexPlanCrossModelTension(ctx)}**Persist the result:**${ctx.skillName === 'plan-ceo-review' ? '\nThis is best-effort review history under Step 0\'s Artifact outcomes table. Attempt it only when permitted. On failure, retain the error, show the actual fields as not persisted and continue; when forbidden, show those fields without attempting the write.' : ''}
+${codexPlanCrossModelTension(ctx)}Carry CODEX_EFFORT_DECISION into effort fields. **Persist the result:**${ctx.skillName === 'plan-ceo-review' ? '\nThis is best-effort review history under Step 0\'s Artifact outcomes table. Attempt it only when permitted. On failure, retain the error, show the actual fields as not persisted and continue; when forbidden, show those fields without attempting the write.' : ''}
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
 
 Substitute: STATUS = "clean" only if a reviewer completed and found no issues; "issues_found" if findings exist, or "unavailable" if neither reviewer completed. Never count missing coverage as a clean review.${['plan-ceo-review', 'plan-eng-review'].includes(ctx.skillName) ? ' A completed native fallback uses SOURCE=in-host, OUTSIDE_STATUS=unavailable, and STATUS=clean or issues_found from its findings. These findings are the reviewer\'s, even if later resolved by the parent.' : ''}
@@ -762,9 +762,9 @@ Options:
 On A or per-finding approvals, make the approved edits yourself (the tool never silently
 rewrites docs), respecting the skill's CHANGELOG and VERSION restrictions. Step 9 then commits and pushes those edits along with the other doc updates; do not end the workflow here. On B, note the gaps in the output so they're visible.
 
-**Persist the result:**
+Carry CODEX_EFFORT_DECISION into effort fields. **Persist the result:**
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-doc-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"documentation","effort":"medium","effort_source":"routed","commit":"'"$(git rev-parse --short HEAD)"'"}'
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-doc-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"documentation","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","commit":"'"$(git rev-parse --short HEAD)"'"}'
 \`\`\`
 Substitute: STATUS = "clean" only if a reviewer completed and found no gaps; "issues_found" if gaps exist, or "unavailable" if neither reviewer completed. ${outsideVoiceProvenance(ctx, 'documentation')}
 
