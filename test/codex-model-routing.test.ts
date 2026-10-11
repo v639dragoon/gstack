@@ -439,6 +439,17 @@ describe('gstack-gate-log model rules', () => {
     expect(r.status).toBe(0);
   });
 
+  test('effective effort overrides retain the planned Astra slot identity without exempting workers', () => {
+    for (const effort_source of ['default', 'config', 'env']) {
+      const row = { ...base, model: 'gpt-6-astra', model_routed: true, effort: 'high', effort_source };
+      expect(gateLog(JSON.stringify(row)).status).toBe(0);
+      expect(gateLog(JSON.stringify({ ...row, gate: 'worker:implement' })).status).toBe(1);
+      expect(gateLog(JSON.stringify({ ...row, effort_source: 'lead-assigned' })).status).toBe(1);
+    }
+    // Slot identity cannot bypass the independent above-high effort guard.
+    expect(gateLog(JSON.stringify({ ...base, model: 'gpt-6-astra', model_routed: true, effort: 'xhigh', effort_source: 'env' })).status).toBe(1);
+  });
+
   test('a Lead-assigned Astra worker or reviewer is refused without model_reason and accepted with one', () => {
     const worker = { ...base, gate: 'worker:implement', model: 'gpt-6-astra', effort: 'medium', effort_source: 'lead-assigned' };
     const refused = gateLog(JSON.stringify(worker));
@@ -557,9 +568,10 @@ describe('rendered routed step carries the model', () => {
       expect(gateRow).toBeDefined();
       expect(gateRow).toContain('"model":"{CODEX_MODEL}"');
       expect(gateRow).toContain('"model_requested":"{CODEX_MODEL_REQUESTED}"');
+      expect(gateRow).toContain('"model_routed":true');
       expect(gateRow).toContain('"model_substituted":{true|false}');
       expect(gateRow).toContain('"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}"');
-      expect(gateRow).toContain('"effort":"{PLAN_EFFORT}","effort_source":"routed"');
+      expect(gateRow).toContain('"effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}"');
       expect(gateRow).toContain('"elapsed_s":{CODEX_ELAPSED_S}');
       expect(text.replace(/\n/g, ' ')).toContain('never triggers an automatic second-model review');
       expect(text).not.toContain('model_reasoning_effort="xhigh"');

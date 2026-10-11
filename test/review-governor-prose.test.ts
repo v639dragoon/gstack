@@ -42,7 +42,7 @@ describe('review governor rendered prose', () => {
     for (const gate of ['codex-structured', 'coverage-audit', 'plan-completion', 'doc-release', 'native-adversarial'])
       expect(text).toContain(`gstack-review-budget dispatch "$RUN_ID" ${gate}`);
     expect(text).toContain('manifest_wtree');
-    expect(text).toContain('head_sha');
+    expect(text).toContain('EXACT reviewed SHA');
     expect(text).toContain('REPAIR_CYCLES_MAX');
     expect(text).toContain('rerun-check');
   });
@@ -72,7 +72,7 @@ describe('review governor rendered prose', () => {
     const ship = read('ship/SKILL.md') + read('ship/sections/tests.md') + read('ship/sections/pr-body.md');
     expect(ship).toMatch(/tests fail[\s\S]{0,120}STOP|STOP[\s\S]{0,120}tests fail/i);
     expect(ship).toContain('gitleaks');
-    expect(ship).toContain('Scan-at-sink before sending'); // v1.84 wording of the redaction gate (was 'redaction scan-at-sink')
+    expect(ship).toContain('gstack-post pr-create'); // D4: upstream moved scan-at-sink into the consent-aware posting binary.
     expect(ship).toContain('## Step 16: Verification Gate');
     expect(union()).toMatch(/\[P1\][\s\S]{0,160}GATE: FAIL[\s\S]{0,180}AskUserQuestion/);
   });

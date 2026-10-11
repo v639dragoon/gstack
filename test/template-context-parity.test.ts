@@ -37,7 +37,7 @@ describe('section TemplateContext parity (skillName pinned to parent)', () => {
     const content = readSection('adversarial.md');
     // D4: upstream uses CLI skill isolation and sandbox settings at the invocation.
     expect(content).toContain('skills.include_instructions=false');
-    expect(content).toContain('_GSTACK_CODEX_SANDBOX');
+    expect(content).toContain('_CODEX_SANDBOX_MODE');
     expect(content).toContain('Step 11: Adversarial review');
     expect(content.length).toBeGreaterThan(500);
   });
