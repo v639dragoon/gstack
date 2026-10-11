@@ -8,6 +8,7 @@
         "SKILL.md",
         "*/SKILL.md",
         "*/sections/*.md",
+        "**/governor-structured.md",
         "review/design-checklist.md",
         "qa/templates/functional-report-template.md",
         "openclaw/gstack-*-CLAUDE.md",

@@ -27,14 +27,9 @@ const read = (p: string) => fs.readFileSync(path.join(ROOT, p), 'utf-8');
 /** The send-binary invocation for exec or structured review. Upstream moved
  * supervision and effort into run-with-timeout; temporary names are shared. */
 function codexLineWith(content: string, marker: string): string {
-  const lines = content
-    .split('\n')
-    .filter((l) => l.includes('run-with-timeout --effort') && (marker === 'codex review --base' ? l.includes(marker) : l.includes('codex exec')));
+  const lines = content.split('\n').filter(l => l.includes('run-with-timeout --effort') && l.includes(marker));
   expect(lines.length).toBeGreaterThan(0);
-  // Prose may quote the marker (the CI_GREEN branch header names `codex review --base`);
-  // the pin is on the COMMAND line, which always runs under the timeout wrapper.
-  const wrapped = lines.filter((l) => l.includes('_gstack_codex_timeout_wrapper'));
-  return wrapped[0] ?? lines[0];
+  return lines[0];
 }
 
 /** The gstack-review-log row template for one skill value. v1.86+ also renders a
@@ -65,10 +60,10 @@ describe('effort routing (Phase 0)', () => {
     test(`${site}: the adversarial-review row records its effort`, () => {
       const content = read(site);
       expect(content).toContain('"skill":"adversarial-review"');
-      const row = content.split('\n').find(l => l.includes('gstack-review-log') && l.includes('{PLAN_EFFORT}'))!;
+      const row = content.split('\n').find(l => l.includes('gstack-review-log') && l.includes('{EFFECTIVE_EFFORT}'))!;
       expect(row).toBeDefined();
-      expect(row).toContain('"effort":"{PLAN_EFFORT}"');
-      expect(row).toContain('"effort_source":"routed"');
+      expect(row).toContain('"effort":"{EFFECTIVE_EFFORT}"');
+      expect(row).toContain('"effort_source":"{EFFECTIVE_EFFORT_SOURCE}"');
     });
   }
 
@@ -90,8 +85,8 @@ describe('effort routing (Phase 0)', () => {
       expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('${_CODEX_MODEL_ARGS[@]}');
       expect(content).toContain(`gstack-voice-row" '${site.split('/')[0]}' 'plan-review' "\${1}"`);
       const row = rowLine(content, 'codex-plan-review');
-      expect(row).toContain('"effort":"medium"');
-      expect(row).toContain('"effort_source":"routed"');
+      expect(row).toContain('"effort":"{EFFECTIVE_EFFORT}"');
+      expect(row).toContain('"effort_source":"{EFFECTIVE_EFFORT_SOURCE}"');
     });
   }
 
@@ -101,8 +96,8 @@ describe('effort routing (Phase 0)', () => {
     expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('run-with-timeout --effort "$CODEX_EFFORT"');
     expect(content).toContain(`gstack-voice-row" 'document-release' 'doc-release' "\${1}"`);
     const row = rowLine(content, 'codex-doc-review');
-    expect(row).toContain('"effort":"medium"');
-    expect(row).toContain('"effort_source":"routed"');
+    expect(row).toContain('"effort":"{EFFECTIVE_EFFORT}"');
+    expect(row).toContain('"effort_source":"{EFFECTIVE_EFFORT_SOURCE}"');
   });
 
   test('xhigh lives ONLY in the /codex skill, as an explicit recorded override', () => {
@@ -170,14 +165,14 @@ describe('effort routing (Phase 0)', () => {
       let fenced = false;
       return lines.flatMap((line, i) => {
         if (line.trim().startsWith('```')) { fenced = !fenced; return []; }
-        return fenced && /^\s*(?:_gstack_codex_timeout_wrapper\s+\d+\s+)?codex (exec|review)\b/.test(line)
+        return fenced && (/^\s*codex (exec|review)\b/.test(line) || (line.includes('run-with-timeout') && /\bcodex (exec|review)\b/.test(line)))
           ? [{ file, line: lines.slice(i, i + 40).join('\n').split('\n```')[0] }]
           : [];
       });
     });
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) {
-      expect(call.line, `${path.relative(ROOT, call.file)}: ${call.line}`).toContain('model_reasoning_effort');
+      expect(call.line, `${path.relative(ROOT, call.file)}: ${call.line}`).toMatch(/model_reasoning_effort|run-with-timeout\s+(?:--user-invoked\s+)?--effort/);
     }
   });
 });

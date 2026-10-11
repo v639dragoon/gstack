@@ -104,9 +104,11 @@ exec ${quote(Bun.which('cat')!)} "$@"
       }));
     };
     // #2914: the selected model and its source are printed before the paid call.
-    const selected = (cached = false) => `CODEX_MODEL: gpt-6-astra (exec; role: plan-review, tier: frontier; source: gstack catalog frontier/openai (verified 2026-10-07))\nAUTH_OK\nMODEL_OK${cached ? ' (cached)' : ''}\nHINT: If the review rejects the selected model, repair its winning source: gstack-config set model_frontier_openai <model-id>; gstack-config set plan_review_tier smart; gstack-config set plan_review_tier host.\n`;
+    const selected = (cached = false) => `CODEX_MODEL: gpt-6-astra (exec; role: plan-review, tier: frontier; source: gstack catalog frontier/openai (verified 2026-10-07))\nAUTH_OK\nMODEL_OK${cached ? ' (cached)' : ''}\nHINT: If the review rejects the selected model, repair its winning source: gstack-config set model_frontier_openai <model-id>; gstack-config set plan_review_tier smart; gstack-config set plan_review_tier host.\nCODEX_MODEL: fixture-model (exec; source: explicit request)\n`;
     return { dir, run, stale, staleError, calls, selected,
-      created: () => fs.existsSync(created) ? fs.readFileSync(created, 'utf8').trim().split('\n') : [],
+      // The public carrier also allocates fingerprint/probe scratch. This contract owns the outside invocation's one directory.
+      created: () => fs.existsSync(created) ? fs.readFileSync(created, 'utf8').trim().split('\n').filter(p => path.basename(p).startsWith('gstack-outside.')) : [],
+      allocated: () => fs.existsSync(created) ? fs.readFileSync(created, 'utf8').trim().split('\n') : [],
       cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
   }
 
@@ -123,6 +125,7 @@ exec ${quote(Bun.which('cat')!)} "$@"
       expect(results[0]!.stdout).toBe(completed('current'));
       expect(results[0]!.stderr).toBe(`${f.selected()}current: current stderr\n`);
       expect(f.created()).toHaveLength(1);
+      expect(f.allocated().every(file => file.startsWith(f.dir + path.sep) && !fs.existsSync(file))).toBe(true);
       expect(f.created().every(file => !fs.existsSync(file))).toBe(true);
     } finally { f.cleanup(); }
   });

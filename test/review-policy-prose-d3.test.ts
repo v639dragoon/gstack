@@ -2,6 +2,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { generateGovernorStructuredBody } from '../scripts/resolvers/governor-structured';
 import { generateReviewArmy } from '../scripts/resolvers/review-army';
 import { generateAdversarialStep, generateCodexDocReview } from '../scripts/resolvers/outside-voice-steps';
 import { generateQAReview, generateQAReviewPreflight } from '../scripts/resolvers/qa';
@@ -10,7 +11,7 @@ const read = (p: string) => readFileSync(join(import.meta.dir, '..', p), 'utf8')
 for (const host of ['claude', 'factory'] as const) for (const skillName of ['ship', 'review']) {
   const ctx = { skillName, host, paths: HOST_PATHS[host], tmplPath: '' } as TemplateContext;
   test(`D3 ${host}/${skillName}: each upstream trim is gated; governor slot remains unconditional`, () => {
-    const army = generateReviewArmy(ctx), adv = generateAdversarialStep(ctx);
+    const army = generateReviewArmy(ctx) + generateGovernorStructuredBody(ctx), adv = generateAdversarialStep(ctx);
     for (const flag of ['UPSTREAM_SPECIALISTS', 'RED_TEAM_LOC_TRIGGER', 'ADVERSARIAL_CLAUDE', 'CODEX_CHALLENGE', 'UPSTREAM_STRUCTURED'])
       expect(army + adv).toContain(`\`${flag}=false\``);
     expect(army).toContain('dispatch only governor-planned');
@@ -27,6 +28,7 @@ test('D3 pre-plan switches: Greptile and QA load manifest-free policy flags', ()
   expect(review.slice(review.indexOf('## Step 2.5:'), review.indexOf('## Step 3:'))).toContain('policy-flags <base>');
   expect(review).toContain('`GREPTILE=false`');
   expect(read('ship/sections/greptile.md.tmpl')).toContain('`GREPTILE=false`');
+  expect(read('ship/sections/greptile-early.md.tmpl')).toContain('`GREPTILE=false`');
   const ctx = { skillName: 'review', host: 'claude', paths: HOST_PATHS.claude, tmplPath: '' } as TemplateContext;
   expect(generateQAReviewPreflight(ctx)).toContain('policy-flags <base>');
   const qa = generateQAReview(ctx); expect(qa).toContain('`QA_SMOKE=false`');

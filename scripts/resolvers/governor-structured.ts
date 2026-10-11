@@ -12,7 +12,7 @@ export function generateGovernorStructured(ctx: TemplateContext): string {
     return `### Governor codex-structured slot
 
 Run this additional slot only when codex-structured is planned and not in REUSED. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
-**STOP.** Before dispatch, Read \`governor-structured.md\` relative to this installed SKILL.md directory in full. It owns the routed model/effort, shared preflight, packet reviewer, verdict and telemetry commands. Missing or unreadable asset means INCOMPLETE: stop with a blocker; never credit clean coverage.`;
+**STOP.** Before dispatch, Read \`governor-structured.md\` beside this SKILL.md. Apply its model/effort, preflight, verdict and telemetry steps. Missing or unreadable asset means INCOMPLETE: stop with a blocker; never credit clean coverage.`;
   }
   return generateGovernorStructuredBody(ctx);
 }
@@ -115,7 +115,8 @@ _CODEX_SANDBOX_MODE=$(echo "$_CODEX_SANDBOX_OUT" | sed -n 's/^CODEX_SANDBOX: //p
 _CODEX_T0=$(date +%s)
 _CODEX_RC=0
 ${freeTextFileUse([{ variable: 'STRUCTURED_PROMPT_FILE', placeholder: '<prompt-file-name>' }], 'codex exec - < saved-prompt-file')}
-~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex exec - {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" --add-dir "$(dirname "{PACKET_PATH}")" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' --json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE" >"$TMPEVENTS" 2>"$TMPERR" || _CODEX_RC=$?
+GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort" ~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex exec - {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" --add-dir "$(dirname "{PACKET_PATH}")" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' --json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE" >"$TMPEVENTS" 2>"$TMPERR" || _CODEX_RC=$?
+cat "$TMPERR.effort" 2>/dev/null || true
 echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 cat "$TMPANSWER"; cat "$TMPERR" >&2
 _CODEX_GATE_RC=0
@@ -137,15 +138,16 @@ _CODEX_SANDBOX_MODE=$(echo "$_CODEX_SANDBOX_OUT" | sed -n 's/^CODEX_SANDBOX: //p
 ~/.claude/skills/gstack/bin/gstack-codex-probe show-first-use-notice
 _CODEX_T0=$(date +%s)
 _CODEX_RC=0
-~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c "sandbox_mode=\\\"${CODEX_SANDBOX_REF}\\\"" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' < /dev/null >"$TMPANSWER" 2>"$TMPERR" || _CODEX_RC=$?
+GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort" ~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c "sandbox_mode=\\\"${CODEX_SANDBOX_REF}\\\"" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' < /dev/null >"$TMPANSWER" 2>"$TMPERR" || _CODEX_RC=$?
+cat "$TMPERR.effort" 2>/dev/null || true
 echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 cat "$TMPANSWER"; cat "$TMPERR" >&2
 _CODEX_GATE_RC=0
 bun ~/.claude/skills/gstack/lib/outside-review-result.ts --label 'Governor codex-structured' --exit "$_CODEX_RC" --stderr "$TMPERR" structured "$TMPANSWER" || _CODEX_GATE_RC=$?
 \`\`\`
 
-Either way the cap stays 540s. The effort is \`medium\` for tiers A/B/C and
-\`high\` for tier D. The model is the one \`gstack-codex-model\` resolved:
+Either way the cap stays 540s. The gate default is \`medium\` for tiers A/B/C and
+\`high\` for tier D; upstream env/config overrides it. The model is the one \`gstack-codex-model\` resolved:
 \`{CODEX_MODEL_EXEC_FLAGS}\` / \`{CODEX_MODEL_REVIEW_FLAGS}\` are empty on the
 default route (the project's own Codex config then decides; no frontier
 model is rendered here, so an unrouted tier never inherits a premium model)
@@ -182,18 +184,17 @@ ${governorTelemetry(ctx)}`;
 }
 
 function governorTelemetry(ctx: TemplateContext): string {
-  return `Persist both logs. The review row and gate row must carry the plan's literal
-effort and \`effort_source:"routed"\`; the gate row also carries the resolved
+  return `Persist both logs. Read \`$TMPERR.effort\` and carry its effective effort, source and reason into both rows; the gate row also carries the resolved
 model, the requested model, whether it was substituted and why, and the wall time.
 Gate telemetry retains tokens (from the \`tokens used\` line in
 stderr when present), \`fix_cycle\`, \`rerun_cause\`, and \`manifest_wtree\`:
 
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{PLAN_EFFORT}","effort_source":"routed","commit":"COMMIT"}'
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{PLAN_EFFORT}","effort_source":"routed","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","source":"codex-structured","tier":"{TIER}","gate":"GATE","model":"{CODEX_MODEL}","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","commit":"COMMIT"}'
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"codex-structured","trigger":"review-plan","model":"{CODEX_MODEL}","model_requested":"{CODEX_MODEL_REQUESTED}","model_source":"{CODEX_MODEL_SOURCE}","model_routed":true,"model_substituted":{true|false},"model_substitution_reason":"{CODEX_MODEL_SUBSTITUTION_REASON}","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","elapsed_s":{CODEX_ELAPSED_S},"tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean=pass|fail|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"delta-verification"|"scope-expansion:{triggers}"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 \`\`\`
 
 Failures and timeouts are missing coverage, never a clean result. Remove
-\`$TMPERR\`, \`$TMPANSWER\`, \`$TMPEVENTS\` and your private prompt after recording both logs, then continue the upstream adversarial phase; the final
+\`$TMPERR\`, \`$TMPANSWER\`, \`$TMPEVENTS\`, \`$TMPERR.effort\` and your private prompt after recording both logs, then continue the upstream adversarial phase; the final
 governor completion gate at Step ${ctx.skillName === 'ship' ? '11.5' : '5.8'} uses \`INCOMPLETE=\` means STOP with a blocker report.`;
 }
