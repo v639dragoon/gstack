@@ -46,7 +46,8 @@ describe('rendered skill mode branches', () => {
     const gate = read('land-and-deploy/sections/readiness-gate.md');
     const review = read('review/SKILL.md');
     const docs = read('document-release/sections/release-body.md');
-    expect(ship).toContain('NEW_TITLE="<type>: <summary>"');
+    // D4: upstream posts a private title file; the post-merge mode uses it too.
+    expect(ship).toContain('Write `<type>: <summary>` into `TITLE_FILE`');
     expect(pr).toContain('Every created or updated title MUST');
     expect(pr).toContain('in-branch it must start with `v$NEW_VERSION `, and post-merge it must have no version prefix');
     expect(ship.replace(/\s+/g, ' ')).toContain('Name BUMP_LEVEL and FRAGMENT_PATH in the body without claiming an assigned version');

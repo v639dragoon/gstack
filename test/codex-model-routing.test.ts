@@ -12,7 +12,7 @@
  *    access check (client catalog, then a round trip) and falls back to the
  *    default route with the substitution LOGGED; inconclusive is never cached
  *    and never routes; xhigh/max/ultra are refused.
- *  - gstack-gate-log refuses `max` without a user override and refuses an
+ *  - gstack-gate-log refuses policy-routed `max` without a user override and refuses an
  *    Astra record outside the routed codex-structured slot (gate codex-structured
  *    AND effort_source routed) without model_reason.
  *  - gstack-outcome-report reads model/effort/elapsed/tokens/substitutions
@@ -25,7 +25,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-import { CODEX_REVIEW_MODEL_CONFIG_FLAG } from '../scripts/resolvers/constants';
+import { CODEX_REVIEW_MODEL_CONFIG_FLAG, CODEX_MODEL_CONFIG_FLAG } from '../scripts/resolvers/constants';
 
 const ROOT = join(import.meta.dir, '..');
 const BUDGET = join(ROOT, 'bin', 'gstack-review-budget');
@@ -551,17 +551,23 @@ describe('rendered routed step carries the model', () => {
       const text = union.slice(union.indexOf('### Governor codex-structured slot'));
       expect(text.length).toBeGreaterThan(1000);
       expect(text).toContain('gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}"');
-      const exec = text.split('\n').filter((l) => /run-with-timeout --effort "\{PLAN_EFFORT\}" 540 codex exec\b/.test(l));
-      const review = text.split('\n').filter((l) => /run-with-timeout --effort "\{PLAN_EFFORT\}" 540 codex review --base\b/.test(l));
+      const exec = text.split('\n').filter((l) => /run-with-timeout --effort high 540 codex exec\b/.test(l));
+      const review = text.split('\n').filter((l) => /run-with-timeout --effort high 540 codex review --base\b/.test(l));
       expect(exec).toHaveLength(1);
       expect(review).toHaveLength(1);
-      expect(exec[0]).toContain('codex exec - {CODEX_MODEL_EXEC_FLAGS}');
-      expect(exec[0]).toContain('run-with-timeout --effort "{PLAN_EFFORT}"');
+      // D4: role-ready binds the routed request, and dispatch consumes that
+      // exact record instead of appending flags from a second selection.
+      expect(exec[0]).toContain('codex exec -');
+      expect(exec[0]).toContain(CODEX_MODEL_CONFIG_FLAG);
+      expect(text).toContain('role-ready exec --model');
+      expect(text).toContain('role-ready review --model');
+      expect(text).toContain('GSTACK_CODEX_GATE_DEFAULT="{PLAN_EFFORT}"');
+      expect(exec[0]).toContain('run-with-timeout --effort high');
       // Harness pass 2026-09-15: the governed slot renders NO frontier default; an
       // unrouted tier runs the project's own Codex config, never an inherited premium model.
-      expect(review[0]).toContain('codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS}');
-      expect(review[0]).not.toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
-      expect(review[0]).toContain('run-with-timeout --effort "{PLAN_EFFORT}"');
+      expect(review[0]).toContain('codex review --base <base>');
+      expect(review[0]).toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
+      expect(review[0]).toContain('run-with-timeout --effort high');
       for (const call of [...exec, ...review]) expect(call).toContain('${_CODEX_SANDBOX_MODE:?}');
       expect(text).toContain('CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))');
       const gateRow = text.split('\n').find((l) => l.includes('gstack-gate-log') && l.includes('"gate":"codex-structured"') && l.includes('"trigger":"review-plan"'));

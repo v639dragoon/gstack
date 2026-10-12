@@ -1,8 +1,8 @@
 /** Governor supplemental structured reviewer. */
 import type { TemplateContext } from './types';
 import { generateGovernorPlanBody, governorDispatchAccounting, governorRedTeamAccounting, governorSpecialistTelemetry, governorAdversarialTelemetry, governorNativeRegistration, governorNativeVerdict } from './governor-accounting';
-import { outsideVoicePreflight } from './outside-voice';
-import { CODEX_WEB_SEARCH_FLAG, CODEX_SANDBOX_REF } from './constants';
+import { outsideVoicePreflight, outsideVoiceGuard } from './outside-voice';
+import { CODEX_WEB_SEARCH_FLAG, CODEX_SANDBOX_REF, CODEX_MODEL_CONFIG_FLAG, CODEX_REVIEW_MODEL_CONFIG_FLAG, codexSelect } from './constants';
 import { freeTextFileBash, freeTextFileUse, FREE_TEXT_WRITE_RULE } from './free-text-file';
 
 export function generateGovernorStructured(ctx: TemplateContext): string {
@@ -66,24 +66,20 @@ Only when \`CODEX_MODE: ready\` (or \`unverified\`), run the budget dispatch:
 ~/.claude/skills/gstack/bin/gstack-review-budget dispatch "$RUN_ID" codex-structured --cycle "\${CYCLE:?carry the plan cycle}"
 \`\`\`
 
-On exit 2, print the blocker and do not run Codex. Otherwise resolve the plan's
-\`CODEX_MODEL\` and \`CODEX_MODEL_SOURCE\` once. A named model needs one cached
-CLI/account access check; unavailable models retain the default route with a
-logged substitution. Empty means the client default. Routing never changes the
-budget, effort, 540s cap, retry or completion rule. A timeout stays incomplete:
+On exit 2, print the blocker and do not run Codex. Otherwise bind the plan's
+model/source without sending content. Empty selects the configured native default.
+Role-ready checks it within 540s; unavailable is incomplete.
+Routing preserves budgets, retries and completion. A timeout stays incomplete:
 it never triggers an automatic second-model review.
 
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}"
+~/.claude/skills/gstack/bin/gstack-codex-model resolve --model "{CODEX_MODEL}" --effort "{medium|high from REVIEWERS suffix}" --source "{CODEX_MODEL_SOURCE}" --selection-only
 \`\`\`
 
-Carry its printed \`CODEX_MODEL\`, \`CODEX_MODEL_REQUESTED\`,
-\`CODEX_MODEL_SOURCE\`, \`CODEX_MODEL_SUBSTITUTED\`,
-\`CODEX_MODEL_SUBSTITUTION_REASON\`, \`CODEX_MODEL_EXEC_FLAGS\` and
-\`CODEX_MODEL_REVIEW_FLAGS\` as literals. Print
+Carry its printed model, requested model, source, substitution flag and reason
+as literals into later blocks and logs; shell state does not cross Bash calls. Print
 \`Codex model: {CODEX_MODEL} ({CODEX_MODEL_SOURCE}; requested {CODEX_MODEL_REQUESTED})\`
-and, when substituted, one more line with the reason. Then run exactly one
-structured review at the suffix supplied by the plan. Branch on the packet's
+and any substitution reason. Run one structured review at the plan's suffix. Branch on
 \`CI_GREEN\` (true only when the EXACT reviewed SHA is on a remote branch with
 every CI run completed and successful):
 
@@ -106,16 +102,16 @@ proved the build and tests; use the saved prompt for semantic review only.
 umask 077
 TMPERR=$(mktemp "\${TMPDIR:-/tmp}/codex-review-XXXXXXXX") || exit 1
 TMPANSWER="$TMPERR.text"; TMPEVENTS="$TMPERR.events"
+${outsideVoiceGuard(ctx)}
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 cd "$_REPO_ROOT"
-_CODEX_SANDBOX_OUT=$(~/.claude/skills/gstack/bin/gstack-codex-probe show-sandbox) || exit 1
-_CODEX_SANDBOX_MODE=$(echo "$_CODEX_SANDBOX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
-~/.claude/skills/gstack/bin/gstack-codex-probe check-sandbox || exit 1
-~/.claude/skills/gstack/bin/gstack-codex-probe show-first-use-notice
 _CODEX_T0=$(date +%s)
+${codexSelect('exec', undefined, { budgetSecs: 540, modelArg: '"{CODEX_MODEL}"' })}
+export GSTACK_CODEX_GATE_DEFAULT="{PLAN_EFFORT}" GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort"
+"$_CODEX_PROBE" show-first-use-notice
 _CODEX_RC=0
 ${freeTextFileUse([{ variable: 'STRUCTURED_PROMPT_FILE', placeholder: '<prompt-file-name>' }], 'codex exec - < saved-prompt-file')}
-GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort" ~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex exec - {CODEX_MODEL_EXEC_FLAGS} -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" --add-dir "$(dirname "{PACKET_PATH}")" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' --json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE" >"$TMPEVENTS" 2>"$TMPERR" || _CODEX_RC=$?
+"$_CODEX_PROBE" run-with-timeout --effort high 540 codex exec - ${CODEX_MODEL_CONFIG_FLAG} -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" --add-dir "$(dirname "{PACKET_PATH}")" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' --json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE" >"$TMPEVENTS" 2>"$TMPERR" || _CODEX_RC=$?
 cat "$TMPERR.effort" 2>/dev/null || true
 echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 cat "$TMPANSWER"; cat "$TMPERR" >&2
@@ -130,15 +126,15 @@ proven the tree green, so codex may run what it needs:
 umask 077
 TMPERR=$(mktemp "\${TMPDIR:-/tmp}/codex-review-XXXXXXXX") || exit 1
 TMPANSWER="$TMPERR.text"; TMPEVENTS="$TMPERR.events"
+${outsideVoiceGuard(ctx)}
 _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo "ERROR: not in a git repo" >&2; exit 1; }
 cd "$_REPO_ROOT"
-_CODEX_SANDBOX_OUT=$(~/.claude/skills/gstack/bin/gstack-codex-probe show-sandbox) || exit 1
-_CODEX_SANDBOX_MODE=$(echo "$_CODEX_SANDBOX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
-~/.claude/skills/gstack/bin/gstack-codex-probe check-sandbox || exit 1
-~/.claude/skills/gstack/bin/gstack-codex-probe show-first-use-notice
 _CODEX_T0=$(date +%s)
+${codexSelect('review', undefined, { budgetSecs: 540, modelArg: '"{CODEX_MODEL}"' })}
+export GSTACK_CODEX_GATE_DEFAULT="{PLAN_EFFORT}" GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort"
+"$_CODEX_PROBE" show-first-use-notice
 _CODEX_RC=0
-GSTACK_CODEX_EFFORT_RECEIPT="$TMPERR.effort" ~/.claude/skills/gstack/bin/gstack-codex-probe run-with-timeout --effort "{PLAN_EFFORT}" 540 codex review --base <base> {CODEX_MODEL_REVIEW_FLAGS} -c "sandbox_mode=\\\"${CODEX_SANDBOX_REF}\\\"" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' < /dev/null >"$TMPANSWER" 2>"$TMPERR" || _CODEX_RC=$?
+"$_CODEX_PROBE" run-with-timeout --effort high 540 codex review --base <base> ${CODEX_REVIEW_MODEL_CONFIG_FLAG} -c "sandbox_mode=\\\"${CODEX_SANDBOX_REF}\\\"" ${CODEX_WEB_SEARCH_FLAG} -c 'skills.include_instructions=false' < /dev/null >"$TMPANSWER" 2>"$TMPERR" || _CODEX_RC=$?
 cat "$TMPERR.effort" 2>/dev/null || true
 echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 cat "$TMPANSWER"; cat "$TMPERR" >&2
@@ -146,13 +142,13 @@ _CODEX_GATE_RC=0
 bun ~/.claude/skills/gstack/lib/outside-review-result.ts --label 'Governor codex-structured' --exit "$_CODEX_RC" --stderr "$TMPERR" structured "$TMPANSWER" || _CODEX_GATE_RC=$?
 \`\`\`
 
-Either way the cap stays 540s. The gate default is \`medium\` for tiers A/B/C and
-\`high\` for tier D; upstream env/config overrides it. The model is the one \`gstack-codex-model\` resolved:
-\`{CODEX_MODEL_EXEC_FLAGS}\` / \`{CODEX_MODEL_REVIEW_FLAGS}\` are empty on the
-default route (the project's own Codex config then decides; no frontier
-model is rendered here, so an unrouted tier never inherits a premium model)
-and \`--model <slug>\` / \`-c model="<slug>" -c review_model="<slug>"\` on a routed one
-(\`codex review\` rejects \`-m\`). No prompt argument is allowed with
+Either way the cap stays 540s, including readiness. The gate default is
+\`medium\` for tiers A/B/C and \`high\` for tier D, carried through
+\`GSTACK_CODEX_GATE_DEFAULT\`; upstream env/config remain first. Binding-only
+routing preserves the configured native default on an unrouted tier, so it
+never inherits the catalog's premium default. Role-ready receives
+that resolved model as its explicit request and supplies the same selection
+to both CLI model keys (\`codex review\` rejects \`-m\`). No prompt argument is allowed with
 \`--base\` (the read-only form reads its private prompt on stdin through
 \`codex exec -\`; never put free text in a shell command). Read stderr before cleanup; keep the printed
 \`CODEX_ELAPSED_S\` for the gate row. Check for

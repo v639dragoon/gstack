@@ -4,8 +4,8 @@
  * The routing contract (audit §10 "stop using xhigh implicitly; route effort"):
  *  - D4 restores the upstream native and outside passes. The additional governor codex-structured is plan-routed
  *    at MEDIUM for A/B/C and HIGH for D.
- *  - Plan-stage voices (plan-{ceo,eng,devex,design}-review outside voice) and
- *    the doc-review voice inside /document-release route to MEDIUM.
+ *  - D4 plan-stage voices use upstream's HIGH gate default and role binding;
+ *    doc review keeps MEDIUM. Explicit policy routes ride the same carrier.
  *  - xhigh exists ONLY as the /codex --xhigh user override, and an applied
  *    override must be RECORDED (effort_source user-override + effort_reason;
  *    gstack-gate-log refuses the record without a reason).
@@ -52,9 +52,10 @@ describe('effort routing (Phase 0)', () => {
       expect(content).toContain('adversarial subagent (always runs)');
       expect(content).toContain('adversarial challenge');
       expect(content).toContain('native-adversarial');
-      const line = codexLineWith(content, '--effort "{PLAN_EFFORT}"');
+      const line = codexLineWith(content, 'codex exec -');
       expect(line).toContain('run-with-timeout --effort');
-      expect(line).toContain('{PLAN_EFFORT}');
+      expect(content).toContain('GSTACK_CODEX_GATE_DEFAULT="{PLAN_EFFORT}"');
+      expect(content).toContain('role-ready exec --model');
     });
 
     test(`${site}: the adversarial-review row records its effort`, () => {
@@ -73,16 +74,16 @@ describe('effort routing (Phase 0)', () => {
     'plan-devex-review/sections/review-sections.md',
   ];
   for (const site of PLAN_VOICE_SITES) {
-    test(`${site}: the plan outside voice is routed to medium and records it`, () => {
+    test(`${site}: the plan outside voice uses upstream role binding and records its effective effort`, () => {
       const content = read(site);
-      // v1.86+ renders the outside voice through outsideVoiceInvocation: the one
-      // command line reads its prompt from $_OUTSIDE_INPUT (TMPERR_PV is gone).
-      // Harness pass 2026-09-15: the voice is ROUTED. The resolve line pins the
-      // default effort and the command consumes the resolved value, so the
-      // policy may lower or raise it but never past high (resolver refuses).
-      expect(content).toContain(`gstack-codex-model" resolve --voice 'plan-review' --effort medium`);
-      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('run-with-timeout --effort "$CODEX_EFFORT"');
-      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('${_CODEX_MODEL_ARGS[@]}');
+      // D4 v1.91.92: upstream's high default and one role selection replace
+      // the fork's second resolve/select. Explicit policy routing rides that
+      // same selection and supplies only the gate default; env/config win.
+      expect(content).toContain("export GSTACK_CODEX_VOICE='plan-review' GSTACK_CODEX_VOICE_DEFAULT=high");
+      expect(content).toContain('role-ready exec) || exit $?');
+      expect(content).toContain("s/^CODEX_ROUTE_EFFORT: //p");
+      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('run-with-timeout --effort high');
+      expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('${_CODEX_SEL:?}');
       expect(content).toContain(`gstack-voice-row" '${site.split('/')[0]}' 'plan-review' "\${1}"`);
       const row = rowLine(content, 'codex-plan-review');
       expect(row).toContain('"effort":"{EFFECTIVE_EFFORT}"');
@@ -92,8 +93,10 @@ describe('effort routing (Phase 0)', () => {
 
   test('document-release: the codex doc voice is routed to medium and records it', () => {
     const content = read('document-release/sections/release-body.md');
-    expect(content).toContain(`gstack-codex-model" resolve --voice 'doc-release' --effort medium`);
-    expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('run-with-timeout --effort "$CODEX_EFFORT"');
+    // D4: no-role dispatch still binds one upstream selection; the explicit
+    // voice route is resolved within the helper before that selection.
+    expect(content).toContain("export GSTACK_CODEX_VOICE='doc-release' GSTACK_CODEX_VOICE_DEFAULT=medium");
+    expect(codexLineWith(content, '_OUTSIDE_INPUT')).toContain('run-with-timeout --effort medium');
     expect(content).toContain(`gstack-voice-row" 'document-release' 'doc-release' "\${1}"`);
     const row = rowLine(content, 'codex-doc-review');
     expect(row).toContain('"effort":"{EFFECTIVE_EFFORT}"');

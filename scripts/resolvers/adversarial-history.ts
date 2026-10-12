@@ -36,7 +36,7 @@ Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.
   \`[]\` when it raised none. The receipt counts these rows' blockers, and one still
   \`open\` when the run stops (no later Step 9 row fixed or deferred it) makes
   \`gstack-ship-receipt write\` refuse (\`RECEIPT_BLOCKER_OPEN\`).` : ''}
-For Codex, carry the printed CODEX_EFFORT_DECISION fields; native effort is agent-default.
+For Codex, copy effective effort from this pass's gate row; native effort is agent-default.
 
 ${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 'Record each dispatched adversarial gate using the Adversarial telemetry section of `governor-structured.md`.' : governorAdversarialTelemetry(ctx)}
 

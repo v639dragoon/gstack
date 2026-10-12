@@ -162,14 +162,13 @@ describe('gstack-codex-probe subcommands', () => {
       const unset = probe(f, 'check-effort high');
       expect([unset.code, unset.stdout]).toEqual([0, 'CODEX_EFFORT: high\n']);
       expect(probe(f, 'check-effort medium').stdout).toBe('CODEX_EFFORT: medium\n');
-      const max = probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'max', GSTACK_CODEX_EFFORT_REASON: 'Explicit owner request for the difficult review' });
+      const max = probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'max' });
       expect([max.code, max.stdout]).toEqual([0, 'CODEX_EFFORT: max\n']);
       expect(max.stderr).toBe('CODEX_EFFORT: max (source: env GSTACK_CODEX_EFFORT)\n');
       fs.writeFileSync(path.join(f.state, 'config.yaml'), 'codex_effort: low\n');
       const config = probe(f, 'check-effort high');
       expect([config.code, config.stdout, config.stderr]).toEqual([0, 'CODEX_EFFORT: low\n', 'CODEX_EFFORT: low (source: config codex_effort)\n']);
-      expect(probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'xhigh' }).code).toBe(1);
-      expect(probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'xhigh', GSTACK_CODEX_EFFORT_REASON: 'Owner requested extra reasoning' }).stdout).toBe('CODEX_EFFORT: xhigh\n');
+      expect(probe(f, 'check-effort high', { GSTACK_CODEX_EFFORT: 'xhigh' }).stdout).toBe('CODEX_EFFORT: xhigh\n');
       fs.writeFileSync(path.join(f.state, 'config.yaml'), 'codex_effort: bogus\n');
       const badConfig = probe(f, 'check-effort high');
       expect([badConfig.code, badConfig.stdout]).toEqual([1, '']);
@@ -194,7 +193,9 @@ describe('gstack-codex-probe subcommands', () => {
   test('effective effort is guarded before sending, and the receipt records upstream env/config/default precedence', () => {
     const f = fixture();
     try {
-      for (const level of ['xhigh', 'max', 'ultra']) {
+      // D4 v1.91.92 permits max via env/config; only xhigh/ultra require a
+      // recorded user override. Upstream codex-effort.test.ts covers max.
+      for (const level of ['xhigh', 'ultra']) {
         expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { GSTACK_CODEX_EFFORT: level }).code).toBe(1);
         fs.writeFileSync(path.join(f.state, 'config.yaml'), `codex_effort: ${level}\n`);
         expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -').code).toBe(1);
