@@ -30,7 +30,7 @@ Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.
 - GATE is "informational" for adversarial passes. For structured review, use
   "pass" or "fail" from its completed result, "skipped" when size-gated, or
   "informational" with completed:false when coverage is missing.
-For Codex, carry the printed CODEX_EFFORT_DECISION fields; native effort is agent-default.
+For Codex, copy effective effort from this pass's gate row; native effort is agent-default.
 
 ${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 'Record each dispatched adversarial gate using the Adversarial telemetry section of `governor-structured.md`.' : governorAdversarialTelemetry(ctx)}
 
