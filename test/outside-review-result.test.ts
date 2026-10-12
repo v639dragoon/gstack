@@ -102,6 +102,8 @@ describe('classifyOutsideReview: separate execution, findings and verdict', () =
     ['structured NO_FINDINGS with the verdict line', { text: 'NO_FINDINGS\nVERDICT: CLEAN', gate: 'structured' }, 'clean', null, undefined],
     ['structured no-regressions prose with verdict', { text: 'No actionable regressions found.\nVERDICT: CLEAN', gate: 'structured' }, 'clean', null, undefined],
     ['structured no-regressions prose without verdict', { text: 'No actionable regressions found.', gate: 'structured' }, 'unverified', null, 'missing_verdict'],
+    ['structured no-defects prose with verdict', { text: 'No actionable defects found.\nVERDICT: CLEAN', gate: 'structured' }, 'clean', null, undefined],
+    ['structured no-defects prose without verdict', { text: 'No actionable defects found.', gate: 'structured' }, 'unverified', null, 'missing_verdict'],
     ['structured native P1 label', { text: 'P1: race in cleanup', gate: 'structured' }, 'findings', 'P1', undefined],
     ['spec passing score', { text: 'SCORE: 8\nAMBIGUITIES: NONE', gate: 'spec' }, 'clean', null, undefined],
     ['spec failing score', { text: 'SCORE: 4\nAMBIGUITIES: scope', gate: 'spec' }, 'findings', null, undefined],
