@@ -41,6 +41,8 @@ After your analysis, output a single JSON object with exactly these seven fields
 Counts map one-to-one to the classifications above and sum to total_items. No plan or no actionable items means all counts are zero with the skip reason in summary. Do not classify work as deferred; only the parent can record a user-approved deferral.
 ````
 
+**Parent processing:**
+
 **Record the pass before anything else** (every AI pass in a ship run leaves a budget verdict and a gate row; a missing row is missing coverage, never a clean pass):
 
 ```bash
@@ -53,8 +55,6 @@ findings the parent now applies; `error`/`timeout` = the subagent failed and
 the inline fallback ran (record the fallback's own result as a second verdict
 after the same cycle-scoped dispatch). Step 9.2's completion check owes this
 verdict (`--require-audits`).
-
-**Parent processing:**
 
 1. Check the task's terminal status. Without successful completion and valid LAST-line
    JSON, use the audit-failure fallback below. Require exactly the seven declared

@@ -58,6 +58,8 @@ After your analysis, output a single JSON object on the LAST LINE of your respon
 `coverage_pct` is Y (paths with any test), `coverage_pct_value` is X (paths with a ★★/★★★ test), `gaps` counts only paths with no test. Use null for an undetermined or skipped coverage percentage, not zero. Include every remaining gap in the diagram so the parent can target a second pass.
 ````
 
+**Parent processing:**
+
 **Record the pass before anything else** (every AI pass in a ship run leaves a budget verdict and a gate row; a missing row is missing coverage, never a clean pass):
 
 ```bash
@@ -70,8 +72,6 @@ findings the parent now applies; `error`/`timeout` = the subagent failed and
 the inline fallback ran (record the fallback's own result as a second verdict
 after the same cycle-scoped dispatch). Step 9.2's completion check owes this
 verdict (`--require-audits`).
-
-**Parent processing:**
 
 When `COVERAGE_RATING=false`, skip item 4's rating dispatch; take the existing `Star rating: off` gate path from the policy (overriding CLAUDE.md), using `coverage_pct`. Carry this flag into the audit prompt; keep gaps, rejected tests and value cards.
 

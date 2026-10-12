@@ -94,8 +94,8 @@ export interface OutsideCommandOptions {
   /** Trusted, caller-owned git command preserving that workflow's original scope. */
   diffCommand?: string;
   gate?: 'review' | 'structured' | 'spec';
-  /** Effort the voice is routed at when the policy names none. Defaults to
-   * MEDIUM: an omitted effort never falls to a premium level. */
+  /** Gate default carried by upstream run-with-timeout. An explicit policy
+   * route may replace the default; env and config still take precedence. */
   reasoningEffort?: 'high' | 'medium' | 'low';
   /** Creative proposals retain the recommendation gate with task-specific wording. */
   purpose?: 'design-direction';
@@ -116,41 +116,30 @@ export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOp
   const prompt = sh(opts.promptFile ?? '<prepared-prompt-file>');
   // /spec's 120 s gate keeps its effort: a raised effort would spend the budget it is timed for.
   // Every other gate lets run-with-timeout resolve GSTACK_CODEX_EFFORT, then codex_effort, then this default.
+  const effort = opts.reasoningEffort ?? 'high';
   const voice = opts.voice ?? 'outside-review';
-  const effort = opts.reasoningEffort ?? 'medium';
   const pinnedEffort = opts.gate === 'spec';
   const effortFlag = pinnedEffort ? ` -c 'model_reasoning_effort="${effort}"'` : '';
   const codex = opts.structuredBase
-    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"${CODEX_SANDBOX_REF}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG} "\${_CODEX_MODEL_ARGS[@]}"${effortFlag} ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
-    : `codex exec - -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" ${CODEX_MODEL_CONFIG_FLAG} "\${_CODEX_MODEL_ARGS[@]}"${effortFlag} ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
+    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"${CODEX_SANDBOX_REF}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
+    : `codex exec - -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" ${CODEX_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
   const kind = opts.structuredBase ? 'review' : 'exec';
   const invocation = v.id === 'codex'
-    ? `${opts.role
+    ? `export GSTACK_CODEX_VOICE=${sh(voice)} GSTACK_CODEX_VOICE_DEFAULT=${effort}
+unset GSTACK_CODEX_GATE_DEFAULT
+_OUTSIDE_T0=$(date +%s)
+${opts.role
       ? codexSelect(kind, `"${bin}/gstack-codex-probe"`, { budgetSecs: Math.ceil(opts.timeoutMs / 1000) })
       : `${codexSelect(kind, `"${bin}/gstack-codex-probe"`)}
 "$_CODEX_PROBE" check-sandbox || exit 1`}
+CODEX_MODEL=$_CODEX_SEL
+CODEX_MODEL_SOURCE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SOURCE: //p')
+export GSTACK_CODEX_GATE_DEFAULT=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_ROUTE_EFFORT: //p')
+CODEX_EFFORT=${effort}
+export GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json"
 "$_CODEX_PROBE" show-first-use-notice
-_OUTSIDE_T0=$(date +%s)
-_ROUTE_EXIT=0
-_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout ${Math.ceil(opts.timeoutMs / 1000)} "${bin}/gstack-codex-model" resolve --voice ${sh(voice)} --effort ${effort} </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
-if [ "$_ROUTE_EXIT" -ne 0 ]; then
-  cat "$_OUTSIDE_TMP/route-error" >&2
-  cat "$_OUTSIDE_TMP/route-error"
-  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
-  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
-  exit "$_ROUTE_EXIT"
-fi
-eval "$_CODEX_ROUTE" || exit 1
-${pinnedEffort ? `CODEX_EFFORT=${effort}` : ''}
-# Preserve argv under bash and zsh; flags come only from the validated route.
-_CODEX_MODEL_ARGS=()
-if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
-${opts.structuredBase ? 'if [ -n "$CODEX_MODEL_REVIEW_FLAGS" ]; then _CODEX_MODEL_ARGS=(-c "model=\\\"$CODEX_MODEL\\\"" -c "review_model=\\\"$CODEX_MODEL\\\""); fi' : ''}
-_CODEX_OUT=$("$_CODEX_PROBE" select-model ${kind} --model "$CODEX_MODEL") || exit 1
-_CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
-_CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 _OUTSIDE_EXIT=0
-GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json" "$_CODEX_PROBE" run-with-timeout ${pinnedEffort ? '' : '--effort "$CODEX_EFFORT" '}${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout ${pinnedEffort ? '' : `--effort ${effort} `}${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 ${opts.structuredBase ? 'cat "$_OUTSIDE_TMP/text"' : 'cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"'}`
     : `CODEX_MODEL=claude-code; CODEX_MODEL_SOURCE=harness; CODEX_EFFORT=${effort}
 _OUTSIDE_T0=$(date +%s)
@@ -176,7 +165,7 @@ ${v.id === 'codex' && ctx.skillName === 'autoplan' ? `if [ "$_OUTSIDE_EXIT" -eq 
   "$_CODEX_PROBE" log-hang autoplan 0 || true
 fi` : ''}
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "${bin}/gstack-voice-row" '${ctx.skillName}' ${sh(voice)} "\${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json"; }
+_row() { "${bin}/gstack-voice-row" '${ctx.skillName}' ${sh(voice)} "\${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json" --quiet; }
 _OUTSIDE_RC=0
 bun "${root}/lib/outside-review-result.ts" --label '${v.label} outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" ${v.id === 'codex' && !opts.structuredBase ? '--events "$_OUTSIDE_TMP/events" ' : ''}${opts.purpose === 'design-direction' ? 'proposal' : opts.gate ?? 'review'} "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 ${v.id === 'claude-code' ? '[ "$_OUTSIDE_RC" -eq 1 ] || cat "$_OUTSIDE_TMP/text" || exit 1\n' : ''}case "$_OUTSIDE_RC" in

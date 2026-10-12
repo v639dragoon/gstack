@@ -476,36 +476,25 @@ trap 'rm -rf "$_OUTSIDE_TMP"' EXIT
 _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
 cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 
+export GSTACK_CODEX_VOICE='plan-review' GSTACK_CODEX_VOICE_DEFAULT=high
+unset GSTACK_CODEX_GATE_DEFAULT
+_OUTSIDE_T0=$(date +%s)
 _CODEX_PROBE="$HOME/.claude/skills/gstack/bin/gstack-codex-probe"
 export _CODEX_DEADLINE=$(($(date +%s)+300)); _CODEX_OUT=$("$_CODEX_PROBE" role-ready exec) || exit $?
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
+CODEX_MODEL=$_CODEX_SEL
+CODEX_MODEL_SOURCE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SOURCE: //p')
+export GSTACK_CODEX_GATE_DEFAULT=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_ROUTE_EFFORT: //p')
+CODEX_EFFORT=high
+export GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json"
 "$_CODEX_PROBE" show-first-use-notice
-_OUTSIDE_T0=$(date +%s)
-_ROUTE_EXIT=0
-_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout 300 "$HOME/.claude/skills/gstack/bin/gstack-codex-model" resolve --voice 'plan-review' --effort medium </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
-if [ "$_ROUTE_EXIT" -ne 0 ]; then
-  cat "$_OUTSIDE_TMP/route-error" >&2
-  cat "$_OUTSIDE_TMP/route-error"
-  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
-  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
-  exit "$_ROUTE_EXIT"
-fi
-eval "$_CODEX_ROUTE" || exit 1
-
-# Preserve argv under bash and zsh; flags come only from the validated route.
-_CODEX_MODEL_ARGS=()
-if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
-
-_CODEX_OUT=$("$_CODEX_PROBE" select-model exec --model "$CODEX_MODEL") || exit 1
-_CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
-_CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 _OUTSIDE_EXIT=0
-GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json" "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout --effort high 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'plan-ceo-review' 'plan-review' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json"; }
+_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'plan-ceo-review' 'plan-review' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json" --quiet; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
@@ -623,7 +612,7 @@ result**. Record only OUTSIDE COVERAGE and do not write a CROSS-MODEL line. A
 disabled, unavailable, timed-out, cancelled or raw/incomplete external result
 also supplies no cross-model agreement or clean-review credit.
 
-Carry CODEX_EFFORT_DECISION into effort fields. **Persist the result:**
+Read this pass's outside-voice gate row for effective effort fields. **Persist the result:**
 This is best-effort review history under Step 0's Artifact outcomes table. Attempt it only when permitted. On failure, retain the error, show the actual fields as not persisted and continue; when forbidden, show those fields without attempting the write.
 ```bash
 ~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"codex-plan-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"claude","outside_provider":"codex","outside_status":"OUTSIDE_STATUS","phase":"plan-review","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","commit":"'"$(git rev-parse --short HEAD)"'"}'

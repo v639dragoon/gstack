@@ -137,7 +137,9 @@ describe('codex frontier model flag is present', () => {
       const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8').split('### Governor codex-structured slot')[1]!;
       const calls = rendered.split('\n').filter(line => line.includes('codex review --base') && line.includes('2>'));
       expect(calls.length).toBeGreaterThan(0);
-      for (const call of calls) expect(call).not.toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
+      // D4: the routed request is now bound by role-ready, so its flags carry
+      // that selection too; the catalog default is never appended afterward.
+      for (const call of calls) expect(call).toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
     }
   });
 
@@ -158,18 +160,18 @@ describe('codex frontier model flag is present', () => {
       const rendered = fs.readFileSync(path.join(ROOT, 'autoplan', 'sections', file), 'utf-8');
       expect(rendered, `${file} lost the model flag`).toContain(CODEX_MODEL_CONFIG_FLAG);
       expect(rendered).not.toContain('{{CODEX_MODEL_CONFIG_FLAG}}');
-      expect(rendered, `${file} bypasses the routing wrapper`).toContain('run-with-timeout --effort "$CODEX_EFFORT" 540 codex exec');
+      expect(rendered, `${file} bypasses the routing wrapper`).toContain('run-with-timeout --effort high 540 codex exec');
     }
   });
 
-  test('the shared emitter routes autoplan voices through gstack-codex-model at medium', () => {
+  test('the shared emitter binds upstream role selection and carries an explicit voice route', () => {
     // D4: upstream replaced the private driver with the common stdin emitter.
     for (const file of ['ceo-phase.md', 'design-phase.md', 'eng-phase.md', 'dx-phase.md']) {
       const rendered = fs.readFileSync(path.join(ROOT, 'autoplan', 'sections', file), 'utf8');
-      expect(rendered).toContain('gstack-codex-model" resolve --voice');
-      expect(rendered).toContain('--effort medium');
-      expect(rendered).toContain('"${_CODEX_MODEL_ARGS[@]}"');
-      expect(rendered).toContain('run-with-timeout --effort "$CODEX_EFFORT"');
+      expect(rendered).toContain("export GSTACK_CODEX_VOICE='autoplan' GSTACK_CODEX_VOICE_DEFAULT=high");
+      expect(rendered).toContain('role-ready exec) || exit $?');
+      expect(rendered).toContain("s/^CODEX_ROUTE_EFFORT: //p");
+      expect(rendered).toContain('run-with-timeout --effort high');
       expect(rendered).toContain('<"$_OUTSIDE_INPUT"');
     }
   });

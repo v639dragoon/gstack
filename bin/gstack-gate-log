@@ -16,7 +16,7 @@
 #   - effort_source:"user-override" REQUIRES a non-empty effort_reason — an
 #     unrecorded xhigh override is the exact failure this writer exists to
 #     make impossible ("prohibit implicit xhigh")
-#   - effort "xhigh", "max" or "ultra" REQUIRES effort_source:"user-override"
+#   - effort "xhigh" or "ultra" REQUIRES effort_source:"user-override"
 #     (and so a reason): effort above high is never selected automatically
 #   - a Lead-ASSIGNED gpt-6-astra record (anything but gate codex-structured
 #     with routed model identity) REQUIRES a non-empty model_reason: Astra replaces an existing
@@ -98,9 +98,9 @@ if (typeof rec.run_id !== 'string' || rec.run_id.length === 0) fail('missing req
 if (rec.effort_source === 'user-override' && !(typeof rec.effort_reason === 'string' && rec.effort_reason.trim().length > 0)) {
   fail('effort_source \"user-override\" requires a non-empty effort_reason');
 }
-// Effort above HIGH is never automatic (dohma ruling 2026-09-03): an xhigh or
-// ultra record must be an explicit, reasoned user override or it is refused.
-if ((rec.effort === 'xhigh' || rec.effort === 'max' || rec.effort === 'ultra') && rec.effort_source !== 'user-override') {
+// xhigh/ultra require a recorded override. D4 permits upstream max from the
+// env/config/default carrier; an automatic policy route still cannot choose it.
+if (((rec.effort === 'xhigh' || rec.effort === 'ultra') || (rec.effort === 'max' && !['default', 'env', 'config'].includes(rec.effort_source))) && rec.effort_source !== 'user-override') {
   fail('effort \"' + rec.effort + '\" requires effort_source \"user-override\" with a recorded effort_reason');
 }
 // gpt-6-astra outside the routed C/D review slots is a Lead assignment that

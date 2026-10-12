@@ -192,37 +192,26 @@ trap 'rm -rf "$_OUTSIDE_TMP"' EXIT
 _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
 cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
 
+export GSTACK_CODEX_VOICE='design-review' GSTACK_CODEX_VOICE_DEFAULT=medium
+unset GSTACK_CODEX_GATE_DEFAULT
+_OUTSIDE_T0=$(date +%s)
 _CODEX_PROBE="$HOME/.claude/skills/gstack/bin/gstack-codex-probe"
 _CODEX_OUT=$("$_CODEX_PROBE" select-model exec) || exit 1
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" check-sandbox || exit 1
+CODEX_MODEL=$_CODEX_SEL
+CODEX_MODEL_SOURCE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SOURCE: //p')
+export GSTACK_CODEX_GATE_DEFAULT=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_ROUTE_EFFORT: //p')
+CODEX_EFFORT=medium
+export GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json"
 "$_CODEX_PROBE" show-first-use-notice
-_OUTSIDE_T0=$(date +%s)
-_ROUTE_EXIT=0
-_CODEX_ROUTE=$( GSTACK_CODEX_PROBE_DIAGNOSTICS="$_OUTSIDE_TMP/route-output" "$_CODEX_PROBE" run-with-timeout 300 "$HOME/.claude/skills/gstack/bin/gstack-codex-model" resolve --voice 'design-review' --effort medium </dev/null 2>"$_OUTSIDE_TMP/route-error") || _ROUTE_EXIT=$?
-if [ "$_ROUTE_EXIT" -ne 0 ]; then
-  cat "$_OUTSIDE_TMP/route-error" >&2
-  cat "$_OUTSIDE_TMP/route-error"
-  [ ! -f "$_OUTSIDE_TMP/route-output" ] || cat "$_OUTSIDE_TMP/route-output"
-  echo 'Codex outside review unavailable: model resolution failed; missing coverage.' >&2
-  exit "$_ROUTE_EXIT"
-fi
-eval "$_CODEX_ROUTE" || exit 1
-
-# Preserve argv under bash and zsh; flags come only from the validated route.
-_CODEX_MODEL_ARGS=()
-if [ -n "$CODEX_MODEL_EXEC_FLAGS" ]; then _CODEX_MODEL_ARGS=(--model "$CODEX_MODEL"); fi
-
-_CODEX_OUT=$("$_CODEX_PROBE" select-model exec --model "$CODEX_MODEL") || exit 1
-_CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
-_CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 _OUTSIDE_EXIT=0
-GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json" "$_CODEX_PROBE" run-with-timeout --effort "$CODEX_EFFORT" 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false "${_CODEX_MODEL_ARGS[@]}" -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout --effort medium 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'ship' 'design-review' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json"; }
+_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'ship' 'design-review' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json" --quiet; }
 _OUTSIDE_RC=0
 bun "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
@@ -592,11 +581,12 @@ Two dispatch paths, ONE activation condition — they differ only in WHEN:
 dispatch message as the specialists (see "Early Red Team" above); do not
 dispatch again. It receives the checklist from
 `~/.claude/skills/gstack/review/specialists/red-team.md`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Early prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch:
+and the git diff command — NOT merged findings (none exist yet). Prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch:
 "You are a red team reviewer. N specialists are reviewing this diff
 CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
-{MANIFEST_PATH}; read it first as an index, then run
-`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"`.
+{MANIFEST_PATH}; read it first as an index. List changed files with
+`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff --name-status "$DIFF_BASE"`,
+then read them as that fixture handling says.
 Hunt for cross-cutting concerns, integration boundary issues, and failure
 modes that specialist checklists don't cover. Output specialist-schema JSON
 findings."
@@ -607,7 +597,7 @@ finding):** dispatch one more subagent via the Agent tool now (pass `run_in_back
 2. The merged specialist findings from Step 9.2, one line each (so it knows what was already caught)
 3. The git diff command
 
-Late prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch: "You are a red team reviewer. The code has already been reviewed by N specialists
+Prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch: "You are a red team reviewer. The code has already been reviewed by N specialists
 who found the following issues: {merged findings summary}. Your job is to find what they
 MISSED. Read the checklist at {red-team checklist path}, list changed files with `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff --name-status "$DIFF_BASE"`, read them as that fixture handling says, and look for gaps.
 Output findings as JSON objects (same schema as the specialists). Focus on cross-cutting

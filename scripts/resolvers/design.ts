@@ -668,12 +668,11 @@ export function generateDesignOutsideVoices(ctx: TemplateContext): string {
 
   // Send binary enforces design-review consent
   const isAutomatic = isDesignReview; // design-review runs automatically
-  // Phase 0 effort routing: every design voice is routed at MEDIUM by
-  // default. The live design-review audit no longer inherits high (or the
-  // frontier model) by construction: a repo that wants more for it names
+  // D4: plan design uses upstream's high gate default and plan-review role.
+  // Other design voices retain medium. A repo can explicitly name
   // {model, effort} under policy routing.models["outside-voice"]["design-review"],
   // which gstack-codex-model resolves and the gate row records.
-  const reasoningEffort = 'medium';
+  const reasoningEffort = isPlanDesignReview ? 'high' : 'medium';
   const voice = isDesignReview ? 'design-review' : isPlanDesignReview ? 'plan-review' : 'design-direction';
 
   // Build the skill-specific outside-review prompt.

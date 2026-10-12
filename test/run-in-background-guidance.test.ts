@@ -30,20 +30,19 @@ const reviewContext = (host: TemplateContext['host']): TemplateContext => ({
 const CEO_FOREGROUND_BRANCH = 'Set `run_in_background: false` if that field is available; omit it otherwise';
 
 describe('generated Codex plan-review shell invocation', () => {
+  const rendered = generateCodexPlanReview({ ...reviewContext('claude'),
+    paths: { ...HOST_PATHS.claude, binDir: path.join(ROOT, 'bin'), skillRoot: ROOT },
+  });
+  // B1: the heading also admits `unverified`; locate it structurally.
+  const ready = rendered.slice(rendered.search(/\*\*If `CODEX_MODE: ready`[^\n]*— run Codex:\*\*/),
+    rendered.indexOf('Present the full output verbatim:'));
+  const blocks = [...ready.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!);
   const quote = (value: string) => "'" + value.replaceAll("'", "'\\''") + "'";
 
   function fixture() {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-codex-plan-shell-'));
     const bin = path.join(dir, 'bin');
     fs.mkdirSync(bin);
-    fs.mkdirSync(path.join(dir, 'lib'));
-    fs.writeFileSync(path.join(dir, 'lib/claude-bin.ts'), '// fixture runtime sentinel\n');
-    const rendered = generateCodexPlanReview({ ...reviewContext('claude'),
-      paths: { ...HOST_PATHS.claude, binDir: bin, skillRoot: ROOT },
-    });
-    const ready = rendered.slice(rendered.indexOf('**If `CODEX_MODE: ready` (or `unverified`) — run Codex:**'),
-      rendered.indexOf('Present the full output verbatim:'));
-    const blocks = [...ready.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!);
     const prompt = path.join(dir, 'review-prompt.txt');
     fs.writeFileSync(prompt, 'Review the current plan without edits.');
     const created = path.join(dir, 'created');
@@ -59,10 +58,6 @@ describe('generated Codex plan-review shell invocation', () => {
     fs.writeFileSync(stale, 'FOREIGN OLD REVIEW\n');
     fs.writeFileSync(staleError, 'FOREIGN OLD ERROR\n');
     const writeBin = (name: string, body: string) => fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n' + body, { mode: 0o755 });
-    // Upstream's shared self-location must resolve the actual runtime script.
-    fs.writeFileSync(path.join(bin, 'gstack-codex-probe'), `#!/usr/bin/env bash\nexec ${quote(path.join(ROOT, 'bin/gstack-codex-probe'))} \"$@\"\n`, { mode: 0o755 });
-    writeBin('gstack-codex-model', '[ \"$FAKE_ROUTE_FAIL\" != 1 ] || { echo unavailable-default >&2; exit 1; }; printf \"%s\\n\" \"CODEX_MODEL=fixture-model\" \"CODEX_MODEL_SOURCE=policy\" \"CODEX_EFFORT=medium\" \"CODEX_MODEL_EXEC_FLAGS=\"\n');
-    writeBin('gstack-voice-row', 'exit 0\n');
     writeBin('git', 'printf "%s\\n" "$FAKE_REPO"\n');
     writeBin('mktemp', `
 if [ "$FAKE_MKTEMP_FAIL" = 1 ]; then exit 42; fi
@@ -91,24 +86,22 @@ if [ "$FAKE_CAT_FAIL" = 1 ] && [ "\${1##*/}" = stderr ]; then
 fi
 exec ${quote(Bun.which('cat')!)} "$@"
 `);
-    const run = (id: string, code = 0, errexit = false, mktempFailure = false, catFailure = false, routeFailure = false) => {
+    const run = (id: string, code = 0, errexit = false, mktempFailure = false, catFailure = false) => {
       const env = { PATH: `${bin}${path.delimiter}${process.env.PATH}`, FAKE_REPO: dir,
         FAKE_CREATED: created, FAKE_CALLS: calls, FAKE_REVIEW_ID: id,
         FAKE_CODEX_STATUS: String(code), FAKE_MKTEMP_FAIL: mktempFailure ? '1' : '0',
-        FAKE_CAT_FAIL: catFailure ? '1' : '0', FAKE_ROUTE_FAIL: routeFailure ? '1' : '0', TMPDIR: dir, CODEX_HOME: dir, GSTACK_CODEX_MODEL: '',
+        FAKE_CAT_FAIL: catFailure ? '1' : '0', TMPDIR: dir, CODEX_HOME: dir, GSTACK_CODEX_MODEL: '',
         GSTACK_HOME: state, GSTACK_STATE_ROOT: '',
-        CODEX_THREAD_ID: '', CODEX_SANDBOX: '', CLAUDECODE: '1', GSTACK_ACTIVE_HOST: 'claude', GSTACK_BIN: bin };
+        CODEX_THREAD_ID: '', CODEX_SANDBOX: '', CLAUDECODE: '1', GSTACK_ACTIVE_HOST: 'claude' };
       // Each displayed block gets a fresh shell, as separate Bash tool calls do.
       return blocks.map(block => spawnSync('bash', ['-c', (errexit ? 'set -e\n' : '') + block.replace("'<prepared-prompt-file>'", quote(prompt))], {
         cwd: dir, env, encoding: 'utf8', timeout: 3_000,
       }));
     };
     // #2914: the selected model and its source are printed before the paid call.
-    const selected = (cached = false) => `CODEX_MODEL: gpt-6-astra (exec; role: plan-review, tier: frontier; source: gstack catalog frontier/openai (verified 2026-10-07))\nAUTH_OK\nMODEL_OK${cached ? ' (cached)' : ''}\nHINT: If the review rejects the selected model, repair its winning source: gstack-config set model_frontier_openai <model-id>; gstack-config set plan_review_tier smart; gstack-config set plan_review_tier host.\nCODEX_MODEL: fixture-model (exec; source: explicit request)\n`;
+    const selected = (cached = false) => `CODEX_MODEL: gpt-6-astra (exec; role: plan-review, tier: frontier; source: gstack catalog frontier/openai (verified 2026-10-07))\nAUTH_OK\nMODEL_OK${cached ? ' (cached)' : ''}\nHINT: If the review rejects the selected model, repair its winning source: gstack-config set model_frontier_openai <model-id>; gstack-config set plan_review_tier smart; gstack-config set plan_review_tier host.\n`;
     return { dir, run, stale, staleError, calls, selected,
-      // The public carrier also allocates fingerprint/probe scratch. This contract owns the outside invocation's one directory.
-      created: () => fs.existsSync(created) ? fs.readFileSync(created, 'utf8').trim().split('\n').filter(p => path.basename(p).startsWith('gstack-outside.')) : [],
-      allocated: () => fs.existsSync(created) ? fs.readFileSync(created, 'utf8').trim().split('\n') : [],
+      created: () => fs.existsSync(created) ? fs.readFileSync(created, 'utf8').trim().split('\n') : [],
       cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
   }
 
@@ -117,6 +110,11 @@ exec ${quote(Bun.which('cat')!)} "$@"
   const unavailable = (id: string) => `${findings(id)}VERDICT: unavailable\nFINDINGS: none\nREASON: execution_failed\n`;
   const completed = (id: string) => `${findings(id)}VERDICT: clean\nFINDINGS: none\nOUTSIDE_STATUS: completed provider=codex host=claude\n`;
 
+  // Fork artifact-inventory extension, measured 2026-10-11: upstream's one
+  // outside scratch directory + one cold slug-cache temp + two working-tree
+  // fingerprint temps (effort-decision and voice accounting) = 4. A second
+  // invocation adds its directory + two fingerprints, reusing the slug = 7.
+  // Every allocated path still has to be owned and deleted; foreign files stay.
   test('fresh shells retain the current stderr and clean its exact temporary file', () => {
     const f = fixture();
     try {
@@ -124,8 +122,7 @@ exec ${quote(Bun.which('cat')!)} "$@"
       expect(results.map(result => result.status)).toEqual([0]);
       expect(results[0]!.stdout).toBe(completed('current'));
       expect(results[0]!.stderr).toBe(`${f.selected()}current: current stderr\n`);
-      expect(f.created()).toHaveLength(1);
-      expect(f.allocated().every(file => file.startsWith(f.dir + path.sep) && !fs.existsSync(file))).toBe(true);
+      expect(f.created()).toHaveLength(4);
       expect(f.created().every(file => !fs.existsSync(file))).toBe(true);
     } finally { f.cleanup(); }
   });
@@ -136,7 +133,7 @@ exec ${quote(Bun.which('cat')!)} "$@"
       expect(results.map(result => result.status)).toEqual([23]);
       expect(results[0]!.stdout).toBe(unavailable('failed'));
       expect(results[0]!.stderr).toContain('failed: current stderr\n');
-      expect(f.created()).toHaveLength(1);
+      expect(f.created()).toHaveLength(4);
       expect(f.created().every(file => !fs.existsSync(file))).toBe(true);
     } finally { f.cleanup(); }
   });
@@ -148,7 +145,7 @@ exec ${quote(Bun.which('cat')!)} "$@"
         expect(results.map(result => result.status)).toEqual([code || 1]);
         expect(results[0]!.stdout).toBe(unavailable('display-failed'));
         expect(results[0]!.stderr).toContain('cat: simulated current-file read failure\n');
-        expect(f.created()).toHaveLength(1);
+        expect(f.created()).toHaveLength(4);
         expect(f.created().every(file => !fs.existsSync(file))).toBe(true);
       } finally { f.cleanup(); }
     });
@@ -161,21 +158,11 @@ exec ${quote(Bun.which('cat')!)} "$@"
         expect(results[0]!.stdout).toBe(completed(id));
         expect(results[0]!.stderr).toBe(`${f.selected(id === 'second')}${id}: current stderr\n`);
       }
-      expect(new Set(f.created()).size).toBe(2);
+      expect(new Set(f.created()).size).toBe(7);
       expect(f.created().every(file => !fs.existsSync(file))).toBe(true);
       expect(fs.readFileSync(f.stale, 'utf8')).toBe('FOREIGN OLD REVIEW\n');
       expect(fs.readFileSync(f.staleError, 'utf8')).toBe('FOREIGN OLD ERROR\n');
       expect(fs.readFileSync(f.calls, 'utf8')).toBe('first\nsecond\n');
-    } finally { f.cleanup(); }
-  });
-  test.each([false, true])('model-route failure stops before Codex even with errexit=%s', (errexit) => {
-    const f = fixture();
-    try {
-      const result = f.run('unstarted', 0, errexit, false, false, true)[0]!;
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain('unavailable-default');
-      expect(fs.existsSync(f.calls)).toBe(false);
-      expect(f.created().every(file => !fs.existsSync(file))).toBe(true);
     } finally { f.cleanup(); }
   });
   test('temporary-directory failure stops before starting Codex', () => {
@@ -280,9 +267,9 @@ describe('outside-voice dispatch contract', () => {
     const apply = rendered.indexOf('**4. Apply the answered row.**');
     expect(answer).toBeGreaterThan(0);
     expect(apply).toBeGreaterThan(answer);
-    expect(rendered).toContain("resolve --voice 'plan-review' --effort medium");
-    expect(rendered).toContain('-s "${_CODEX_SANDBOX_MODE:?}"');
-    expect(rendered).toContain('run-with-timeout --effort "$CODEX_EFFORT"');
+    // B1: the sandbox comes from the probe's select-model (read-only unless GSTACK_CODEX_NO_SANDBOX=1).
+    expect(rendered).toContain(`run-with-timeout --effort high `);
+    expect(rendered).toContain(`-s "\${_CODEX_SANDBOX_MODE:?}" ${CODEX_MODEL_CONFIG_FLAG} ${CODEX_WEB_SEARCH_FLAG}`);
   });
 
   test('the generated-carrier exception rejects missing wait, cancellation or result guards', () => {

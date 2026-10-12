@@ -3,6 +3,7 @@
 #
 #   gstack-codex-model resolve --model <slug|""> --effort <medium|high> [--source policy|default]
 #   gstack-codex-model resolve --voice <purpose> [--effort <low|medium|high>]
+#   --selection-only binds a request/default without sending; role-ready owns readiness.
 #
 # `--voice <purpose>` routes an OUTSIDE VOICE (plan-review, design-review,
 # design-direction, doc-release, spec, autoplan, codex-review, ...): the
@@ -45,9 +46,10 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cmd="${1:-}"; shift || true
 [ "$cmd" = "resolve" ] || { echo "usage: gstack-codex-model resolve --model <slug|\"\"> --effort <medium|high> [--source policy|default] | resolve --voice <purpose> [--effort <low|medium|high>]" >&2; exit 1; }
-MODEL=""; EFFORT=""; SOURCE=""; VOICE=""
+MODEL=""; EFFORT=""; SOURCE=""; VOICE=""; SELECTION_ONLY=0; ROUTE_EFFORT=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --selection-only) SELECTION_ONLY=1; shift ;;
     --model) MODEL="${2:-}"; shift 2 ;;
     --effort) EFFORT="${2:-}"; shift 2 ;;
     --source) SOURCE="${2:-}"; shift 2 ;;
@@ -66,7 +68,7 @@ if [ -n "$VOICE" ]; then
     _VOICE_MODEL="${_VOICE_ROUTE%%	*}"
     _VOICE_EFFORT="${_VOICE_ROUTE#*	}"
     if [ -n "$_VOICE_MODEL" ]; then MODEL="$_VOICE_MODEL"; SOURCE="policy"; fi
-    if [ -n "$_VOICE_EFFORT" ]; then EFFORT="$_VOICE_EFFORT"; fi
+    if [ -n "$_VOICE_EFFORT" ]; then EFFORT="$_VOICE_EFFORT"; ROUTE_EFFORT="$EFFORT"; fi
   fi
   if [ -z "$MODEL" ] && [ -n "${GSTACK_CODEX_MODEL:-}" ]; then MODEL="$GSTACK_CODEX_MODEL"; SOURCE="env"; fi
 fi
@@ -137,6 +139,21 @@ emit() {
   printf "CODEX_EFFORT='%s'\n" "$(q "$EFFORT")"
   printf "CODEX_VOICE='%s'\n" "$(q "$VOICE")"
 }
+
+# Binding-only mode delegates all paid readiness to upstream role-ready. It
+# never probes or substitutes a model after a selection has been bound.
+if [ "$SELECTION_ONLY" = 1 ]; then
+  if [ -n "$VOICE" ]; then
+    emit "$MODEL" "$MODEL" "${SOURCE:-default}" false none "" ""
+    printf "CODEX_ROUTE_EFFORT='%s'\n" "$ROUTE_EFFORT"
+  else
+    REQUESTED="$MODEL"
+    DEFAULT_NAME=$(default_model_name) || exit 1
+    [ -n "$MODEL" ] || { [ "$DEFAULT_NAME" != client-default ] || { echo 'No configured native Codex model; repair config before dispatch.' >&2; exit 1; }; MODEL="$DEFAULT_NAME"; }
+    emit "${REQUESTED:-default}" "$MODEL" "${SOURCE:-default}" false none "--model $MODEL" "-c model=\"$MODEL\" -c review_model=\"$MODEL\""
+  fi
+  exit 0
+fi
 
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/gstack-codex-probe" 2>/dev/null || true

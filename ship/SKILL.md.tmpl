@@ -671,7 +671,7 @@ Continue to Step 18. No documentation writer runs after push.
 
 ## Step 18: Prepare publication metadata
 
-**Post-merge:** Set `NEW_TITLE="<type>: <summary>"`, stripping any stale version
+**Post-merge:** Write `<type>: <summary>` into `TITLE_FILE`; strip stale version
 prefix; do not use the rewrite helper or NEW_VERSION. Name BUMP_LEVEL and
 FRAGMENT_PATH in the body without claiming an assigned version. The lookup
 and saved-title rules still apply; the prefix instructions below are in-branch only.

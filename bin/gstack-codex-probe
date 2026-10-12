@@ -161,6 +161,22 @@ _gstack_codex_select_model() {
     echo "CODEX_MODEL: unresolved — bun is not on PATH, so gstack cannot read the Codex model choice. Reinstall gstack with ./setup; no Codex call was made." >&2
     return 1
   fi
+  # A fork voice route supplies an explicit request and gate default to the
+  # upstream carrier, before its single selection/probe. No second resolver
+  # may replace the selected model after readiness.
+  _GSTACK_CODEX_ROUTE_EFFORT=""
+  if [ -n "${GSTACK_CODEX_VOICE:-}" ]; then
+    local _route _root CODEX_MODEL="" CODEX_ROUTE_EFFORT="" CODEX_EFFORT CODEX_VOICE
+    local CODEX_MODEL_REQUESTED CODEX_MODEL_SOURCE CODEX_MODEL_SUBSTITUTED CODEX_MODEL_SUBSTITUTION_REASON
+    local CODEX_MODEL_EXEC_FLAGS CODEX_MODEL_REVIEW_FLAGS
+    _root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    if [ -f "$_root/.gstack-policy.json" ]; then
+      _route=$("$_GSTACK_CODEX_BIN/gstack-codex-model" resolve --voice "$GSTACK_CODEX_VOICE" --effort "${GSTACK_CODEX_VOICE_DEFAULT:-high}" --selection-only) || return 1
+      eval "$_route" || return 1
+      [ -n "$_explicit" ] || _explicit="$CODEX_MODEL"
+      _GSTACK_CODEX_ROUTE_EFFORT="$CODEX_ROUTE_EFFORT"
+    fi
+  fi
   # Function-local argv: each value stays one literal argument in bash and zsh.
   set -- --runtime "$_kind"
   [ -n "$_role" ] && set -- "$@" --role "$_role"
@@ -972,12 +988,21 @@ _gstack_codex_effort_check() {
   # levels are model-dependent. A default outside it is a usage error (64).
   local _default="$1" _chosen _source _cfg
   case "$_default" in minimal|low|medium|high|xhigh|max|ultra) ;; *) return 64 ;; esac
-  if [ -n "${GSTACK_CODEX_EFFORT:-}" ]; then
+  if [ -n "${_GSTACK_CODEX_EFFORT_PIN:-}" ]; then
+    _chosen="$_GSTACK_CODEX_EFFORT_PIN"; _source="gate default"
+  elif [ -n "${GSTACK_CODEX_EFFORT:-}" ]; then
     _chosen="$GSTACK_CODEX_EFFORT"; _source="env GSTACK_CODEX_EFFORT"
   else
     _cfg=$("$_GSTACK_CODEX_BIN/gstack-config" get codex_effort 2>/dev/null || true)
     if [ -n "$_cfg" ]; then _chosen="$_cfg"; _source="config codex_effort"
-    else _chosen="$_default"; _source="gate default"; fi
+    else
+      case "${GSTACK_CODEX_GATE_DEFAULT:-}" in
+        '') _chosen="$_default" ;;
+        low|medium|high) _chosen="$GSTACK_CODEX_GATE_DEFAULT" ;;
+        *) echo 'CODEX_EFFORT: invalid routed gate default; no Codex call was made.' >&2; return 1 ;;
+      esac
+      _source="gate default"
+    fi
   fi
   case "$_chosen" in
     minimal|low|medium|high|xhigh|max|ultra) ;;
@@ -989,10 +1014,11 @@ _gstack_codex_effort_check() {
   esac
   # Fork hardening applies to the effective upstream choice, including env/config.
   local _reason="${GSTACK_CODEX_EFFORT_REASON:-}" _record_source
-  case "$_source" in 'env '*) _record_source=env ;; 'config '*) _record_source=config ;; *) _record_source=default ;; esac
+  case "$_source" in 'env '*) _record_source=env ;; 'config '*) _record_source=config ;; *) _record_source=default; [ -z "${GSTACK_CODEX_GATE_DEFAULT:-}" ] || _record_source=routed ;; esac
+  [ -z "${_GSTACK_CODEX_EFFORT_PIN:-}" ] || _record_source=default
   case "$_chosen" in
-    xhigh|max|ultra)
-      if [ -z "$(printf '%s' "$_reason" | tr -d '[:space:]')" ]; then
+    xhigh|ultra)
+      if [ "${_GSTACK_CODEX_RECORD_EFFORT:-0}" = 1 ] && [ -z "$(printf '%s' "$_reason" | tr -d '[:space:]')" ]; then
         echo "CODEX_EFFORT: '$_chosen' requires an explicit user override with GSTACK_CODEX_EFFORT_REASON; no Codex call was made." >&2
         return 1
       fi
@@ -1087,7 +1113,8 @@ _gstack_codex_main() {
     select-model)
       _gstack_codex_kind_args "$@" || { _gstack_codex_usage >&2; return 64; }
       _gstack_codex_select_model "$_GSTACK_CODEX_ARG_KIND" "$_GSTACK_CODEX_ARG_MODEL" || return 1
-      printf 'CODEX_SEL: %s\nCODEX_SEL_KIND: %s\nCODEX_SANDBOX: %s\n' "$_GSTACK_CODEX_SEL" "$_GSTACK_CODEX_SEL_KIND" "$_GSTACK_CODEX_SANDBOX" ;;
+      printf 'CODEX_SEL: %s\nCODEX_SEL_KIND: %s\nCODEX_SANDBOX: %s\n' "$_GSTACK_CODEX_SEL" "$_GSTACK_CODEX_SEL_KIND" "$_GSTACK_CODEX_SANDBOX"
+      [ -z "${GSTACK_CODEX_VOICE:-}" ] || printf 'CODEX_SOURCE: %s\nCODEX_ROUTE_EFFORT: %s\n' "$_GSTACK_CODEX_SEL_SRC" "$_GSTACK_CODEX_ROUTE_EFFORT" ;;
     check-effort)
       [ "$#" -eq 1 ] || { _gstack_codex_usage >&2; return 64; }
       _gstack_codex_effort_check "$1"
@@ -1123,7 +1150,8 @@ _gstack_codex_main() {
       _gstack_codex_role_ready "$_GSTACK_CODEX_ARG_KIND" "$_GSTACK_CODEX_ARG_CWD" "$_GSTACK_CODEX_ARG_MODEL" >&2
       _rc=$?
       [ "$_rc" -eq 0 ] || return "$_rc"
-      printf 'CODEX_SEL: %s\nCODEX_SEL_KIND: %s\nCODEX_SANDBOX: %s\nCODEX_PROBE_STATE: %s\n' "$_GSTACK_CODEX_SEL" "$_GSTACK_CODEX_SEL_KIND" "$_GSTACK_CODEX_SANDBOX" "${_GSTACK_CODEX_PROBE_STATE:-ok}" ;;
+      printf 'CODEX_SEL: %s\nCODEX_SEL_KIND: %s\nCODEX_SANDBOX: %s\nCODEX_PROBE_STATE: %s\n' "$_GSTACK_CODEX_SEL" "$_GSTACK_CODEX_SEL_KIND" "$_GSTACK_CODEX_SANDBOX" "${_GSTACK_CODEX_PROBE_STATE:-ok}"
+      [ -z "${GSTACK_CODEX_VOICE:-}" ] || printf 'CODEX_SOURCE: %s\nCODEX_ROUTE_EFFORT: %s\n' "$_GSTACK_CODEX_SEL_SRC" "$_GSTACK_CODEX_ROUTE_EFFORT" ;;
     check-version) [ "$#" -eq 0 ] || { _gstack_codex_usage >&2; return 64; }; _gstack_codex_version_check >&2; return 0 ;;
     show-first-use-notice) [ "$#" -eq 0 ] || { _gstack_codex_usage >&2; return 64; }; _gstack_codex_first_use_notice; return 0 ;;
     run-with-timeout)
@@ -1138,13 +1166,27 @@ _gstack_codex_main() {
       [ "$#" -ge 2 ] || { _gstack_codex_usage >&2; return 64; }
       if [ -n "$_GSTACK_CODEX_EFFORT_DEFAULT" ] && [ "${2##*/}" != "codex" ]; then _gstack_codex_usage >&2; return 64; fi
       _gstack_codex_consent "$_GSTACK_CODEX_USER_INVOKED" || return 3
-      if [ -n "$_GSTACK_CODEX_EFFORT_DEFAULT" ]; then
+      # /spec supplies a fixed CLI effort rather than --effort. Validate and
+      # record that final value too, ignoring ambient effort settings only for
+      # an explicitly pinned command. All ordinary gates use precedence above.
+      _GSTACK_CODEX_EFFORT_PIN=""
+      if [ -z "$_GSTACK_CODEX_EFFORT_DEFAULT" ] && [ "${2##*/}" = codex ]; then
+        local _arg _config_next=0
+        for _arg in "$@"; do
+          if [ "$_config_next" = 1 ]; then
+            case "$_arg" in model_reasoning_effort=*) _GSTACK_CODEX_EFFORT_PIN="${_arg#model_reasoning_effort=}"; _GSTACK_CODEX_EFFORT_PIN="${_GSTACK_CODEX_EFFORT_PIN//\"/}" ;; esac
+          fi
+          _config_next=0
+          [ "$_arg" != -c ] || _config_next=1
+        done
+      fi
+      if [ -n "$_GSTACK_CODEX_EFFORT_DEFAULT" ] || [ -n "$_GSTACK_CODEX_EFFORT_PIN" ]; then
         _rc=0
         _GSTACK_CODEX_RECORD_EFFORT=1
-        _GSTACK_CODEX_EFFORT_LINE=$(_gstack_codex_effort_check "$_GSTACK_CODEX_EFFORT_DEFAULT") || _rc=$?
+        _GSTACK_CODEX_EFFORT_LINE=$(_gstack_codex_effort_check "${_GSTACK_CODEX_EFFORT_DEFAULT:-$_GSTACK_CODEX_EFFORT_PIN}") || _rc=$?
         [ "$_rc" -eq 64 ] && { _gstack_codex_usage >&2; return 64; }
         [ "$_rc" -eq 0 ] || return "$_rc"
-        set -- "$@" -c "model_reasoning_effort=\"${_GSTACK_CODEX_EFFORT_LINE#CODEX_EFFORT: }\""
+        [ -z "$_GSTACK_CODEX_EFFORT_DEFAULT" ] || set -- "$@" -c "model_reasoning_effort=\"${_GSTACK_CODEX_EFFORT_LINE#CODEX_EFFORT: }\""
       fi
       _gstack_codex_timeout_wrapper "$@" ;;
     log-event) [ "$#" -ge 1 ] && _gstack_codex_log_event "$@" >/dev/null 2>&1; return 0 ;;

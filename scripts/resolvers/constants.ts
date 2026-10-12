@@ -99,9 +99,9 @@ export const CODEX_PROBE_PATH = '~/.claude/skills/gstack/bin/gstack-codex-probe'
  * readiness time is charged to the review instead of extending it. `optional`
  * (manual /codex) keeps select-model unless the agent sets `_CODEX_ROLE`.
  */
-export function codexSelect(kind: 'exec' | 'review', probe: string = CODEX_PROBE_PATH, role?: { budgetSecs: number; optional?: boolean }): string {
+export function codexSelect(kind: 'exec' | 'review', probe: string = CODEX_PROBE_PATH, role?: { budgetSecs: number; optional?: boolean; modelArg?: string }): string {
   const select = `_CODEX_OUT=$("$_CODEX_PROBE" select-model ${kind}) || exit 1`;
-  const ready = `export _CODEX_DEADLINE=$(($(date +%s)+${role?.budgetSecs})); _CODEX_OUT=$("$_CODEX_PROBE" role-ready ${kind}) || exit $?`;
+  const ready = `export _CODEX_DEADLINE=$(($(date +%s)+${role?.budgetSecs})); _CODEX_OUT=$("$_CODEX_PROBE" role-ready ${kind}${role?.modelArg ? ` --model ${role.modelArg}` : ''}) || exit $?`;
   return `_CODEX_PROBE=${probe}
 ${!role ? select : role.optional ? `_CODEX_ROLE=''\nif [ -n "$_CODEX_ROLE" ]; then ${ready}\nelse ${select}; fi` : ready}
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
