@@ -11,7 +11,12 @@ import { HOST_PATHS, type TemplateContext } from '../scripts/resolvers/types';
 const ROOT = path.resolve(import.meta.dir, '..');
 const BIN = path.join(ROOT, 'bin');
 const ctx: TemplateContext = { skillName: 'review', tmplPath: '', host: 'claude', paths: { ...HOST_PATHS.claude, binDir: BIN, skillRoot: ROOT } };
-type Arm = 'voice' | 'structured-voice' | 'packet' | 'diff' | 'spec';
+type Arm = 'voice' | 'structured-voice' | 'packet' | 'spec';
+
+/** The governor step's Codex dispatch blocks: the bash fences that start the clock. */
+function governorCodexFences(): string[] {
+  return [...generateGovernorStructuredBody(ctx).matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!).filter(body => body.includes('_CODEX_T0='));
+}
 
 function invoke(arm: Arm, options: { disabled?: boolean; stored?: string; effort?: string; reason?: string; native?: boolean;
   shell?: 'bash' | 'zsh'; errexit?: boolean; routeFailure?: boolean } = {}) {
@@ -56,8 +61,8 @@ if(args[0]==='review')console.log(text);else writeFileSync(args[args.indexOf('-o
         ...(arm === 'structured-voice' ? { structuredBase: 'main', gate: 'structured' } : { role: 'plan-review' }),
         ...(arm === 'spec' ? { gate: 'spec', reasoningEffort: 'medium' } : {}) });
     } else {
-      const fences = [...generateGovernorStructuredBody(ctx).matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!).filter(body => body.includes('_CODEX_T0='));
-      expect(fences).toHaveLength(2);
+      const fences = governorCodexFences();
+      expect(fences).toHaveLength(1);
       const route = spawnSync(path.join(BIN, 'gstack-codex-model'), ['resolve', '--model', options.native ? '' : 'gpt-routed',
         '--effort', 'medium', '--source', options.native ? 'default' : 'policy', '--selection-only'], { cwd: repo, env, encoding: 'utf8', timeout: 5000 });
       expect(route.status, route.stderr).toBe(0);
@@ -65,7 +70,7 @@ if(args[0]==='review')console.log(text);else writeFileSync(args[args.indexOf('-o
       expect(model).toBeDefined();
       // Carry the printed model as a literal into a fresh Bash call, exactly
       // as the skill directs. A prefix eval would hide unbound shell state.
-      script = fences[arm === 'packet' ? 0 : 1]!
+      script = fences[0]!
         .replaceAll('~/.claude/skills/gstack', ROOT).replaceAll('{PLAN_EFFORT}', 'medium')
         .replaceAll('{CODEX_MODEL}', model!).replaceAll('{PACKET_PATH}', prompt)
         .replaceAll('<prompt-file-name>', 'prompt.txt').replaceAll('<base>', 'main');
@@ -83,7 +88,19 @@ if(args[0]==='review')console.log(text);else writeFileSync(args[args.indexOf('-o
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
-for (const arm of ['voice', 'packet', 'diff'] as const) {
+// The governor runs the read-only packet reviewer on every route: `codex review`
+// takes no prompt with `--base`, so its answer format cannot be required.
+test('the governor step has one Codex dispatch, the read-only packet form, and never codex review', () => {
+  const fences = governorCodexFences();
+  expect(fences).toHaveLength(1);
+  expect(fences[0]).toContain('codex exec');
+  expect(fences[0]).toContain('{PACKET_PATH}');
+  for (const fence of [...generateGovernorStructuredBody(ctx).matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!)) {
+    expect(fence).not.toContain('codex review');
+  }
+});
+
+for (const arm of ['voice', 'packet'] as const) {
   test(`${arm}: one bound routed model and one deadline reach the real send wrapper`, () => {
     const result = invoke(arm);
     expect(result.status, result.stderr + result.stdout).toBe(0);
