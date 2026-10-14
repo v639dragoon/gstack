@@ -135,11 +135,11 @@ describe('codex frontier model flag is present', () => {
     }
     for (const file of ['review/sections/adversarial.md', 'ship/sections/adversarial.md']) {
       const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8').split('### Governor codex-structured slot')[1]!;
-      const calls = rendered.split('\n').filter(line => line.includes('codex review --base') && line.includes('2>'));
-      expect(calls.length).toBeGreaterThan(0);
+      const calls = rendered.split('\n').filter(line => line.includes('codex exec -') && line.includes('2>'));
+      expect(calls).toHaveLength(1);
       // D4: the routed request is now bound by role-ready, so its flags carry
       // that selection too; the catalog default is never appended afterward.
-      for (const call of calls) expect(call).toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
+      for (const call of calls) expect(call).toContain(CODEX_MODEL_CONFIG_FLAG);
     }
   });
 
