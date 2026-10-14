@@ -17,7 +17,7 @@
  *    AND effort_source routed) without model_reason.
  *  - gstack-outcome-report reads model/effort/elapsed/tokens/substitutions
  *    from the gate rows it already aggregates (no new telemetry stream).
- *  - The rendered routed step carries the model flags on BOTH codex calls and
+ *  - The rendered routed step carries the model flags on its packet exec call and
  *    the model fields on the gate row; the effort pin is untouched.
  */
 import { afterAll, describe, expect, test } from 'bun:test';
@@ -25,7 +25,7 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, existsSync
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-import { CODEX_REVIEW_MODEL_CONFIG_FLAG, CODEX_MODEL_CONFIG_FLAG } from '../scripts/resolvers/constants';
+import { CODEX_MODEL_CONFIG_FLAG } from '../scripts/resolvers/constants';
 
 const ROOT = join(import.meta.dir, '..');
 const BUDGET = join(ROOT, 'bin', 'gstack-review-budget');
@@ -534,13 +534,13 @@ describe('gstack-outcome-report model detail', () => {
   });
 });
 
-// ─── Rendered prose: both codex calls carry the model, the gate row records it
+// Rendered prose: the packet exec call carries the model, the gate row records it
 
 describe('rendered routed step carries the model', () => {
   const SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/sections/adversarial.md', '.factory/skills/gstack-review/governor-structured.md'];
   const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
   for (const site of SITES) {
-    test(`${site}: resolves the model once, pins it on both calls, records it, never re-runs on another model`, () => {
+    test(`${site}: resolves the model once, pins it on packet exec, records it, never re-runs on another model`, () => {
       const union = read(site);
       const parent = site.endsWith('/governor-structured.md') ? read(site.replace('governor-structured.md', 'SKILL.md')) : union;
       expect(parent).toContain('adversarial subagent (always runs)');
@@ -554,21 +554,18 @@ describe('rendered routed step carries the model', () => {
       const exec = text.split('\n').filter((l) => /run-with-timeout --effort high 540 codex exec\b/.test(l));
       const review = text.split('\n').filter((l) => /run-with-timeout --effort high 540 codex review --base\b/.test(l));
       expect(exec).toHaveLength(1);
-      expect(review).toHaveLength(1);
+      expect(review).toHaveLength(0);
       // D4: role-ready binds the routed request, and dispatch consumes that
       // exact record instead of appending flags from a second selection.
       expect(exec[0]).toContain('codex exec -');
       expect(exec[0]).toContain(CODEX_MODEL_CONFIG_FLAG);
       expect(text).toContain('role-ready exec --model');
-      expect(text).toContain('role-ready review --model');
+      expect(text).not.toContain('role-ready review --model');
       expect(text).toContain('GSTACK_CODEX_GATE_DEFAULT="{PLAN_EFFORT}"');
       expect(exec[0]).toContain('run-with-timeout --effort high');
       // Harness pass 2026-09-15: the governed slot renders NO frontier default; an
       // unrouted tier runs the project's own Codex config, never an inherited premium model.
-      expect(review[0]).toContain('codex review --base <base>');
-      expect(review[0]).toContain(CODEX_REVIEW_MODEL_CONFIG_FLAG);
-      expect(review[0]).toContain('run-with-timeout --effort high');
-      for (const call of [...exec, ...review]) expect(call).toContain('${_CODEX_SANDBOX_MODE:?}');
+      expect(exec[0]).toContain('${_CODEX_SANDBOX_MODE:?}');
       expect(text).toContain('CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))');
       const gateRow = text.split('\n').find((l) => l.includes('gstack-gate-log') && l.includes('"gate":"codex-structured"') && l.includes('"trigger":"review-plan"'));
       expect(gateRow).toBeDefined();
