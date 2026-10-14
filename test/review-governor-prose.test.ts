@@ -42,9 +42,30 @@ describe('review governor rendered prose', () => {
     for (const gate of ['codex-structured', 'coverage-audit', 'plan-completion', 'doc-release', 'native-adversarial'])
       expect(text).toContain(`gstack-review-budget dispatch "$RUN_ID" ${gate}`);
     expect(text).toContain('manifest_wtree');
-    expect(text).toContain('EXACT reviewed SHA');
+    expect(text).toContain('CI status for the exact head SHA');
     expect(text).toContain('REPAIR_CYCLES_MAX');
     expect(text).toContain('rerun-check');
+  });
+
+  test('codex-structured always uses one strict packet exec before telemetry', () => {
+    for (const root of ['ship', 'review']) {
+      const rendered = read(`${root}/sections/adversarial.md`);
+      const start = rendered.indexOf('### Governor codex-structured slot');
+      expect(start).toBeGreaterThan(-1);
+      const telemetry = rendered.indexOf('Persist both logs.', start);
+      expect(telemetry).toBeGreaterThan(start);
+      const step = rendered.slice(start, telemetry);
+      const calls = step.split('\n').filter(line => /run-with-timeout.*\bcodex (?:exec|review)\b/.test(line));
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toContain('run-with-timeout --effort high 540 codex exec -');
+      expect(calls[0]).toContain('--json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE"');
+      expect(step).toContain('NO FINDINGS');
+      expect(step).toContain("<true, false or unknown: the packet's CI_GREEN value>");
+      expect(step).toContain('Whatever it is, do NOT run the build, the test suite, typecheck or any install');
+      expect(step).not.toContain('CI_GREEN=true for the exact head SHA');
+      expect(step).not.toContain('codex review --base');
+      expect(step).not.toMatch(/Branch on\s*`CI_GREEN`/);
+    }
   });
 
   test('D3 advisory policy overrides retained upstream AUTO-FIX and ASK defaults', () => {
