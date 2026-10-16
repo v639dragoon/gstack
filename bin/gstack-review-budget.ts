@@ -1140,7 +1140,18 @@ if (command === 'resolve') {
   if (!id || !fingerprint || !['fixed', 'accepted', 'skipped'].includes(action || ''))
     fail('invalid resolve');
   loadPlan(id);
-  append(id, { record_type: 'resolved', run_id: id, fingerprint, action, ts: now() });
+  const rawReason = opt('--reason');
+  const details: { reason_kind?: string; reason?: string } = {};
+  if (action === 'accepted' || action === 'skipped') {
+    const match = rawReason?.match(/^(wrong|intentional|minor|deferred):\s*(\S[\s\S]*)$/);
+    if (!match)
+      fail(`resolve --action ${action} needs --reason "<wrong|intentional|minor|deferred>: <why>"`);
+    details.reason_kind = match![1];
+    details.reason = match![2].trim();
+  } else if (rawReason?.trim()) {
+    details.reason = rawReason.trim();
+  }
+  append(id, { record_type: 'resolved', run_id: id, fingerprint, action, ...details, ts: now() });
   process.exit(0);
 }
 if (command === 'report') {
@@ -1169,6 +1180,16 @@ if (command === 'report') {
   console.log(`FULL_RERUNS=${fulls.length}`);
   console.log(`BLOCKING_FINDINGS=${blockingFindings.length}`);
   console.log(`BLOCKING_FINDINGS_ACCEPTED=${acceptedBlocking}`);
+  const resolutionKinds = { wrong: 0, intentional: 0, minor: 0, deferred: 0, unstated: 0 };
+  for (const fingerprint of new Set(blockingFindings.map((r) => r.fingerprint))) {
+    const resolution = rs.filter((r) => r.record_type === 'resolved' && r.fingerprint === fingerprint).at(-1);
+    if (resolution && ['accepted', 'skipped'].includes(resolution.action)) {
+      const kind = resolution.reason_kind || 'unstated';
+      if (Object.hasOwn(resolutionKinds, kind))
+        resolutionKinds[kind as keyof typeof resolutionKinds]++;
+    }
+  }
+  console.log(`RESOLUTION_KINDS=${Object.entries(resolutionKinds).map(([kind, count]) => `${kind}:${count}`).join(',')}`);
   console.log(
     `RERUN_TRIGGERS=${[...new Set(fulls.flatMap((r) => r.triggers || []))].join(',') || 'none'}`,
   );

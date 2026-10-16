@@ -102,3 +102,11 @@ describe('review governor rendered prose', () => {
     expect(union()).toContain('Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: ~/.claude/skills/gstack/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]');
   });
 });
+
+
+test('ship fixes the whole bug class and records accepted or skipped resolution reasons', () => {
+  const text = read('ship/sections/review-army.md');
+  expect(text).toContain('Apply each fix at every listed instance (`also at` / `instances`) and at any other instance of the same pattern in the diff. Output one line per fix:');
+  expect(text).toContain('`resolve`; an accepted or skipped `resolve` takes `--reason "<wrong|intentional|minor|deferred>: <why>"`.');
+  expect(text).toContain('A Fix answer covers every instance, as in item 2. Governor classification is telemetry; upstream AUTO-FIX/ASK governs');
+});
