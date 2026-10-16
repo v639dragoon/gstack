@@ -472,7 +472,7 @@ describe('review budgets', () => {
         severity: 'P1', fingerprint: fp, gate: 'codex-structured', summary: fp,
       })]).status).toBe(0);
     expect(run(d, s, ['resolve', 'A', 'fixed', '--action', 'fixed']).status).toBe(0);
-    expect(run(d, s, ['resolve', 'A', 'skipped', '--action', 'skipped']).status).toBe(0);
+    expect(run(d, s, ['resolve', 'A', 'skipped', '--action', 'skipped', '--reason', 'deferred: later work']).status).toBe(0);
     writeFileSync(join(d, 'x.ts'), 'fixed\n');
     expect(run(d, s, ['rerun-check', 'A']).stdout).toContain('FULL_RERUN=false');
     expect(run(d, s, ['dispatch', 'A', 'codex-structured', '--verify-of', 'fixed']).status).toBe(0);
@@ -542,7 +542,7 @@ describe('review budgets', () => {
     expect(run(d, s, ['finding', 'A', JSON.stringify({
       severity: 'P1', fingerprint: 'fp', gate: 'codex-structured', summary: 'one recorded issue',
     }), '--cycle', '1']).status).toBe(0);
-    expect(run(d, s, ['resolve', 'A', 'fp', '--action', 'accepted']).status).toBe(0);
+    expect(run(d, s, ['resolve', 'A', 'fp', '--action', 'accepted', '--reason', 'intentional: kept on purpose']).status).toBe(0);
     expect(run(d, s, ['complete', 'A', '--cycle', '1']).status).toBe(0);
     const b = run(d, s, ['plan', manifest(d, 'B', 'B')]);
     expect(b.stdout).toContain('CARRIED_REPAIR_CYCLES=1');
@@ -770,7 +770,7 @@ describe('converged <run_id>', () => {
     f.expectReason('blocking-open');
     f.finding('fp');
     f.expectReason('blocking-open');
-    f.ok('resolve', 'ship', 'fp', '--action', 'accepted');
+    f.ok('resolve', 'ship', 'fp', '--action', 'accepted', '--reason', 'intentional: kept on purpose');
     f.expectReason('converged');
   }, 60_000);
   test('a fixed finding converges only after a clean --verify-of re-dispatch', () => {
@@ -978,4 +978,46 @@ describe('converged after a docs-only carry-forward (dohma #917)', () => {
     expectTokens(route, ['COMPLETE=true', 'INCOMPLETE='], 'ship Step 16 stage 2');
     expectMentions(route, [['exit 2', 'stop']], 'ship Step 16 stage 2');
   });
+});
+
+describe('resolution reasons', () => {
+  test('accepted requires a reason and skipped rejects an unknown kind', () => {
+    const { d, s } = setup();
+    expect(run(d, s, ['plan', manifest(d, 'B', 'reasons')]).status).toBe(0);
+    for (const [action, reason] of [['accepted', null], ['skipped', 'other: unsupported']]) {
+      const result = run(d, s, ['resolve', 'reasons', 'fp', '--action', action!,
+        ...(reason ? ['--reason', reason] : [])]);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toBe(`gstack-review-budget: resolve --action ${action} needs --reason "<wrong|intentional|minor|deferred>: <why>"\n`);
+    }
+  });
+
+  test('resolve stores accepted reason kind and optional fixed reason without extra keys', () => {
+    const { d, s } = setup();
+    expect(run(d, s, ['plan', manifest(d, 'B', 'reasons')]).status).toBe(0);
+    const ledger = join(s, 'projects', d.split('/').at(-1)!, 'budgets', 'reasons.ledger.jsonl');
+    for (const [action, reason, details] of [
+      ['accepted', 'intentional: kept on purpose', { reason_kind: 'intentional', reason: 'kept on purpose' }],
+      ['fixed', null, {}],
+      ['fixed', 'x', { reason: 'x' }],
+      ['fixed', '   ', {}],
+      ['skipped', 'minor: first line\nsecond line', { reason_kind: 'minor', reason: 'first line\nsecond line' }],
+    ] as const) {
+      expect(run(d, s, ['resolve', 'reasons', 'fp', '--action', action,
+        ...(reason === null ? [] : ['--reason', reason])]).status).toBe(0);
+      const row = JSON.parse(readFileSync(ledger, 'utf8').trim().split('\n').at(-1)!);
+      expect(row).toEqual({ record_type: 'resolved', run_id: 'reasons', fingerprint: 'fp', action,
+        ...details, ts: expect.any(String) });
+    }
+  });
+
+  test('accepted with a reason converges like a legacy reasonless resolution', () => {
+    const f = shipRun();
+    f.plan();
+    f.review(0, ['issues_found', '--critical', '1']);
+    f.docRelease();
+    f.finding('fp');
+    f.ok('resolve', 'ship', 'fp', '--action', 'accepted', '--reason', 'intentional: kept on purpose');
+    f.expectReason('converged');
+  }, 60_000);
 });

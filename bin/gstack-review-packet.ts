@@ -160,15 +160,28 @@ try {
     .filter(Boolean)
     .map(text => JSON.parse(text));
 } catch {}
-const resolved = new Set(
-  ledger.filter((r) => r.record_type === 'resolved').map((r) => r.fingerprint),
+const resolved = new Map(
+  ledger.filter((r) => r.record_type === 'resolved').map((r) => [r.fingerprint, r]),
 );
-const unresolved = ledger.filter(
+const findings = new Map(
+  ledger.filter((r) => r.record_type === 'finding').map((r) => [r.fingerprint, r]),
+);
+const unresolved = [...findings.values()].filter(
   (r) =>
-    r.record_type === 'finding' &&
     (r.blocking === true || plan.blockingSeverities.includes(r.severity)) &&
     !resolved.has(r.fingerprint),
 );
+const excerpt = (value: unknown) => {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return text.length > 300 ? text.slice(0, 297) + '...' : text;
+};
+const settled = [...findings.values()].filter((r) => resolved.has(r.fingerprint)).map((r) => {
+  const resolution = resolved.get(r.fingerprint);
+  const reason = resolution.reason
+    ? `${['accepted', 'skipped'].includes(resolution.action) ? ` (${resolution.reason_kind})` : ''}: ${excerpt(resolution.reason)}`
+    : '';
+  return `- [${r.severity}] ${r.fingerprint} (${r.gate}): ${excerpt(r.summary)} | ${resolution.action}${reason}`;
+});
 const tags = (f: any) => {
   const r = manifest.routing || {},
     xs: string[] = [];
@@ -182,7 +195,7 @@ const tags = (f: any) => {
 const risk = manifest.routing;
 const outcome = risk.outcome;
 const dirty = git(['status', '--porcelain']).stdout.trim() ? true : false;
-const md = `# Review packet ${id}\n\n## Acceptance criteria\n\n${acceptance}\n\n## Risk\n\n- Tier: ${risk.risk_tier}\n- Rule: ${risk.tier_rule}\n- Source: ${risk.tier_source}\n- Auth surfaces: ${(risk.auth_surface_matches || []).join(', ') || 'none'}\n- D surfaces: ${(risk.d_surface_matches || []).join(', ') || 'none'}\n- Load-bearing docs: ${(risk.load_bearing_doc_matches || []).join(', ') || 'none'}\n- Outcome: ${outcome.present ? `${outcome.outcome_id} slice ${outcome.slice_number}${outcome.is_final_slice ? ' final' : ''}${outcome.is_flag_flip ? ' flag-flip' : ''}` : 'none'}\n\n## Changed files\n\n| Path | + | - | Tags |\n|---|---:|---:|---|\n${manifest.files.map((f: any) => `| ${f.path} | ${f.additions} | ${f.deletions} | ${tags(f)} |`).join('\n') || '| none | 0 | 0 | - |'}\n\n## Reviewed revision\n\n- SHA: ${sha}\n- Base: ${base}\n- Merge-base: ${merge}\n- Dirty: ${dirty}\n\n## Architecture constraints\n\n${ruleRows.join('\n') || 'none'}\n\n## CI / test evidence\n\n${evidence}\n\nCI status: ${ci}\n\n${ciText}\n\n## Unresolved blocking findings\n\n${unresolved.map((r) => `- [${r.severity}] ${r.fingerprint} (${r.gate}): ${r.summary}`).join('\n') || 'none'}\n\nReviewers: read this packet and the diff at ${diffPath} first. Do not re-derive the project. When CI_GREEN=true do not run the full build or test suite; run a build only to investigate a specific build-related finding.\n`;
+const md = `# Review packet ${id}\n\n## Acceptance criteria\n\n${acceptance}\n\n## Risk\n\n- Tier: ${risk.risk_tier}\n- Rule: ${risk.tier_rule}\n- Source: ${risk.tier_source}\n- Auth surfaces: ${(risk.auth_surface_matches || []).join(', ') || 'none'}\n- D surfaces: ${(risk.d_surface_matches || []).join(', ') || 'none'}\n- Load-bearing docs: ${(risk.load_bearing_doc_matches || []).join(', ') || 'none'}\n- Outcome: ${outcome.present ? `${outcome.outcome_id} slice ${outcome.slice_number}${outcome.is_final_slice ? ' final' : ''}${outcome.is_flag_flip ? ' flag-flip' : ''}` : 'none'}\n\n## Changed files\n\n| Path | + | - | Tags |\n|---|---:|---:|---|\n${manifest.files.map((f: any) => `| ${f.path} | ${f.additions} | ${f.deletions} | ${tags(f)} |`).join('\n') || '| none | 0 | 0 | - |'}\n\n## Reviewed revision\n\n- SHA: ${sha}\n- Base: ${base}\n- Merge-base: ${merge}\n- Dirty: ${dirty}\n\n## Architecture constraints\n\n${ruleRows.join('\n') || 'none'}\n\n## CI / test evidence\n\n${evidence}\n\nCI status: ${ci}\n\n${ciText}\n\n## Unresolved blocking findings\n\n${unresolved.map((r) => `- [${r.severity}] ${r.fingerprint} (${r.gate}): ${r.summary}`).join('\n') || 'none'}\n\n## Resolved findings\n\n${settled.join('\n') || 'none'}\n\nReviewers: read this packet and the diff at ${diffPath} first. Do not re-derive the project. When CI_GREEN=true do not run the full build or test suite; run a build only to investigate a specific build-related finding. Resolved findings are settled: do not report one again unless the current diff shows its fix is wrong or incomplete, or its recorded reason no longer holds; then cite its fingerprint and say which. When a defect is one instance of a pattern, name the pattern and list every other instance in the diff inside the same finding (a codex line appends "also at: path:line, path:line"; a JSON finding adds "instances":["path:line"]), so one fix round clears the whole class.\n`;
 const packetPath = path.join(packets, `${id}.md`);
 fs.writeFileSync(packetPath, md);
 console.log(`PACKET_PATH=${packetPath}`);

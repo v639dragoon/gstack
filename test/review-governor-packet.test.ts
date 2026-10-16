@@ -7,7 +7,9 @@ const root = join(import.meta.dir, '..'),
   budget = join(root, 'bin/gstack-review-budget'),
   packet = join(root, 'bin/gstack-review-packet');
 describe('review packet', () => {
-  test('writes ordered sections, matching rules, diff and unknown CI', () => {
+  for (const withLedger of [false, true]) test(withLedger
+    ? 'renders latest deduplicated resolved findings, reasons and reviewer instructions'
+    : 'writes ordered sections, matching rules, diff and unknown CI', () => {
     const d = mkdtempSync(join(tmpdir(), 'packet-repo-')),
       state = mkdtempSync(join(tmpdir(), 'packet-state-'));
     try {
@@ -63,6 +65,28 @@ describe('review packet', () => {
         GIT_CONFIG_GLOBAL: '/dev/null',
       };
       expect(spawnSync(budget, ['plan', mp], { cwd: d, env, timeout: 30_000 }).status).toBe(0);
+      if (withLedger) {
+        const finding = (fingerprint: string, summary = fingerprint) => ({
+          record_type: 'finding', fingerprint, summary, severity: 'P1', gate: 'codex-structured', blocking: true,
+        });
+        const resolution = (fingerprint: string, action: string, extra = {}) => ({
+          record_type: 'resolved', fingerprint, action, ...extra,
+        });
+        const rows = [
+          finding('open', 'old open'), finding('open'),
+          finding('fixed', 'old fixed'), finding('fixed', 'fixed \n summary'),
+          resolution('fixed', 'fixed', { reason: 'fixed \n safely' }),
+          finding('accepted'), resolution('accepted', 'accepted', { reason_kind: 'intentional', reason: 'kept \t on purpose' }),
+          finding('twice', 'x'.repeat(310)), resolution('twice', 'accepted', { reason_kind: 'wrong', reason: 'outdated' }),
+          resolution('twice', 'skipped', { reason_kind: 'deferred', reason: 'y'.repeat(310) }),
+          finding('legacy'), resolution('legacy', 'accepted'),
+          resolution('orphan', 'fixed'),
+          { record_type: 'finding', fingerprint: 'bare', severity: 'P1', gate: 'codex-structured', blocking: true },
+          resolution('bare', 'fixed', { reason: 42 }),
+        ];
+        writeFileSync(join(state, 'projects', 'packet-test', 'budgets', 'packet-run.ledger.jsonl'),
+          rows.map(row => JSON.stringify(row)).join('\n') + '\n');
+      }
       const acc = join(state, 'acceptance.md');
       writeFileSync(acc, 'Ship the packet safely.\n');
       const r = spawnSync(packet, ['packet-run', 'main', '--acceptance', acc], {
@@ -83,6 +107,8 @@ describe('review packet', () => {
         '## Architecture constraints',
         '## CI / test evidence',
         '## Unresolved blocking findings',
+        '## Resolved findings',
+        'Reviewers:',
       ];
       let last = -1;
       for (const h of sections) {
@@ -90,6 +116,17 @@ describe('review packet', () => {
         expect(at).toBeGreaterThan(last);
         last = at;
       }
+      const unresolved = text.split('## Unresolved blocking findings\n\n')[1].split('\n\n## Resolved findings')[0];
+      const resolved = text.split('## Resolved findings\n\n')[1].split('\n\nReviewers:')[0];
+      expect(unresolved).toBe(withLedger ? '- [P1] open (codex-structured): open' : 'none');
+      expect(resolved).toBe(withLedger ? [
+        '- [P1] fixed (codex-structured): fixed summary | fixed: fixed safely',
+        '- [P1] accepted (codex-structured): accepted | accepted (intentional): kept on purpose',
+        `- [P1] twice (codex-structured): ${'x'.repeat(297)}... | skipped (deferred): ${'y'.repeat(297)}...`,
+        '- [P1] legacy (codex-structured): legacy | accepted',
+        '- [P1] bare (codex-structured):  | fixed: 42',
+      ].join('\n') : 'none');
+      expect(text).toContain('Resolved findings are settled: do not report one again unless the current diff shows its fix is wrong or incomplete, or its recorded reason no longer holds; then cite its fingerprint and say which. When a defect is one instance of a pattern, name the pattern and list every other instance in the diff inside the same finding (a codex line appends "also at: path:line, path:line"; a JSON finding adds "instances":["path:line"]), so one fix round clears the whole class.');
       expect(text).toContain('Ship the packet safely.');
       expect(text).toContain('.claude/rules/x.md: Keep the X contract stable.');
       expect(text).toContain('When CI_GREEN=true do not run the full build or test suite');

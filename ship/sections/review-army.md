@@ -714,7 +714,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
 1. **Classify only unmatched or reopened findings as AUTO-FIX or ASK** after Step 9.3 matches all sources, including queued Steps 10–11 findings, per the Fix-First Heuristic in
    checklist.md. Critical findings lean toward ASK; informational lean toward AUTO-FIX.
 
-2. **Auto-fix all AUTO-FIX items.** Apply each fix. Output one line per fix:
+2. **Auto-fix all AUTO-FIX items.** Apply each fix at every listed instance (`also at` / `instances`) and at any other instance of the same pattern in the diff. Output one line per fix:
    `[AUTO-FIXED] [file:line] Problem → what you did`
 
 3. **If ASK items remain,** present them in ONE AskUserQuestion:
@@ -727,7 +727,8 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    identity, scope and supporting source evidence; keep it across repeats.
 
    Record fixes and explicit skips through `gstack-review-budget finding` and
-   `resolve`. Governor classification is telemetry; upstream AUTO-FIX/ASK governs
+   `resolve`; an accepted or skipped `resolve` takes `--reason "<wrong|intentional|minor|deferred>: <why>"`.
+   A Fix answer covers every instance, as in item 2. Governor classification is telemetry; upstream AUTO-FIX/ASK governs
    action and advice remains ASK-only.
 
    - **Track the fix-cycle index:** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only: it never alters the loop.

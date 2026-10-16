@@ -198,3 +198,40 @@ describe('outcome report', () => {
     }
   });
 });
+
+test('budget report counts latest accepted and skipped blocking resolutions by kind', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'kinds-repo-')),
+    state = mkdtempSync(join(tmpdir(), 'kinds-state-'));
+  try {
+    const budgets = join(state, 'projects', 'kinds-test', 'budgets');
+    mkdirSync(budgets, { recursive: true });
+    writeFileSync(join(budgets, 'kinds.json'), JSON.stringify({ runId: 'kinds' }));
+    const rows: any[] = [];
+    const add = (fingerprint: string, action: string, reason_kind?: string, blocking = true) => {
+      rows.push({ record_type: 'finding', fingerprint, blocking });
+      rows.push({ record_type: 'resolved', fingerprint, action, ...(reason_kind ? { reason_kind } : {}) });
+    };
+    add('wrong', 'accepted', 'wrong');
+    add('intentional', 'skipped', 'intentional');
+    add('minor', 'accepted', 'minor');
+    add('deferred', 'skipped', 'deferred');
+    add('legacy', 'accepted');
+    add('wrong', 'skipped', 'wrong'); // duplicate fingerprint counts once
+    add('latest', 'accepted', 'wrong');
+    add('latest', 'skipped', 'minor'); // latest resolution wins
+    add('fixed', 'accepted', 'wrong');
+    add('fixed', 'fixed'); // no longer accepted or skipped
+    add('advisory', 'accepted', 'wrong', false);
+    rows.push({ record_type: 'finding', fingerprint: 'open', blocking: true });
+    writeFileSync(join(budgets, 'kinds.ledger.jsonl'), rows.map(row => JSON.stringify(row)).join('\n') + '\n');
+    const result = spawnSync(join(import.meta.dir, '..', 'bin/gstack-review-budget'), ['report', 'kinds'], {
+      cwd: repo, encoding: 'utf8', timeout: 30_000,
+      env: { ...process.env, GSTACK_STATE_DIR: state, GSTACK_PROJECT_SLUG: 'kinds-test', GIT_CONFIG_GLOBAL: '/dev/null' },
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/^BLOCKING_FINDINGS_ACCEPTED=\d+\nRESOLUTION_KINDS=wrong:1,intentional:1,minor:2,deferred:1,unstated:1\n/m);
+  } finally {
+    rmSync(repo, { recursive: true, force: true });
+    rmSync(state, { recursive: true, force: true });
+  }
+});
