@@ -658,11 +658,14 @@ export async function runHeadedSupervisor(deps: HeadedSupervisorDeps): Promise<'
  * "Google Chrome for Testing" frequently opens behind the active window or on
  * another Space — the first thing users read as "I can't see the browser"
  * (#1781). Best-effort, fire-and-forget, never throws. The app name is a fixed
- * literal (no interpolation). */
+ * literal (no interpolation). The `is running` guard is load-bearing: a bare
+ * `activate` LAUNCHES the app when it is not running, and that flagless copy
+ * (no --use-mock-keychain) raises a "Keychain Not Found" dialog on the user's
+ * real keychain. */
 function raiseHeadedWindowMacOS(): void {
   if (process.platform !== 'darwin') return;
   try {
-    nodeSpawn('osascript', ['-e', 'tell application "Google Chrome for Testing" to activate'], {
+    nodeSpawn('osascript', ['-e', 'if application "Google Chrome for Testing" is running then tell application "Google Chrome for Testing" to activate'], {
       stdio: 'ignore',
       detached: true,
       windowsHide: true,

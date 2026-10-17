@@ -804,7 +804,10 @@ export async function handleMetaCommand(
         let activated = false;
         for (const appName of appNames) {
           try {
-            execSync(`osascript -e 'tell application "${appName}" to activate'`, { stdio: 'pipe', timeout: 3000, windowsHide: true });
+            // Only an already-running app: a bare `activate` LAUNCHES a stopped one
+            // (a flagless browser that prompts on the real keychain); the error
+            // branch makes osascript fail so the loop tries the next name.
+            execSync(`osascript -e 'if application "${appName}" is running then' -e 'tell application "${appName}" to activate' -e 'else' -e 'error "not running"' -e 'end if'`, { stdio: 'pipe', timeout: 3000, windowsHide: true });
             activated = true;
             break;
           } catch (err: any) {
