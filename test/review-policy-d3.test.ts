@@ -61,6 +61,10 @@ for (const [key, literal, field, gate] of [
       const p = f.plan(); expect(p[field]).toBe(enabled);
       expect(f.plan('C', 0, {}, 'text', false)).toContain(`${literal}=${enabled}`);
       expect(p.policyRoutingIgnored).not.toContain('passes');
+      if (key === 'upstream_specialists') {
+        const stateMachine = f.run('register-upstream', 'run', 'upstream-specialist:state-machines');
+        expect(stateMachine.status, stateMachine.stderr).toBe(enabled ? 0 : 2);
+      }
       if (gate) {
         const r = f.run('register-upstream', 'run', gate);
         expect(r.status).toBe(enabled ? 0 : 2);
@@ -77,7 +81,7 @@ test('D3 native OFF completes governor slots; absent still owes --require-native
     const f = fixture(enabled ? {} : { routing: { passes: OFF } });
     const p = f.plan('D');
     expect(p.reviewerSpecs).toEqual(['codex-structured@high', 'specialist:security@sonnet', 'red-team@sonnet']);
-    expect(p.deterministicGates).toBe('tests,typecheck,build,gitleaks,redaction,verification,claim-check,migration-runbook');
+    expect(p.deterministicGates).toBe('tests,typecheck,build,gitleaks,redaction,verification,claim-check,pregate,migration-runbook');
     for (const gate of p.reviewers.map((x: any) => x.gate)) f.verdict(gate);
     const r = f.run('complete', 'run', '--require-native');
     expect(r.status).toBe(enabled ? 2 : 0);

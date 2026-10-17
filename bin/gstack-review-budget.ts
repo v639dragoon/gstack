@@ -298,7 +298,7 @@ if (command === 'plan') {
   const out = m.routing.outcome || {};
   const final = out.is_final_slice || out.is_flag_flip || !out.present;
   const deterministicGates =
-    'tests,typecheck,build,gitleaks,redaction,verification,claim-check' +
+    'tests,typecheck,build,gitleaks,redaction,verification,claim-check,pregate' +
     (tier === 'D' ? ',migration-runbook' : '');
   const reviewers: any[] = reviewerSpecs.map((s, i) => {
     const at = s.lastIndexOf('@');
@@ -496,7 +496,7 @@ function gateDisabled(p: any, gate: string): boolean {
 }
 if (command === 'register-upstream') {
   const [id, gate] = argv;
-  if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|red-team))$/.test(gate))
+  if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|state-machines|red-team))$/.test(gate))
     fail('known upstream-required reviewer gate required');
   const cycle = requestedCycle(), p = cyclePlan(loadPlan(id), cycle);
   if (gateDisabled(p, gate) || gate === 'upstream-specialist:red-team' && opt('--trigger') === 'loc' && p.redTeamLocTrigger === false) {

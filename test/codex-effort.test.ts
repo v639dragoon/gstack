@@ -125,33 +125,38 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"SCORE: 8"}
     read(`codex/sections/${mode}.md`).split('\n').filter(line => /run-with-timeout --user-invoked --effort \w+ --request-effort '<effort-level>' \d+ codex /.test(line))
       .map(line => ({ mode, line: line.trim().split(' | tee ')[0] })));
 
-  test('all four rendered /codex dispatches carry the request level to the probe, over env and codex_effort', () => {
+  // One bounded case per rendered dispatch; all four fences and every guard remain.
+  test.each(FENCES.map(({ mode, line }, index) => [`${mode} fence ${index}`, line] as const))('%s carries the request level over env and codex_effort', (mode, line) => {
     expect(FENCES.length).toBe(4);
     const dispatches = (['review-mode', 'challenge-mode', 'consult-mode'] as const).flatMap(mode =>
       read(`codex/sections/${mode}.md`).split('\n').filter(line => /run-with-timeout\b.*\bcodex (exec|review)\b/.test(line)));
     expect(dispatches.length).toBe(FENCES.length);
     expect(dispatches.filter(line => /\bcodex review\b/.test(line))).toEqual([]);
-    const state = path.join(TMP, 'state-codex-request-effort');
+    const state = path.join(TMP, 'state-codex-request-effort-' + mode.replace(/[^a-z0-9-]/g, '-'));
     fs.mkdirSync(state, { recursive: true });
     fs.writeFileSync(path.join(state, 'config.yaml'), 'codex_effort: low\n');
     const env: Record<string, string> = {};
     for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !/^(CODEX_|GSTACK_CODEX_|OPENAI_)/.test(k)) env[k] = v;
     Object.assign(env, { PATH: `${fakeBin}:${process.env.PATH}`, GSTACK_HOME: state, GSTACK_STATE_ROOT: '', CODEX_HOME: TMP, GSTACK_ACTIVE_HOST: 'claude', CLAUDECODE: '1' });
     const err = path.join(TMP, 'dispatch-err');
-    const run = (line: string, level: string, exported?: string) => {
+    const run = (line: string, level: string, exported?: string, reason?: string) => {
       fs.rmSync(capture, { force: true });
       fs.rmSync(err, { force: true });
       const script = [`_CODEX_PROBE=${JSON.stringify(path.join(ROOT, 'bin', 'gstack-codex-probe'))}`, '_CODEX_SANDBOX_MODE=read-only', '_CODEX_SEL=gpt-test',
         `_REPO_ROOT=${JSON.stringify(repo)}`, `PROMPT_FILE=${JSON.stringify(prompt)}`, `_PROMPT_FILE=${JSON.stringify(prompt)}`, '_SID=sid-test',
         `TMPOUT=${JSON.stringify(path.join(TMP, 'dispatch-out'))}`, `TMPRESP=${JSON.stringify(path.join(TMP, 'dispatch-resp'))}`, `TMPERR=${JSON.stringify(err)}`,
         line.replace('<base>', 'HEAD').replace(`'<effort-level>'`, `'${level}'`)].join('\n');
-      const r = spawnSync('bash', ['-c', script], { cwd: repo, env: exported ? { ...env, GSTACK_CODEX_EFFORT: exported } : env, encoding: 'utf8', timeout: 60_000 });
+      const r = spawnSync('bash', ['-c', script], { cwd: repo, env: { ...env, ...(exported ? { GSTACK_CODEX_EFFORT: exported } : {}), ...(reason ? { GSTACK_CODEX_EFFORT_REASON: reason } : {}) }, encoding: 'utf8', timeout: 60_000 });
       return { status: r.status, args: fs.existsSync(capture) ? fs.readFileSync(capture, 'utf8').split('\n') : [], stderr: fs.existsSync(err) ? fs.readFileSync(err, 'utf8') : '' };
     };
-    for (const { mode, line } of FENCES) {
       expect(run(line, '').args, mode).toContain('model_reasoning_effort="low"');
       expect(run(line, 'medium').args, mode).toContain('model_reasoning_effort="medium"');
-      expect(run(line, 'xhigh').args, mode).toContain('model_reasoning_effort="xhigh"');
+      // Fork guard: a request-level xhigh is refused until its owner reason can be recorded.
+      const refused = run(line, 'xhigh');
+      expect(refused.args, mode).toEqual([]);
+      expect(refused.stderr, mode).toContain('requires an explicit user override');
+      expect(run(line, 'xhigh', undefined, 'Explicit one-run test override').args, mode).toContain('model_reasoning_effort="xhigh"');
+      expect(run(line, 'max').args, mode).toContain('model_reasoning_effort="max"');
       expect(run(line, 'medium', 'max').args, mode).toContain('model_reasoning_effort="medium"');
       const unfilled = run(line, '<effort-level>');
       expect(unfilled.args, mode).toEqual([]);
@@ -161,7 +166,6 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"SCORE: 8"}
       expect(bogus.status, mode).toBe(1);
       expect(bogus.stderr, mode).toContain("CODEX_EFFORT: invalid — 'bogus' from /codex --effort");
       expect(bogus.stderr, mode).toContain('--effort medium');
-    }
   });
 
   test('check-effort --request outranks env and config, and names the flag when the level is invalid', () => {

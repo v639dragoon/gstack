@@ -95,7 +95,7 @@ describe('review budgets', () => {
         r = run(d, s, ['plan', manifest(d, t, `r${i}`, sc, rt)]);
       expect(r.stdout).toContain(`REVIEWERS=${w}`);
       expect(r.stdout).toContain(
-        'DETERMINISTIC_GATES=tests,typecheck,build,gitleaks,redaction,verification,claim-check' +
+        'DETERMINISTIC_GATES=tests,typecheck,build,gitleaks,redaction,verification,claim-check,pregate' +
           (t === 'D' ? ',migration-runbook' : ''),
       );
     }
@@ -182,7 +182,7 @@ describe('review budgets', () => {
     expect(c).toContain('REPAIR_CYCLES_MAX=1');
     expect(c).toContain('POLICY_ROUTING_IGNORED=deterministic_gates,mystery');
     expect(c).toContain(
-      'DETERMINISTIC_GATES=tests,typecheck,build,gitleaks,redaction,verification,claim-check',
+      'DETERMINISTIC_GATES=tests,typecheck,build,gitleaks,redaction,verification,claim-check,pregate',
     );
     const dd = run(d, s, ['plan', manifest(d, 'D', 'pd')]).stdout;
     expect(dd).toContain('REVIEWER_BUDGET=3');

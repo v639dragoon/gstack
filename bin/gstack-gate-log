@@ -100,7 +100,7 @@ if (rec.effort_source === 'user-override' && !(typeof rec.effort_reason === 'str
 }
 // xhigh/ultra require a recorded override. D4 permits upstream max from the
 // env/config/default carrier; an automatic policy route still cannot choose it.
-if (((rec.effort === 'xhigh' || rec.effort === 'ultra') || (rec.effort === 'max' && !['default', 'env', 'config'].includes(rec.effort_source))) && rec.effort_source !== 'user-override') {
+if (((rec.effort === 'xhigh' || rec.effort === 'ultra') || (rec.effort === 'max' && !['default', 'env', 'config', 'request'].includes(rec.effort_source))) && rec.effort_source !== 'user-override') {
   fail('effort \"' + rec.effort + '\" requires effort_source \"user-override\" with a recorded effort_reason');
 }
 // gpt-6-astra outside the routed C/D review slots is a Lead assignment that

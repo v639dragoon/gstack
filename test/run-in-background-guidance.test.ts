@@ -95,7 +95,11 @@ exec ${quote(Bun.which('cat')!)} "$@"
         CODEX_THREAD_ID: '', CODEX_SANDBOX: '', CLAUDECODE: '1', GSTACK_ACTIVE_HOST: 'claude' };
       // Each displayed block gets a fresh shell, as separate Bash tool calls do.
       return blocks.map(block => spawnSync('bash', ['-c', (errexit ? 'set -e\n' : '') + block.replace("'<prepared-prompt-file>'", quote(prompt))], {
-        cwd: dir, env, encoding: 'utf8', timeout: 3_000,
+        // The fork records effective effort and the terminal voice through upstream's
+        // current send boundary (two content fingerprints). An isolated successful
+        // invocation takes 4.98s here; 3s killed bookkeeping after the fake send.
+        // Match the bounded fixture allowance, without changing the model deadline.
+        cwd: dir, env, encoding: 'utf8', timeout: 30_000,
       }));
     };
     // #2914: the selected model and its source are printed before the paid call.
