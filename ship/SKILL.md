@@ -668,7 +668,7 @@ Make bisectable commits; if already committed, continue to Step 16. Never create
 3. Subject: the change for a user in plain words, issue code last; brief body;
    trailers last (a user-named issue: `Fixes: #<n>`). Leave VERSION, CHANGELOG/fragment, TODOS.md
    and the digest uncommitted: Step 16's `finish` commits them last with
-   `--trailer 'Co-Authored-By: Claude <noreply@anthropic.com>'`. Do not add a Git tag.
+   `--trailer 'Co-Authored-By: Claude <noreply@anthropic.com>'`. Do not create a Git tag.
 
    Post-merge: `finish` commits the fragment with the co-author trailer; never stage version files.
 
