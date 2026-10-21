@@ -74,6 +74,8 @@ export const PRICING: Record<string, ModelPricing> = {
   'gpt-6.2-sol':        { input_per_mtok: 2.00,  output_per_mtok: 10.00, cached_input_per_mtok: 0.10, as_of: '2026-11' },
   // https://developers.openai.com/api/docs/models/gpt-6.2-astra (fetched 2026-11-21; standard tier, up to 272K input)
   'gpt-6.2-astra':      { input_per_mtok: 8.00,  output_per_mtok: 40.00, cached_input_per_mtok: 0.40, as_of: '2026-11' },
+  // https://developers.openai.com/api/docs/pricing (read 2026-10-21; standard tier, short context)
+  'gpt-6-sol':          { input_per_mtok: 2.00,  output_per_mtok: 10.00, cached_input_per_mtok: 0.20, as_of: '2026-10' },
   // https://developers.openai.com/api/docs/models/gpt-6-luna (fetched 2026-10-31; standard tier, up to 272K input)
   'gpt-6-luna':         { input_per_mtok: 0.10,  output_per_mtok: 0.50,  cached_input_per_mtok: 0.01, as_of: '2026-10' },
   'gpt-5.4':            { input_per_mtok: 2.50,  output_per_mtok: 10.00, superseded_by: 'gpt-6.2-sol', as_of: '2026-04' },
