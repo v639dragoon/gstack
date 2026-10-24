@@ -6,4 +6,4 @@ eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-p
 eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
 GSTACK_BUDGET_PROJECT_DIR="$GSTACK_STATE_ROOT/projects/$SLUG" \
 GSTACK_BUDGET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)" \
-bun "$SCRIPT_DIR/gstack-review-budget.ts" "$@"
+bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-review-budget.ts" "$@"

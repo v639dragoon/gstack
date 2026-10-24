@@ -114,7 +114,7 @@ cat "$TMPERR.effort" 2>/dev/null || true
 echo "CODEX_RC=$_CODEX_RC CODEX_ELAPSED_S=$(( $(date +%s) - _CODEX_T0 ))"
 cat "$TMPANSWER"; cat "$TMPERR" >&2
 _CODEX_GATE_RC=0
-bun ~/.claude/skills/gstack/lib/outside-review-result.ts --label 'Governor codex-structured' --exit "$_CODEX_RC" --stderr "$TMPERR" --events "$TMPEVENTS" structured "$TMPANSWER" || _CODEX_GATE_RC=$?
+bun --no-env-file --config=/dev/null ~/.claude/skills/gstack/lib/outside-review-result.ts --label 'Governor codex-structured' --exit "$_CODEX_RC" --stderr "$TMPERR" --events "$TMPEVENTS" structured "$TMPANSWER" || _CODEX_GATE_RC=$?
 \`\`\`
 
 The cap stays 540s, including readiness. The gate default is

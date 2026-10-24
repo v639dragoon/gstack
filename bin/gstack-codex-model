@@ -64,7 +64,7 @@ if [ -n "$VOICE" ]; then
   [ -n "$EFFORT" ] || EFFORT="medium"
   _POLICY_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
   if [ -f "$_POLICY_ROOT/.gstack-policy.json" ]; then
-    _VOICE_ROUTE=$(bun -e 'try { const p = JSON.parse(await Bun.file(process.argv[1]).text()); const v = p?.routing?.models?.["outside-voice"]?.[process.argv[2]]; if (v && typeof v === "object") process.stdout.write(`${typeof v.model === "string" ? v.model : ""}\t${typeof v.effort === "string" ? v.effort : ""}`); else if (typeof v === "string") process.stdout.write(`${v}\t`); } catch {}' "$_POLICY_ROOT/.gstack-policy.json" "$VOICE" 2>/dev/null || true)
+    _VOICE_ROUTE=$(bun --no-env-file --config=/dev/null -e 'try { const p = JSON.parse(await Bun.file(process.argv[1]).text()); const v = p?.routing?.models?.["outside-voice"]?.[process.argv[2]]; if (v && typeof v === "object") process.stdout.write(`${typeof v.model === "string" ? v.model : ""}\t${typeof v.effort === "string" ? v.effort : ""}`); else if (typeof v === "string") process.stdout.write(`${v}\t`); } catch {}' "$_POLICY_ROOT/.gstack-policy.json" "$VOICE" 2>/dev/null || true)
     _VOICE_MODEL="${_VOICE_ROUTE%%	*}"
     _VOICE_EFFORT="${_VOICE_ROUTE#*	}"
     if [ -n "$_VOICE_MODEL" ]; then MODEL="$_VOICE_MODEL"; SOURCE="policy"; fi
@@ -94,7 +94,7 @@ if [ -n "$MODEL" ] && [ "${#MODEL}" -gt 64 ]; then echo "gstack-codex-model: mod
 default_model_name() {
   local root
   root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-  bun -e '
+  bun --no-env-file --config=/dev/null -e '
     const fs = require("fs"), path = require("path");
     const read = p => {
       try { return Bun.TOML.parse(fs.readFileSync(p, "utf8")); }
