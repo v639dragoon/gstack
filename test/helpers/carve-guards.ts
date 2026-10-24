@@ -280,7 +280,7 @@ export const CARVE_GUARDS: Record<string, CarveGuard> = {
     mustContain: ['developer experience', 'Getting Started'],
     // Default-on Codex outside-voice (codexPreflight block + CODEX_MODE branch
     // prose replacing the smaller opt-in question) lands this ~5.7% over baseline.
-    maxSizeRatio: 1.0971, // v1.91.329 rebase: upstream 136,557 + pinned fork routing/context 839 = 137,396 / 125,243 = 1.097035. Before: // + GSTA-96 shared-preamble hoist (owner-approved raise, Garry 2026-10-25: "do it"): the union now holds sections/preamble.md, so a fresh invocation reads the pointer plus the shared file; measured 136,646 / 125,243 = 1.0910 (2026-10-25). Before: 1.08.
+    maxSizeRatio: 1.0971, // v1.91.329 rebase: upstream 136,551 + pinned fork routing/context 845 = 137,396 / 125,243 = 1.097035. Before: // + GSTA-96 shared-preamble hoist (owner-approved raise, Garry 2026-10-25: "do it"): the union now holds sections/preamble.md, so a fresh invocation reads the pointer plus the shared file; measured 136,646 / 125,243 = 1.0910 (2026-10-25). Before: 1.08.
   },
   'office-hours': {
     skill: 'office-hours',

@@ -4,5 +4,5 @@
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
-bun "$SCRIPT_DIR/gstack-context-fence.ts"
+bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-context-fence.ts"
 exit 0

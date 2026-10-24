@@ -60,12 +60,12 @@ INPUT="$1"
 # Governor identity stamps. These are authoritative just like commit/tree:
 # caller-supplied values are discarded. Missing metadata is stamped as null.
 OUTCOME_JSON=$("$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || printf '%s' '{"present":false}')
-MANIFEST_WTREE=$(printf '%s' "$INPUT" | bun -e 'try { const r=JSON.parse(await Bun.stdin.text()); if(typeof r.manifest_wtree==="string") process.stdout.write(r.manifest_wtree) } catch {}' 2>/dev/null || true)
+MANIFEST_WTREE=$(printf '%s' "$INPUT" | bun --no-env-file --config=/dev/null -e 'try { const r=JSON.parse(await Bun.stdin.text()); if(typeof r.manifest_wtree==="string") process.stdout.write(r.manifest_wtree) } catch {}' 2>/dev/null || true)
 RISK_TIER=""
 if [ -n "$MANIFEST_WTREE" ]; then
   MANIFEST_FILE="$GSTACK_STATE_ROOT/projects/$SLUG/manifests/${MANIFEST_WTREE:0:12}.json"
   if [ -f "$MANIFEST_FILE" ]; then
-    RISK_TIER=$(bun -e 'try { const r=JSON.parse(await Bun.file(process.argv[1]).text()); process.stdout.write(r.routing?.risk_tier || "") } catch {}' "$MANIFEST_FILE" 2>/dev/null || true)
+    RISK_TIER=$(bun --no-env-file --config=/dev/null -e 'try { const r=JSON.parse(await Bun.file(process.argv[1]).text()); process.stdout.write(r.routing?.risk_tier || "") } catch {}' "$MANIFEST_FILE" 2>/dev/null || true)
   fi
 fi
 
@@ -89,7 +89,7 @@ fi
 # Validate (reject malformed input, missing gate identity, or an unrecorded
 # effort override) AND stamp in one pass. Caller values for the binding keys
 # are dropped before stamping.
-STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" GSTACK_STAMP_COMMIT_SHORT="$COMMIT_SHORT" GSTACK_STAMP_OUTCOME_JSON="$OUTCOME_JSON" GSTACK_STAMP_RISK_TIER="$RISK_TIER" bun -e "
+STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" GSTACK_STAMP_COMMIT_SHORT="$COMMIT_SHORT" GSTACK_STAMP_OUTCOME_JSON="$OUTCOME_JSON" GSTACK_STAMP_RISK_TIER="$RISK_TIER" bun --no-env-file --config=/dev/null -e "
 const rec = JSON.parse(await Bun.stdin.text());
 const fail = (msg) => { console.error('gstack-gate-log: ' + msg); process.exit(1); };
 if (rec.record_type !== 'gate') fail('record_type must be \"gate\"');

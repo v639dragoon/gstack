@@ -1040,11 +1040,11 @@ _gstack_codex_effort_check() {
   esac
   if [ "${_GSTACK_CODEX_RECORD_EFFORT:-0}" = 1 ]; then
     local _metadata _record
-    _metadata=$(bun -e 'process.stdout.write(JSON.stringify({effort:process.argv[1],effort_source:process.argv[2],effort_reason:process.argv[3]}))' "$_chosen" "$_record_source" "$_reason") || return 1
+    _metadata=$(bun --no-env-file --config=/dev/null -e 'process.stdout.write(JSON.stringify({effort:process.argv[1],effort_source:process.argv[2],effort_reason:process.argv[3]}))' "$_chosen" "$_record_source" "$_reason") || return 1
     if [ -n "${GSTACK_CODEX_EFFORT_RECEIPT:-}" ]; then
-      bun -e 'require("fs").writeFileSync(process.argv[1],process.argv[2]+"\n",{mode:0o600,flag:"wx"})' "$GSTACK_CODEX_EFFORT_RECEIPT" "$_metadata" || return 1
+      bun --no-env-file --config=/dev/null -e 'require("fs").writeFileSync(process.argv[1],process.argv[2]+"\n",{mode:0o600,flag:"wx"})' "$GSTACK_CODEX_EFFORT_RECEIPT" "$_metadata" || return 1
     fi
-    _record=$(bun -e 'const m=JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify({...m,record_type:"gate",run_id:process.env.GSTACK_RUN_ID || "effort-"+process.pid+"-"+Date.now(),skill:"codex",gate:"codex-effort-decision",trigger:"send",decision:"resolved"}))' "$_metadata") || return 1
+    _record=$(bun --no-env-file --config=/dev/null -e 'const m=JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify({...m,record_type:"gate",run_id:process.env.GSTACK_RUN_ID || "effort-"+process.pid+"-"+Date.now(),skill:"codex",gate:"codex-effort-decision",trigger:"send",decision:"resolved"}))' "$_metadata") || return 1
     if ! "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_record" >/dev/null 2>&1; then
       if [ "$_record_source" = user-override ]; then
         echo 'CODEX_EFFORT: override could not be recorded; no Codex call was made.' >&2
