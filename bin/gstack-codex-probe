@@ -1039,13 +1039,19 @@ _gstack_codex_effort_check() {
       _record_source=user-override ;;
   esac
   if [ "${_GSTACK_CODEX_RECORD_EFFORT:-0}" = 1 ]; then
-    local _metadata _record
-    _metadata=$(bun --no-env-file --config=/dev/null -e 'process.stdout.write(JSON.stringify({effort:process.argv[1],effort_source:process.argv[2],effort_reason:process.argv[3]}))' "$_chosen" "$_record_source" "$_reason") || return 1
-    if [ -n "${GSTACK_CODEX_EFFORT_RECEIPT:-}" ]; then
-      bun --no-env-file --config=/dev/null -e 'require("fs").writeFileSync(process.argv[1],process.argv[2]+"\n",{mode:0o600,flag:"wx"})' "$GSTACK_CODEX_EFFORT_RECEIPT" "$_metadata" || return 1
-    fi
-    _record=$(bun --no-env-file --config=/dev/null -e 'const m=JSON.parse(process.argv[1]); process.stdout.write(JSON.stringify({...m,record_type:"gate",run_id:process.env.GSTACK_RUN_ID || "effort-"+process.pid+"-"+Date.now(),skill:"codex",gate:"codex-effort-decision",trigger:"send",decision:"resolved"}))' "$_metadata") || return 1
-    if ! "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_record" >/dev/null 2>&1; then
+    local _record _deferred=""
+    # ONE bun process builds the metadata, writes the receipt (when asked) and
+    # prints the gate record: this runs inside the dispatch's shared deadline,
+    # and each extra process start was charged to the Codex call.
+    _record=$(bun --no-env-file --config=/dev/null -e 'const [effort,effort_source,effort_reason,receipt]=process.argv.slice(1); const m={effort,effort_source,effort_reason}; if(receipt) require("fs").writeFileSync(receipt,JSON.stringify(m)+"\n",{mode:0o600,flag:"wx"}); process.stdout.write(JSON.stringify({...m,record_type:"gate",run_id:process.env.GSTACK_RUN_ID || "effort-"+process.pid+"-"+Date.now(),skill:"codex",gate:"codex-effort-decision",trigger:"send",decision:"resolved"}))' "$_chosen" "$_record_source" "$_reason" "${GSTACK_CODEX_EFFORT_RECEIPT:-}") || return 1
+    # An ordinary effort's record is best-effort, so run-with-timeout logs it
+    # BESIDE the dispatch (gstack-gate-log starts about a dozen processes) and
+    # waits for it before returning; it comes back as a second output line, so
+    # the dispatch creates no extra temp file. A user override must be logged
+    # before any call, so it stays synchronous and refuses when it cannot be.
+    if [ "$_record_source" != user-override ] && [ "${_GSTACK_CODEX_EFFORT_DEFER:-0}" = 1 ]; then
+      _deferred="$_record"
+    elif ! "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_record" >/dev/null 2>&1; then
       if [ "$_record_source" = user-override ]; then
         echo 'CODEX_EFFORT: override could not be recorded; no Codex call was made.' >&2
         return 1
@@ -1054,6 +1060,7 @@ _gstack_codex_effort_check() {
   fi
   [ "$_source" = "gate default" ] || echo "CODEX_EFFORT: $_chosen (source: $_source)" >&2
   printf 'CODEX_EFFORT: %s\n' "$_chosen"
+  [ -z "${_deferred:-}" ] || printf 'CODEX_EFFORT_RECORD: %s\n' "$_deferred"
 }
 
 # --- Executed subcommands ----------------------------------------------------
@@ -1201,15 +1208,36 @@ _gstack_codex_main() {
           [ "$_arg" != -c ] || _config_next=1
         done
       fi
+      local _effort_record="" _effort_log_pid=""
       if [ -n "$_GSTACK_CODEX_EFFORT_DEFAULT" ] || [ -n "$_GSTACK_CODEX_EFFORT_PIN" ]; then
         _rc=0
         _GSTACK_CODEX_RECORD_EFFORT=1
+        # The effort check runs in a subshell, so an ordinary record comes back
+        # as its second line, never through a temp file (dispatch temp files
+        # are counted by run-in-background-guidance.test.ts).
+        _GSTACK_CODEX_EFFORT_DEFER=1
         _GSTACK_CODEX_EFFORT_LINE=$(_gstack_codex_effort_check "${_GSTACK_CODEX_EFFORT_DEFAULT:-$_GSTACK_CODEX_EFFORT_PIN}" "$_GSTACK_CODEX_EFFORT_REQUEST") || _rc=$?
+        _GSTACK_CODEX_EFFORT_DEFER=0
+        case "$_GSTACK_CODEX_EFFORT_LINE" in
+          *"
+CODEX_EFFORT_RECORD: "*) _effort_record="${_GSTACK_CODEX_EFFORT_LINE#*
+CODEX_EFFORT_RECORD: }" ;;
+        esac
+        _GSTACK_CODEX_EFFORT_LINE="${_GSTACK_CODEX_EFFORT_LINE%%
+*}"
         [ "$_rc" -eq 64 ] && { _gstack_codex_usage >&2; return 64; }
         [ "$_rc" -eq 0 ] || return "$_rc"
         [ -z "$_GSTACK_CODEX_EFFORT_DEFAULT" ] || set -- "$@" -c "model_reasoning_effort=\"${_GSTACK_CODEX_EFFORT_LINE#CODEX_EFFORT: }\""
       fi
-      _gstack_codex_timeout_wrapper "$@" ;;
+      if [ -n "$_effort_record" ]; then
+        "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_effort_record" </dev/null >/dev/null 2>&1 &
+        _effort_log_pid=$!
+      fi
+      _rc=0
+      _gstack_codex_timeout_wrapper "$@" || _rc=$?
+      # The record lands before the probe returns, whatever the dispatch did.
+      [ -z "$_effort_log_pid" ] || wait "$_effort_log_pid" 2>/dev/null || true
+      return "$_rc" ;;
     log-event) [ "$#" -ge 1 ] && _gstack_codex_log_event "$@" >/dev/null 2>&1; return 0 ;;
     log-hang) _gstack_codex_log_hang "$@" >/dev/null 2>&1; return 0 ;;
     *) _gstack_codex_usage >&2; return 64 ;;
