@@ -213,6 +213,50 @@ describe('gstack-codex-probe subcommands', () => {
     } finally { fs.rmSync(f.home, { recursive: true, force: true }); }
   });
 
+  // The ordinary effort record is logged BESIDE the dispatch so gstack-gate-log's
+  // process starts are not charged to the Codex call's deadline (the cache-hit
+  // budget case in model-role-invocation.test.ts). It must still be on disk when
+  // the probe returns, leave no temp file, never block an ordinary dispatch, and
+  // never relax the override rule: an xhigh/ultra choice that cannot be recorded
+  // still sends nothing.
+  test('the effort record lands before run-with-timeout returns; only an override refuses when it cannot be logged', () => {
+    const f = fixture();
+    try {
+      const tmp = path.join(f.home, 'tmp');
+      fs.mkdirSync(tmp);
+      const gateRows = (runId: string) => {
+        const rows: Array<Record<string, unknown>> = [];
+        const walk = (dir: string) => {
+          for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, e.name);
+            if (e.isDirectory()) walk(p);
+            else if (e.name.endsWith('-gates.jsonl')) {
+              for (const line of fs.readFileSync(p, 'utf8').split('\n').filter(Boolean)) rows.push(JSON.parse(line));
+            }
+          }
+        };
+        walk(f.state);
+        return rows.filter(r => r.gate === 'codex-effort-decision' && r.run_id === runId);
+      };
+      expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { TMPDIR: tmp, GSTACK_RUN_ID: 'effort-ordinary' }).code).toBe(0);
+      expect(gateRows('effort-ordinary')).toMatchObject([{ effort: 'medium', effort_source: 'default', decision: 'resolved' }]);
+      expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { TMPDIR: tmp, GSTACK_RUN_ID: 'effort-override', GSTACK_CODEX_EFFORT: 'xhigh', GSTACK_CODEX_EFFORT_REASON: 'Owner asked' }).code).toBe(0);
+      expect(gateRows('effort-override')).toMatchObject([{ effort: 'xhigh', effort_source: 'user-override', effort_reason: 'Owner asked' }]);
+      expect(fs.readdirSync(tmp)).toEqual([]);
+      expect(calls(f)).toHaveLength(2);
+
+      const unwritable = path.join(f.home, 'not-a-directory');
+      fs.writeFileSync(unwritable, '');
+      expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { TMPDIR: tmp, GSTACK_HOME: unwritable }).code).toBe(0);
+      expect(calls(f)).toHaveLength(3);
+      const refused = probe(f, 'run-with-timeout --effort medium 20 codex exec -', { TMPDIR: tmp, GSTACK_HOME: unwritable, GSTACK_CODEX_EFFORT: 'xhigh', GSTACK_CODEX_EFFORT_REASON: 'Owner asked' });
+      expect(refused.code).toBe(1);
+      expect(refused.stderr).toContain('override could not be recorded; no Codex call was made.');
+      expect(calls(f)).toHaveLength(3);
+      expect(fs.readdirSync(tmp)).toEqual([]);
+    } finally { fs.rmSync(f.home, { recursive: true, force: true }); }
+  });
+
   test('run-with-timeout --effort appends the resolved effort to the codex command; a bad level or non-codex command never runs', () => {
     const f = fixture();
     try {
