@@ -85,7 +85,7 @@ describe('review budgets', () => {
       ['D', 'codex-structured@high,specialist:security@sonnet,red-team@sonnet', {}, {}],
       [
         'D',
-        'codex-structured@high,specialist:security@sonnet,specialist:data-migration@sonnet',
+        'codex-structured@high,specialist:security@sonnet,specialist:data-migration@sonnet,red-team@sonnet',
         { migrations: true },
         {},
       ],
@@ -178,7 +178,8 @@ describe('review budgets', () => {
     };
     const { d, s } = setup(policy);
     const c = run(d, s, ['plan', manifest(d, 'C', 'pc')]).stdout;
-    expect(c).toContain('REVIEWER_BUDGET=1');
+    // Lead floor: policy cannot make the planned C specialist undispatchable.
+    expect(c).toContain('REVIEWER_BUDGET=2');
     expect(c).toContain('REPAIR_CYCLES_MAX=1');
     expect(c).toContain('POLICY_ROUTING_IGNORED=deterministic_gates,mystery');
     expect(c).toContain(

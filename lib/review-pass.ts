@@ -24,6 +24,7 @@ import { TARGETED_RULES, parseClassList, targetedBriefSha, targetedRead } from '
 import type { FetchHit } from './review-fetch';
 import type { EffectiveReaders } from './ship-policy-readers';
 import type { StageSweep } from './review-sweep';
+import type { GovernorContext, GovernorMetadata } from './review-governor-packet';
 
 export const STAGES = ['first', 'specialists', 'red-team', 'voices'] as const;
 export type Stage = typeof STAGES[number];
@@ -31,6 +32,7 @@ export type ReaderState = 'planned' | 'rendered' | 'intent' | 'created' | 'queue
 
 export interface PassModel { model_id: string; reasoning_mode?: string }
 export interface PassReader {
+  governor?: GovernorMetadata; governor_gate?: string; governor_gates?: string[]; governor_floor?: boolean;
   reader: string; stage: Stage; title: string; state: ReaderState;
   role?: BriefRole; name?: string; effort?: string; exclude?: string; checklists?: string[];
   /** The targeted reader: the plan's TARGETED classes and the merge base it reads on every pass. */
@@ -55,6 +57,7 @@ export interface PassReader {
   path?: string; output?: string; error?: string; state_at?: string;
 }
 export interface Manifest {
+  governor?: GovernorContext;
   version: 1; pass: string; out: string; ledger: string; merged: string; base: string; diff_base: string;
   stack: string; test_fw: string; learnings: string | null; checklist_root: string;
   next: string; plan_lines: string[]; readers: PassReader[]; before?: { tokens: number; credits: number };
@@ -131,6 +134,7 @@ const STAGE_OF: Record<string, Stage> = { specialist: 'specialists', 'fix-check'
 /** The manifest for one pass from the plan's dispatches. A fix-check reader needs decision 3.5's files. `voices` keeps only Step 11's readers. */
 export function buildManifest(o: {
   pass: string; out: string; ledger: string; base: string; diffBase: string; root: string; checklistRoot: string;
+  governor?: GovernorContext;
   dispatches: Array<Dispatch & { excerpt?: string[] }>; next: string; planLines: string[]; learnings?: string | null; extras?: Extra[];
   targetedClasses?: readonly string[]; mergeBase?: string; rangeBase?: string; fixCheck?: FixCheckFiles; reviewExclude?: Record<string, unknown>; disclosure?: string; readers?: EffectiveReaders; voices?: boolean;
 }): Manifest {
@@ -143,14 +147,14 @@ export function buildManifest(o: {
     if (!stage) throw new BriefError(`a pass dispatches no ${d.role} reader`);
     if (o.voices && stage !== 'voices') continue;
     if (d.role === 'fix-check' && !o.fixCheck) throw new BriefError('the plan dispatches a fix-check: pass needs --fix-list, --hunks and --tests (decision 3.5\'s files; --callers optional)');
-    const role: BriefRole = d.role === 'specialist' && d.checklists ? 'specialist-batched' : d.role as BriefRole;
+    const role: BriefRole = d.name === 'codex-structured' ? 'codex-structured' : d.role === 'specialist' && d.checklists ? 'specialist-batched' : d.role as BriefRole;
     const name = role === 'specialist' ? d.name : undefined;
     const reader = readerKey(role, name);
     const exclude = d.exclude.length ? diffCommand(d).slice('git diff <diff-base> '.length) : undefined;
     const policy = d.exclude.filter(s => s.startsWith(':(top,exclude,glob)'));
     const excerpt = (d.excerpt ?? []).filter(s => d.keep?.includes(s));
     const keep = (d.keep ?? []).filter(s => !excerpt.includes(s));
-    readers.push({ reader, stage, title: `ship ${o.pass} ${reader}`, state: 'planned', role, name, effort: d.effort, exclude, checklists: d.checklists,
+    readers.push({ reader, stage, title: `ship ${o.pass} ${reader}`, state: 'planned', role, name, governor: d.governor, governor_gate: d.governor_gate, governor_gates: d.governor_gates, governor_floor: d.governor_floor, effort: d.effort, exclude, checklists: d.checklists,
       ...(policy.length ? { policy_exclude: policy.map(shellQuote).join(' ') } : {}), ...(keep.length ? { keep } : {}), ...(excerpt.length ? { excerpt } : {}),
       ...(role === 'targeted' ? { classes: [...(o.targetedClasses ?? [])], diff_base: o.mergeBase ?? o.diffBase } : {}),
       ...(role === 'adversarial-native' && d.classes?.length ? { classes: [...d.classes], diff_base: o.mergeBase ?? o.diffBase } : {}),
@@ -169,7 +173,7 @@ export function buildManifest(o: {
   return {
     version: 1, pass: o.pass, out, ledger: path.resolve(o.ledger), merged: path.join(out, 'merged.jsonl'), base: o.base, diff_base: o.diffBase,
     stack: detectStack(o.root), test_fw: detectTestFw(o.root), learnings: o.learnings ?? null, checklist_root: o.checklistRoot,
-    next: o.next, plan_lines: o.planLines, readers, ...(o.voices ? { voices_only: true as const } : {}), ...(o.reviewExclude ? { review_exclude: o.reviewExclude } : {}), ...(o.disclosure ? { disclosure: o.disclosure } : {}), ...(o.readers ? { fetch_policy: o.readers } : {}),
+    next: o.next, plan_lines: o.planLines, readers, ...(o.governor ? { governor: o.governor } : {}), ...(o.voices ? { voices_only: true as const } : {}), ...(o.reviewExclude ? { review_exclude: o.reviewExclude } : {}), ...(o.disclosure ? { disclosure: o.disclosure } : {}), ...(o.readers ? { fetch_policy: o.readers } : {}),
     ...(o.fixCheck ? { fix_check: Object.fromEntries(Object.entries(o.fixCheck).filter(([, v]) => v).map(([k, v]) => [k, path.resolve(v as string)])) as unknown as FixCheckFiles } : {}),
   };
 }
@@ -230,9 +234,9 @@ export function renderStage(m: Manifest, stage: Stage, t: SectionTexts, diffFor:
       Object.assign(slots, { checklist: path.join(m.checklist_root, 'review/specialists/red-team.md'), findings, specialists: String(specialists) });
     }
     let slice: Record<string, unknown> = {};
-    if (role === 'outside-voice') {
+    if ((role === 'outside-voice' || role === 'codex-structured')) {
       const s = sliceDiff(diffFor(m.diff_base, r), REVIEW_DIFF_MAX_BYTES);
-      const diffFile = path.join(briefs, 'outside-voice.diff');
+      const diffFile = path.join(briefs, `${role}.diff`);
       fs.writeFileSync(diffFile, s.text, { mode: 0o600 });
       Object.assign(slots, { diff_file: diffFile, diff_bytes: String(s.bytes), diff_sha256: createHash('sha256').update(s.text).digest('hex'), ...(s.sliced ? { diff_slice: sliceNote(s, REVIEW_DIFF_MAX_BYTES) } : {}) });
       slice = { payload: { file: diffFile, sha256: slots.diff_sha256 }, ...(s.sliced ? { diff_slice: { kept: s.kept, files: s.files, bytes: s.bytes, total: s.total } } : {}) };
@@ -250,12 +254,12 @@ export function renderStage(m: Manifest, stage: Stage, t: SectionTexts, diffFor:
       Object.assign(slots, { checklist, brief, classes: (r.classes ?? []).join(','), diff_base: r.diff_base ?? m.diff_base });
       targeted = { classes: parseClassList(slots.classes!), rules: TARGETED_RULES, brief_sha: targetedBriefSha(checklist), diff_base: slots.diff_base, ...targetedRead(process.cwd(), slots.diff_base!) };
     }
-    const text = withWorkspace(renderBrief(role, slots, t), workdir, m.fetch_policy);
+    const text = withWorkspace(renderBrief(role, slots, t) + (m.governor ? '\n\n' + m.governor.text : ''), workdir, m.fetch_policy);
     const file = path.join(briefs, briefFile(role, r.name));
     fs.writeFileSync(file, text, { mode: 0o600 });
     const sha = promptHash(text);
     const bytes = Buffer.byteLength(text);
-    appendEvent(m.ledger, { event: 'rendered', reader: readerKey(role, r.name), role, name: r.name ?? null, file, sha256: sha, bytes, pass: m.pass, stage, workdir, tree, ...(findingsSha ? { findings_sha256: findingsSha } : {}), ...targeted, ...slice, ...(disclosureDigest(m.disclosure) ? { exclude: disclosureDigest(m.disclosure) } : {}), ...(m.fetch_policy ? { readers: m.fetch_policy.digest } : {}) });
+    appendEvent(m.ledger, { event: 'rendered', reader: readerKey(role, r.name), role, name: r.name ?? null, file, sha256: sha, bytes, pass: m.pass, stage, workdir, tree, ...(findingsSha ? { findings_sha256: findingsSha } : {}), ...targeted, ...slice, ...(r.governor ? { governor: r.governor, governor_gate: r.governor_gate, governor_gates: r.governor_gates, governor_floor: r.governor_floor } : {}), ...(disclosureDigest(m.disclosure) ? { exclude: disclosureDigest(m.disclosure) } : {}), ...(m.fetch_policy ? { readers: m.fetch_policy.digest } : {}) });
     Object.assign(r, { file, sha256: sha, bytes, chunks: chunkCount(text), state: 'rendered', tree, ...(findingsSha ? { findings_sha256: findingsSha } : {}) });
     done.push(r);
   }

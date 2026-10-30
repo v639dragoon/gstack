@@ -254,6 +254,8 @@ The ${outsideVoiceFor(ctx).nativeLabel} adversarial subagent always runs.`}
 
 ---
 
+${isShip ? '**Use the Step 9 dispatch manifest at Step 11:** stage voices through gstack-review-dispatch; D3 filters and governor floors already ran in the planner. The strict codex-structured brief is required coverage, regardless of consent or availability. Rendered briefs carry governor context; reserve and record each planned gate before dispatch, and settle its verdict only when its reader completes.' : ''}
+
 ${adversarialNativePass(ctx, isShip)}
 
 ${adversarialOutsideChallenge(ctx, isShip)}
@@ -281,7 +283,7 @@ ADVERSARIAL REVIEW SYNTHESIS (${isShip ? '' : 'always-on, '}N lines):
 
 High-confidence findings (agreed on by multiple sources) should be prioritized for fixes.
 
-${ctx.host !== 'codex' ? generateGovernorStructured(ctx) : ''}
+${generateGovernorStructured(ctx)}
 
 ${isShip ? `### Finish the adversarial phase
 

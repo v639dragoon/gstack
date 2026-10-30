@@ -43,10 +43,14 @@ import { classList, targetedBriefSha, targetedClasses, targetedPatchId } from '.
 import { targetedDelta } from '../lib/review-targeted-delta';
 import { docsChangeSince, ownChangeSince } from '../lib/ship-receipt-depth';
 import { RISK_CLASSES, type RiskClass } from '../lib/review-risk';
+import { governorPlan } from '../lib/review-plan-governor';
+import { loadGovernorPlan } from '../lib/review-governor-packet';
+import { readPolicy } from '../lib/review-policy';
 import { renderFixCheckPrompt } from '../scripts/resolvers/fix-check';
 
 const HELP = `gstack-review-plan — the review depth of the next /ship step (docs/review-policy.md#review-depth)
 
+  --run-id <id> [--cycle <n>]  add governor floors and metadata before building the dispatch manifest
   --base <ref>              the base branch (merge base with HEAD is the diff base); required
   --pass <n>                full review passes already run in this invocation (default 0)
   --last none|full|fix-check  the step that just finished (default none: plan pass 1)
@@ -251,7 +255,7 @@ function main(): number {
   const afterFixCheck = fixCheckAt ? docsChangeSince(root, fixCheckAt, head, ref) : null;
   const rawSince = fixCheckAt && own ? git(['diff', '--raw', '--no-renames', fixCheckAt, own]) : null;
   const carried = afterFixCheck && afterFixCheck.verdict !== 'code' && rawSince !== null && !/^:\d+ (100755|120000|160000) /m.test(rawSince) && gateTagsOf(['--commit', own!]) === 0 ? afterFixCheck : null;
-  const plan = planReview({
+  let plan = planReview({
     ...collected, ...exclusionInput, ...riskPaths, declared: declared as RiskClass[], shape: { panel: review.panel, readerModel: review.reader_model, platform: review.platform, head, platformReview: platform?.ok ? platform.review : null }, scope, gateTagged, targeted: { classes: targeted.classes, ran }, numbers: scanNumbers(kept(added)), force, gated: list('--gated'), floor, tiers: auditEffort !== 'host',
     criticalFound: has('--critical-found'), adversarialRan: has('--adversarial-ran'), reviewedNumbers: flag('--reviewed-numbers'),
     history: { fullPasses: pass, last, fixedBlocking: has('--fixed-blocking'), fixedBelow: (has('--fixed-below') || (postReview && pass > 0)) && last !== 'fix-check', blockingOpen: has('--blocking-open'), touchedGate: has('--touched-gate') || (!carried && (!!fixRange?.touched_gate || (postReview && pass > 0))), pass1Depth, rangeRuntimeLines: fixRange?.runtime_lines, granted: grant, fixChecks: has('--fix-checks') ? fixChecks : undefined, postReview, chained: inLoopLink },
@@ -268,6 +272,11 @@ function main(): number {
     plan.dispatches.push({ role: 'targeted', name: 'targeted', effort: ROLE_EFFORT.targeted, exclude: active ? [...active.specs] : [], classes: [...targeted.classes], ...(active?.keep.length ? { keep: [...active.keep] } : {}) });
   } else if (delta) plan.skipped.push(`targeted-only read (${delta.reason})`);
   const targetedDeltaOut = delta?.state === 'dispatch' ? { range_base: delta.range_base, paths: delta.paths, classes: targeted.classes } : null;
+  if (has('--cycle') && !/^\d+$/.test(flag('--cycle') ?? '')) { process.stderr.write('gstack-review-plan: --cycle must be a non-negative integer\n'); return EXIT.usage; }
+  let governor;
+  try { if (flag('--run-id')) { const loaded = loadGovernorPlan(root, binDir, flag('--run-id')!, has('--cycle') ? Number(flag('--cycle')) : undefined); governor = { run_id: flag('--run-id')!, cycle: loaded.cycle, plan: loaded.plan }; } }
+  catch (e) { process.stderr.write(`gstack-review-plan: governor plan unavailable: ${(e as Error).message}\n`); return EXIT.fail; }
+  plan = governorPlan(plan, readPolicy(root), governor, has('--critical-found') || has('--fixed-blocking'));
   const selection = policySelection(active && { state: 'active', specs: active.specs, keep: active.keep, excerpt: active.excerpt }, readers);
   plan.dispatches.forEach((d, i) => { if (d.role !== 'fix-check') plan.dispatches[i] = selectFor(d, selection); });
   const gateScan = { tagged: gateTagged, head };
@@ -289,7 +298,7 @@ function main(): number {
   for (const e of plan.errors) out.push(`DEPTH_ERROR: ${e.code} input=${e.input} detail=${e.detail}; fix: ${e.repair}${e.result ? ` (${e.result})` : ''}`);
   for (const d of plan.dispatches) {
     const key = d.name.split(' ')[0];
-    out.push(`DISPATCH: ${d.role} ${d.name} effort=${d.effort}${d.model ? ` model=${d.model}` : ''}${d.checklists ? ` checklists=${d.checklists.join(',')}` : ''}${d.classes ? ` classes=${d.classes.join(',')}` : ''}${d.reason ? ` reason=${d.reason}` : ''}`, `DIFF_CMD: ${key} ${diffCommand(d)}`);
+    out.push(`DISPATCH: ${d.role} ${d.name} effort=${d.effort}${d.model ? ` model=${d.model}` : ''}${d.checklists ? ` checklists=${d.checklists.join(',')}` : ''}${d.classes ? ` classes=${d.classes.join(',')}` : ''}${d.reason ? ` reason=${d.reason}` : ''}${d.governor ? ` run_id=${d.governor.run_id} cycle=${d.governor.cycle} tier=${d.governor.tier} routed_effort=${d.governor.routed_effort} governor_gate=${d.governor_gate} floor=${!!d.governor_floor}` : ''}`, `DIFF_CMD: ${key} ${diffCommand(d)}`);
     if (!d.exclude.length) out.push(`DIFF_EXCLUDE: ${key} none`);
     const keepCmd = keepCommand({ ...d, keep: d.keep?.filter(k => !d.excerpt?.includes(k)) });
     if (keepCmd) out.push(`DIFF_KEEP: ${key} ${keepCmd}`);

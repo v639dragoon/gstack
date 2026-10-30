@@ -94,6 +94,8 @@ Branch on the echoed `CODEX_MODE`:
 
 ---
 
+**Use the Step 9 dispatch manifest at Step 11:** stage voices through gstack-review-dispatch; D3 filters and governor floors already ran in the planner. The strict codex-structured brief is required coverage, regardless of consent or availability. Rendered briefs carry governor context; reserve and record each planned gate before dispatch, and settle its verdict only when its reader completes.
+
 ### Claude adversarial subagent (on `DISPATCH: adversarial-native`)
 
 When `NON_CODE_DELTA=true` and this native slot was carried by a successful `carry-forward`, reuse its audited receipt: do not register/dispatch another attempt or create a PASS_START. This exception never accepts missing native coverage.
@@ -373,7 +375,7 @@ High-confidence findings (agreed on by multiple sources) should be prioritized f
 ### Governor codex-structured slot
 
 
-Run this additional slot only when codex-structured is planned and not in REUSED. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
+Run this additional slot only when codex-structured is planned and not in REUSED. In /ship, use every codex-structured PACKET emitted by the saved plan build, carrying its file, out and read fields. Reserve each packet through ship-budget before invoking it; dispatch the governor gate once for the logical reviewer, then record its aggregate verdict after every shard and collect settle. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
 It does not replace the required native pass, upstream outside challenge, or
 structured P1 decision. Record all of them separately.
 

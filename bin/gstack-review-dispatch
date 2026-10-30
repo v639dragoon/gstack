@@ -416,9 +416,11 @@ function pass(): number {
   if (!diffBase) throw new BriefError(`no merge base between ${base} and HEAD`);
   const root = git(['rev-parse', '--show-toplevel'])?.trim() ?? process.cwd();
   const extrasFile = flag('--extras');
+  const option = (n: string) => { const i = planArgs.indexOf(n); return i < 0 ? undefined : planArgs[i + 1]; };
+  const governor = option('--run-id') ? loadGovernorContext(root, path.join(ROOT, 'bin'), option('--run-id')!, option('--cycle') === undefined ? undefined : Number(option('--cycle'))) : undefined;
   const { extras, lines } = withAuditModel(extrasFile ? JSON.parse(readFile(extrasFile, 'extras')!) as Extra[] : []);
   planLines.push(...lines);
-  const m = buildManifest({ pass: id, out, ledger: flag('--ledger') ?? path.join(out, 'review-ledger.jsonl'), base, diffBase, root, checklistRoot: flag('--checklist-root') ?? ROOT,
+  const m = buildManifest({ governor, pass: id, out, ledger: flag('--ledger') ?? path.join(out, 'review-ledger.jsonl'), base, diffBase, root, checklistRoot: flag('--checklist-root') ?? ROOT,
     dispatches: step === 'fix-check' ? p.dispatches : p.dispatches.filter(d => d.role !== 'fix-check'), next: step, planLines, learnings: readFile(flag('--learnings-file'), 'learnings') ?? null, extras,
     targetedClasses: p.targeted?.classes, mergeBase, rangeBase: flag('--diff-base') ? undefined : rangeBase,
     fixCheck: step === 'fix-check' && (flag('--fix-list') || flag('--hunks') || flag('--tests')) ? { fix_list: flag('--fix-list')!, hunks: flag('--hunks')!, tests: flag('--tests')!, callers: flag('--callers') } : undefined,

@@ -16,7 +16,7 @@ Every repeat starts before the checklist read and captures a fresh REVIEW_START.
 Finish the complete review and QA before applying any fix in Step 9.4.
 
 **Review plan.** Pass 1 runs `~/.claude/skills/gstack/bin/gstack-review-plan
---base <base>`, plus `--depth-floor <d>` on every plan run when the /ship prompt
+--base <base> --run-id "$RUN_ID" --cycle "$CYCLE"`, plus `--depth-floor <d>` on every plan run when the /ship prompt
 gave `--depth-floor <d>` (it only raises); add `--declare-risk <classes>` when the diff touches a risk
 class the plan's `REVIEW_DEPTH:` misses (spend it reserves or binds: `money`), and give Step 16's
 receipt write the same flag; a repeat uses the plan run that picked it.
@@ -324,7 +324,7 @@ Then build the shared packet from the final reviewed content:
 ~/.claude/skills/gstack/bin/gstack-diff-manifest <base> "$RUN_ID"
 ~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude
 ~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
-~/.claude/skills/gstack/bin/gstack-review-context "$RUN_ID" <base>
+# All later gstack-review-plan/review-dispatch pass calls carry --run-id "$RUN_ID" --cycle "$CYCLE".
 ```
 
 Carry these printed values as literals for the rest of the invocation:

@@ -19,14 +19,20 @@ export function governorProject(root: string, binDir: string): { project: string
   return { project: path.join(resolveStateRoot(), 'projects', value('REPO_SLUG')), stateBranch: value('BRANCH') };
 }
 
-export function loadGovernorContext(repo: string, binDir: string, id: string, cycle?: number, acceptanceFile?: string): GovernorContext {
+export function loadGovernorPlan(repo: string, binDir: string, id: string, cycle?: number): { project: string; stateBranch: string; plan: any; cycle: number } {
   if (!/^[A-Za-z0-9._-]+$/.test(id)) throw new Error('invalid governor run id');
   const { project, stateBranch } = governorProject(repo, binDir);
-  const plan = JSON.parse(fs.readFileSync(path.join(project, 'budgets', `${id}.json`), 'utf8'));
-  const selectedCycle = cycle ?? plan.cycle;
-  const selected = plan.cyclePlans?.[String(selectedCycle)] ?? (plan.cycle === selectedCycle ? plan : null);
-  if (!selected) throw new Error(`governor cycle ${selectedCycle} not planned`);
-  const manifest = JSON.parse(fs.readFileSync(selected.manifestPath, 'utf8'));
+  const rootPlan = JSON.parse(fs.readFileSync(path.join(project, 'budgets', `${id}.json`), 'utf8'));
+  const selectedCycle = cycle ?? rootPlan.cycle;
+  const plan = rootPlan.cyclePlans?.[String(selectedCycle)] ?? (rootPlan.cycle === selectedCycle ? rootPlan : null);
+  if (!plan) throw new Error(`governor cycle ${selectedCycle} not planned`);
+  return { project, stateBranch, plan, cycle: selectedCycle };
+}
+
+export function loadGovernorContext(repo: string, binDir: string, id: string, cycle?: number, acceptanceFile?: string): GovernorContext {
+  const { project, stateBranch, plan, cycle: selectedCycle } = loadGovernorPlan(repo, binDir, id, cycle);
+  const selected = plan;
+  const manifest = JSON.parse(fs.readFileSync(plan.manifestPath, 'utf8'));
   const git = (args: string[]) => spawnSync('git', args, { cwd: repo, encoding: 'utf8', timeout: 15_000 });
   const sha = git(['rev-parse', 'HEAD']).stdout.trim();
   const branch = git(['branch', '--show-current']).stdout.trim();

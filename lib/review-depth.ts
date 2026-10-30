@@ -489,11 +489,12 @@ export interface PlanInput extends ClassInput {
 /** How much review a repo runs (lib/ship-policy-review.ts) plus HEAD and the platform review found at it (lib/review-platform.ts). */
 export interface ReviewShape { panel: 'off' | 'risk' | 'all'; readerModel: string; platform: 'off' | 'on'; head: string; platformReview: { id: string; head: string; reviewer: string } | null }
 /** One reviewer. `exclude` holds git pathspec argv items the reviewer's diff leaves out; `checklists` names what the batched specialist reads. */
-export interface Dispatch { role: Role; name: string; effort: Effort; exclude: string[]; checklists?: string[]; reason?: string; keep?: string[]; model?: string; classes?: string[]; governor?: GovernorMetadata }
+export interface Dispatch { role: Role; name: string; effort: Effort; exclude: string[]; checklists?: string[]; reason?: string; keep?: string[]; model?: string; classes?: string[]; governor?: GovernorMetadata; governor_gate?: string; governor_floor?: boolean; governor_gates?: string[] }
 /** lean: R65's one reviewer; panel: today's panel (review.panel); platform: the platform review at HEAD stands in for every reader. */
 export type ReviewMode = 'lean' | 'panel' | 'platform';
 export interface ReviewPlan extends DepthResult {
   /** The depth this step runs at: light raised to standard by a fixed blocker, a CRITICAL or an open blocker. */
+  governor?: GovernorMetadata;
   stepDepth: Depth;
   depthReasons: string[];
   next: NextStep; numbers: NumbersResult; dispatches: Dispatch[]; skipped: string[]; mode: ReviewMode;
