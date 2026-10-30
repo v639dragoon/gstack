@@ -1,4 +1,4 @@
 {
-  "bytes": 48614,
-  "why": "v1.91.329 integration: upstream packet/planner, D3 and risky floors, guarded strict reviewer and collected output"
+  "bytes": 48747,
+  "why": "rebase v1.91.329: keep upstream's pinned adversarial packet sentence (defensive framing, ADVERSARIAL_NATIVE, fixture summary, JSONL contract) in the governor Step 11 build paragraph, +133 bytes"
 }
