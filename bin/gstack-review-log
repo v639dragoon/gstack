@@ -120,7 +120,7 @@ if [ "$INPUT" = --check-shared-libs ] && [ "$#" -eq 2 ]; then
   exit $?
 fi
 if [ "$INPUT" = --carry-forward ] && [ "$#" -eq 2 ]; then
-  GSTACK_REVIEW_RUN_ID="$2" bun --no-env-file --config=/dev/null -e '
+  GSTACK_REVIEW_RUN_ID="$2" bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e '
     const { carryReviewRecords } = await import(process.env.GSTACK_REVIEW_LIB);
     const rows = carryReviewRecords(process.env.GSTACK_REVIEW_RUN_ID);
     const { appendFileSync } = await import("node:fs");

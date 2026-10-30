@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v cygpath >/dev/null 2>&1; then GSTACK_BUN_CONFIG=NUL; fi ;; esac
 # gstack-review-budget — deterministic semantic-review budgets and ledger
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -6,4 +7,4 @@ eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-p
 eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
 GSTACK_BUDGET_PROJECT_DIR="$GSTACK_STATE_ROOT/projects/$SLUG" \
 GSTACK_BUDGET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)" \
-bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-review-budget.ts" "$@"
+bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" "$SCRIPT_DIR/gstack-review-budget.ts" "$@"

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v cygpath >/dev/null 2>&1; then GSTACK_BUN_CONFIG=NUL; fi ;; esac
 # gstack-diff-manifest — shared immutable diff/risk manifest (Phase 0 PR-gating)
 # Usage: gstack-diff-manifest <base> [run_id]
 #   source <(gstack-diff-manifest main)          → sets RUN_ID=... MANIFEST_PATH=... etc.
@@ -116,7 +117,7 @@ fi
 
 # All heavy lifting (glob matching, tier computation, fingerprint, JSON
 # emission, manifest reuse/cleanup) lives in the adjacent .ts file, executed
-# under bun with inputs on env + stdin. A separate file, NOT `bun --no-env-file --config=/dev/null -e`: the
+# under bun with inputs on env + stdin. A separate file, NOT `bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e`: the
 # glob→regex code is backslash-dense, and double-quoted-bash escaping of it
 # is exactly the class of embedded-one-liner bug this repo keeps finding.
 # Precedent for the wrapper+.ts split: bin/gstack-gbrain-sync.ts.
@@ -126,4 +127,4 @@ printf '%s\n---UNTRACKED---\n%s\n---SCOPE---\n%s\n' "$NUMSTAT" "$UNTRACKED_STAT"
   GDM_SCOPE_EXIT="$SCOPE_EXIT" GDM_MANIFEST_DIR="$MANIFEST_DIR" \
   GDM_POLICY_PATH="$POLICY_PATH" GDM_SESSION_ID="${GSTACK_SESSION_ID:-}" \
   GDM_OUTCOME_JSON="$OUTCOME_JSON" \
-  bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-diff-manifest.ts"
+  bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" "$SCRIPT_DIR/gstack-diff-manifest.ts"

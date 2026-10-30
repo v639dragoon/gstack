@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
+GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v cygpath >/dev/null 2>&1; then GSTACK_BUN_CONFIG=NUL; fi ;; esac
 # gstack-context-fence — Claude Code PreToolUse hook: past the context handoff
 # threshold, refuse a NEW expensive dispatch until a checkpoint exists.
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
-bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-context-fence.ts"
+bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" "$SCRIPT_DIR/gstack-context-fence.ts"
 exit 0
