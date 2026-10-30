@@ -45,7 +45,8 @@ function readExternalSkillUnion(output: string, hostSubdir: string, skill: strin
   return fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf-8')
     + (fs.existsSync(sections) ? fs.readdirSync(sections).sort()
       .filter(file => file.endsWith('.md'))
-      .map(file => '\n' + fs.readFileSync(path.join(sections, file), 'utf-8')).join('') : '');
+      .map(file => '\n' + fs.readFileSync(path.join(sections, file), 'utf-8')).join('') : '')
+    + (fs.existsSync(path.join(dir, 'governor-structured.md')) ? '\n' + fs.readFileSync(path.join(dir, 'governor-structured.md'), 'utf-8') : '');
 }
 
 
@@ -3047,7 +3048,9 @@ describe('Codex generation (--host codex)', () => {
   test('Codex ship and review preserve outside review through Claude Code', () => {
     for (const skill of ['ship', 'review']) {
       const content = readExternalSkillUnion(EXTERNAL_OUT, '.agents', skill);
-      expect(content).not.toMatch(/codex\s+(?:exec|review)\s/);
+      expect(content).toContain('Governor codex-structured slot');
+      expect(content).toContain('Codex outside review unavailable: harness mismatch');
+      expect(content).toMatch(/GSTACK_ACTIVE_HOST[^\n]*= codex/);
       expect(content).toContain('gstack-claude-code');
       expect(content).toContain('codex_reviews');
       expect(content).toContain('adversarial-review');

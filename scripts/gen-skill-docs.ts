@@ -1071,7 +1071,7 @@ export async function runGeneration(settings: GenerationOptions = {}): Promise<G
         if (result.preamble) emit(result.preamble.outputPath, result.preamble.content, 'preamble', host);
         // Fork reference asset: external /review retains upstream's inline
         // section policy and byte ceiling; its additional governor slot is Read.
-        if (skillDir === 'review' && host !== 'claude' && host !== 'codex') {
+        if (skillDir === 'review' && host !== 'claude') {
           const asset = processSectionTemplate(path.join(ROOT, 'scripts/resolvers/governor-structured.ts'), skillDir, host, options, '{{GOVERNOR_STRUCTURED_BODY}}\n');
           emit(path.join(path.dirname(result.outputPath), 'governor-structured.md'), asset.content, 'asset', host);
         }

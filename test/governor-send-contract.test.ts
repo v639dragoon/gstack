@@ -14,12 +14,12 @@ const ctx: TemplateContext = { skillName: 'review', tmplPath: '', host: 'claude'
 type Arm = 'voice' | 'structured-voice' | 'packet' | 'spec';
 
 /** The governor step's Codex dispatch blocks: the bash fences that start the clock. */
-function governorCodexFences(): string[] {
-  return [...generateGovernorStructuredBody(ctx).matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!).filter(body => body.includes('_CODEX_T0='));
+function governorCodexFences(host: TemplateContext['host'] = 'claude'): string[] {
+  return [...generateGovernorStructuredBody({ ...ctx, host }).matchAll(/```bash\n([\s\S]*?)\n```/g)].map(match => match[1]!).filter(body => body.includes('_CODEX_T0='));
 }
 
 function invoke(arm: Arm, options: { disabled?: boolean; stored?: string; effort?: string; reason?: string; native?: boolean;
-  shell?: 'bash' | 'zsh'; errexit?: boolean; routeFailure?: boolean } = {}) {
+  shell?: 'bash' | 'zsh'; errexit?: boolean; routeFailure?: boolean; actualHost?: 'claude' | 'codex' } = {}) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'governor-send-')));
   try {
     const repo = path.join(dir, 'fixture-repo'), fake = path.join(dir, 'fake-bin'), state = path.join(dir, 'state');
@@ -30,6 +30,7 @@ function invoke(arm: Arm, options: { disabled?: boolean; stored?: string; effort
       PATH: `${fake}${path.delimiter}${process.env.PATH}`, CODEX_API_KEY: 'fake-only', CLAUDECODE: '1', GSTACK_ACTIVE_HOST: 'claude', CALLS: calls,
       GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: 'Fixture', GIT_AUTHOR_EMAIL: 'fixture@example.invalid',
       GIT_COMMITTER_NAME: 'Fixture', GIT_COMMITTER_EMAIL: 'fixture@example.invalid' });
+    if (options.actualHost === 'codex') { delete env.CLAUDECODE; env.GSTACK_ACTIVE_HOST = 'codex'; env.CODEX_THREAD_ID = 'fixture-codex'; }
     if (options.effort) env.GSTACK_CODEX_EFFORT = options.effort;
     if (options.reason) env.GSTACK_CODEX_EFFORT_REASON = options.reason;
     const git = (...args: string[]) => {
@@ -61,7 +62,7 @@ if(args[0]==='review')console.log(text);else writeFileSync(args[args.indexOf('-o
         ...(arm === 'structured-voice' ? { structuredBase: 'main', gate: 'structured' } : { role: 'plan-review' }),
         ...(arm === 'spec' ? { gate: 'spec', reasoningEffort: 'medium' } : {}) });
     } else {
-      const fences = governorCodexFences();
+      const fences = governorCodexFences(options.actualHost);
       expect(fences).toHaveLength(1);
       const route = spawnSync(path.join(BIN, 'gstack-codex-model'), ['resolve', '--model', options.native ? '' : 'gpt-routed',
         '--effort', 'medium', '--source', options.native ? 'default' : 'policy', '--selection-only'], { cwd: repo, env, encoding: 'utf8', timeout: 5000 });
@@ -72,7 +73,7 @@ if(args[0]==='review')console.log(text);else writeFileSync(args[args.indexOf('-o
       // as the skill directs. A prefix eval would hide unbound shell state.
       script = fences[0]!
         .replaceAll('~/.claude/skills/gstack', ROOT).replaceAll('{PLAN_EFFORT}', 'medium')
-        .replaceAll('{CODEX_MODEL}', model!).replaceAll('{PACKET_PATH}', prompt)
+        .replaceAll('{CODEX_MODEL}', model!).replaceAll('{PACKET_PATH}', prompt).replaceAll('{PACKET_OUT}', path.join(dir, 'structured.out'))
         .replaceAll('<prompt-file-name>', 'prompt.txt').replaceAll('<base>', 'main');
       // Observe the shared classifier rather than treating a final assignment as success.
       script += '\nexit "$_CODEX_GATE_RC"\n';
@@ -185,3 +186,11 @@ test.each([false, true])('route failure refuses dispatch before any Codex call w
   expect(result.stderr).toContain('malformed model slug');
   expect(result.rows).toEqual([]);
 }, 30000);
+
+
+test('strict floor on a Codex host refuses the actual Codex provider before any CLI call', () => {
+  const result = invoke('packet', { actualHost: 'codex' });
+  expect(result.status).toBe(78);
+  expect(result.stderr).toContain('Codex outside review unavailable: harness mismatch');
+  expect(result.rows).toEqual([]);
+});

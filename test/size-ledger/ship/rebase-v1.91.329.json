@@ -1,4 +1,4 @@
 {
-  "bytes": 46235,
-  "why": "Upstream v1.91.329 plus pinned fork governor, context, routed effort, post-merge version mode and D3 policy contracts"
+  "bytes": 48614,
+  "why": "v1.91.329 integration: upstream packet/planner, D3 and risky floors, guarded strict reviewer and collected output"
 }

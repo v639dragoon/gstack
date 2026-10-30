@@ -25,7 +25,8 @@ function readUnion(dir: string): string {
   return readFileSync(join(dir, 'SKILL.md'), 'utf8')
     + (existsSync(sectionDir) ? readdirSync(sectionDir).sort()
       .filter(file => file.endsWith('.md'))
-      .map(file => '\n' + readFileSync(join(sectionDir, file), 'utf8')).join('') : '');
+      .map(file => '\n' + readFileSync(join(sectionDir, file), 'utf8')).join('') : '')
+    + (existsSync(join(dir, 'governor-structured.md')) ? '\n' + readFileSync(join(dir, 'governor-structured.md'), 'utf8') : '');
 }
 
 beforeAll(() => {
@@ -84,8 +85,14 @@ describe('generated automatic review coverage', () => {
       const host = ALL_HOST_CONFIGS.find(h => h.name === 'codex')!;
       const text = RETIRED_SKILLS.includes(skill) ? readFileSync(join(skillDir(host, 'autoplan'), `${skill}.md`), 'utf8') : readUnion(skillDir(host, skill));
       expect(text).toContain('gstack-claude-code');
-      // Prose about the CLI is permitted; executable codex review commands are not.
-      expect(shellLines(text).filter(line => /\bcodex\s+(?:exec|review)\b/.test(line))).toEqual([]);
+      // The required governor slot has one guarded send. Echoed recovery text is not a send.
+      const codexCalls = shellLines(text).filter(line => /\bcodex\s+(?:exec|review)\b/.test(line) && !line.includes('echo "Not sent:'));
+      if (skill === 'ship' || skill === 'review') {
+        expect(codexCalls).toHaveLength(1);
+        for (const line of codexCalls) expect(line).toContain('run-with-timeout --effort high 540 codex exec -');
+        expect(text).toContain('Codex outside review unavailable: harness mismatch');
+        expect(text).toMatch(/GSTACK_ACTIVE_HOST[^\n]*= codex/);
+      } else expect(codexCalls).toEqual([]);
       expect(text).toContain('Claude Code');
     });
   }
@@ -145,6 +152,10 @@ for (const host of ['claude', 'codex'] as const) {
       expect(text).toContain('Step 3: Get the diff');
       expect(text).toContain('Step 4.8: Adversarial review (always-on)');
       expect(text).toContain(host === 'codex' ? 'gstack-claude-code' : 'codex exec');
+      if (text.includes('Read `governor-structured.md`')) {
+        const governor = readFileSync(join(dir, 'governor-structured.md'), 'utf8');
+        expect(governor).toContain('Codex outside review unavailable: harness mismatch');
+      }
       expect(text).not.toContain('## Preamble (run first)');
       expect(text.match(/^name:/gm)).toHaveLength(1);
     } finally { rmSync(repo, { recursive: true, force: true }); }

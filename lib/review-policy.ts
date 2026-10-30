@@ -113,7 +113,7 @@ export function sensitiveTriggers(files: Delta['files'], policy: any): string[] 
 /** The governor's risky-surface floor, shared by ship planning and /review range selection. */
 export function riskyReviewPaths(files: readonly string[], policy: any): string[] {
   const configured = sensitiveTriggers(files.map(path => ({ path, status: 'M' })), policy).filter(t => !t.startsWith('api:'));
-  const builtIn = files.filter(p => /(?:^|[\/_.-])(?:auth[^/]*|authorization|permission[^/]*|roles?|rls|billing|entitlements?|secrets?|migrations?)(?:[\/_.-]|$)|(?:^|\/)\.env(?:[\/.]|$)/i.test(p));
+  const builtIn = files.filter(p => matchAny(p, ['**/*auth*', '**/*session*', '**/*jwt*', '**/*oauth*', '**/*permission*', '**/*role*']) || /(?:^|[\/_.-])(?:(?:auth|oauth|session|jwt)[^/]*|authorization|permission[^/]*|roles?|rls|billing|entitlements?|secrets?|migrations?)(?:[\/_.-]|$)|(?:^|\/)\.env(?:[\/.]|$)/i.test(p));
   return [...new Set([...configured, ...builtIn.map(p => `risky-surface:${p}`)])];
 }
 

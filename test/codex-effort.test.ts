@@ -69,7 +69,7 @@ describe('manual /codex modes (#3098)', () => {
 describe('gstack outside reviews use the same precedence', () => {
   test('rendered gates pass their default to run-with-timeout --effort', () => {
     for (const [rel, def] of [['autoplan/sections/ceo-phase.md', 'high'], ['plan-eng-review/sections/review-sections.md', 'high'],
-      ['review/sections/adversarial.md', 'high'], ['design-consultation/sections/proposal-and-preview.md', 'medium']] as const) {
+      ['design-consultation/sections/proposal-and-preview.md', 'medium']] as const) {
       const text = read(rel);
       expect(text, rel).not.toContain('check-effort');
       const dispatches = text.split('\n').filter(line => /run-with-timeout (--effort \w+ )?\d+ codex (exec|review)\b/.test(line));
@@ -79,6 +79,15 @@ describe('gstack outside reviews use the same precedence', () => {
         expect(line, rel).not.toContain('model_reasoning_effort');
       }
     }
+  });
+
+  test('review phases keep their routed challenge and strict slot defaults', () => {
+    const text = read('review/sections/adversarial.md');
+    const challenge = between(text, 'adversarial challenge (', 'structured review (');
+    expect(challenge).toContain('run-with-timeout --effort medium 540 codex exec');
+    const strict = text.slice(text.indexOf('### Governor codex-structured slot'));
+    expect(strict).toContain('run-with-timeout --effort high 540 codex exec -');
+    expect(strict).toContain('GSTACK_CODEX_GATE_DEFAULT="{PLAN_EFFORT}"');
   });
 
   const fakeBin = path.join(TMP, 'bin');
@@ -114,25 +123,30 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"SCORE: 8"}
     return fs.existsSync(capture) ? fs.readFileSync(capture, 'utf8').split('\n') : [];
   }
 
-  test('an ordinary gate takes env, then config, then its default', () => {
-    expect(dispatchedArgs('review', undefined, undefined)).toContain('model_reasoning_effort="high"');
-    expect(dispatchedArgs('review', undefined, 'low')).toContain('model_reasoning_effort="low"');
-    expect(dispatchedArgs('review', 'max', 'low')).toContain('model_reasoning_effort="max"');
-    expect(dispatchedArgs('review', 'banana', undefined)).toEqual([]);
+  test.each([
+    ['default', undefined, undefined, 'high'], ['config', undefined, 'low', 'low'],
+    ['env', 'max', 'low', 'max'], ['invalid', 'banana', undefined, null],
+  ] as const)('ordinary gate precedence: %s', (_name, exported, stored, expected) => {
+    const args = dispatchedArgs('review', exported, stored);
+    if (expected) expect(args).toContain(`model_reasoning_effort="${expected}"`);
+    else expect(args).toEqual([]);
   });
 
   const FENCES = (['review-mode', 'challenge-mode', 'consult-mode'] as const).flatMap(mode =>
     read(`codex/sections/${mode}.md`).split('\n').filter(line => /run-with-timeout --user-invoked --effort \w+ --request-effort '<effort-level>' \d+ codex /.test(line))
       .map(line => ({ mode, line: line.trim().split(' | tee ')[0] })));
 
-  // One bounded case per rendered dispatch; all four fences and every guard remain.
-  test.each(FENCES.map(({ mode, line }, index) => [`${mode} fence ${index}`, line] as const))('%s carries the request level over env and codex_effort', (mode, line) => {
+  // One dispatch per bounded free case: preserve all four fences and every precedence/refusal arm.
+  const scenarios = ['config', 'request', 'unreasoned-xhigh', 'reasoned-xhigh', 'max', 'request-over-env', 'placeholder', 'invalid'] as const;
+  for (const { mode: baseMode, line } of FENCES) for (const scenario of scenarios) {
+    const mode = baseMode + ' fence ' + FENCES.findIndex(f => f.line === line);
+    test(`${mode}: ${scenario} carries request precedence and refusal evidence`, () => {
     expect(FENCES.length).toBe(4);
     const dispatches = (['review-mode', 'challenge-mode', 'consult-mode'] as const).flatMap(mode =>
       read(`codex/sections/${mode}.md`).split('\n').filter(line => /run-with-timeout\b.*\bcodex (exec|review)\b/.test(line)));
     expect(dispatches.length).toBe(FENCES.length);
     expect(dispatches.filter(line => /\bcodex review\b/.test(line))).toEqual([]);
-    const state = path.join(TMP, 'state-codex-request-effort-' + mode.replace(/[^a-z0-9-]/g, '-'));
+    const state = path.join(TMP, 'state-codex-request-effort-' + (mode + '-' + scenario).replace(/[^a-z0-9-]/g, '-'));
     fs.mkdirSync(state, { recursive: true });
     fs.writeFileSync(path.join(state, 'config.yaml'), 'codex_effort: low\n');
     const env: Record<string, string> = {};
@@ -149,24 +163,27 @@ echo '{"type":"item.completed","item":{"type":"agent_message","text":"SCORE: 8"}
       const r = spawnSync('bash', ['-c', script], { cwd: repo, env: { ...env, ...(exported ? { GSTACK_CODEX_EFFORT: exported } : {}), ...(reason ? { GSTACK_CODEX_EFFORT_REASON: reason } : {}) }, encoding: 'utf8', timeout: 60_000 });
       return { status: r.status, args: fs.existsSync(capture) ? fs.readFileSync(capture, 'utf8').split('\n') : [], stderr: fs.existsSync(err) ? fs.readFileSync(err, 'utf8') : '' };
     };
-      expect(run(line, '').args, mode).toContain('model_reasoning_effort="low"');
-      expect(run(line, 'medium').args, mode).toContain('model_reasoning_effort="medium"');
-      // Fork guard: a request-level xhigh is refused until its owner reason can be recorded.
-      const refused = run(line, 'xhigh');
-      expect(refused.args, mode).toEqual([]);
-      expect(refused.stderr, mode).toContain('requires an explicit user override');
-      expect(run(line, 'xhigh', undefined, 'Explicit one-run test override').args, mode).toContain('model_reasoning_effort="xhigh"');
-      expect(run(line, 'max').args, mode).toContain('model_reasoning_effort="max"');
-      expect(run(line, 'medium', 'max').args, mode).toContain('model_reasoning_effort="medium"');
-      const unfilled = run(line, '<effort-level>');
-      expect(unfilled.args, mode).toEqual([]);
-      expect(unfilled.stderr, mode).toContain('placeholder was left unfilled');
-      const bogus = run(line, 'bogus');
-      expect(bogus.args, mode).toEqual([]);
-      expect(bogus.status, mode).toBe(1);
-      expect(bogus.stderr, mode).toContain("CODEX_EFFORT: invalid — 'bogus' from /codex --effort");
-      expect(bogus.stderr, mode).toContain('--effort medium');
-  });
+      if (scenario === 'config') expect(run(line, '').args, mode).toContain('model_reasoning_effort="low"');
+      if (scenario === 'request') expect(run(line, 'medium').args, mode).toContain('model_reasoning_effort="medium"');
+      if (scenario === 'unreasoned-xhigh') {
+        const refused = run(line, 'xhigh'); expect(refused.args, mode).toEqual([]);
+        expect(refused.stderr, mode).toContain('requires an explicit user override');
+      }
+      if (scenario === 'reasoned-xhigh') expect(run(line, 'xhigh', undefined, 'Explicit one-run test override').args, mode).toContain('model_reasoning_effort="xhigh"');
+      if (scenario === 'max') expect(run(line, 'max').args, mode).toContain('model_reasoning_effort="max"');
+      if (scenario === 'request-over-env') expect(run(line, 'medium', 'max').args, mode).toContain('model_reasoning_effort="medium"');
+      if (scenario === 'placeholder') {
+        const unfilled = run(line, '<effort-level>'); expect(unfilled.args, mode).toEqual([]);
+        expect(unfilled.stderr, mode).toContain('placeholder was left unfilled');
+      }
+      if (scenario === 'invalid') {
+        const bogus = run(line, 'bogus'); expect(bogus.args, mode).toEqual([]);
+        expect(bogus.status, mode).toBe(1);
+        expect(bogus.stderr, mode).toContain("CODEX_EFFORT: invalid — 'bogus' from /codex --effort");
+        expect(bogus.stderr, mode).toContain('--effort medium');
+      }
+    });
+  }
 
   test('check-effort --request outranks env and config, and names the flag when the level is invalid', () => {
     const probe = path.join(ROOT, 'bin', 'gstack-codex-probe');

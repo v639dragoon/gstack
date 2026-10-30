@@ -83,7 +83,8 @@ function readCodexSkillUnion(skill: string): string {
   return fs.readFileSync(path.join(dir, 'SKILL.md'), 'utf-8')
     + (fs.existsSync(sections) ? fs.readdirSync(sections).sort()
       .filter(file => file.endsWith('.md'))
-      .map(file => '\n' + fs.readFileSync(path.join(sections, file), 'utf-8')).join('') : '');
+      .map(file => '\n' + fs.readFileSync(path.join(sections, file), 'utf-8')).join('') : '')
+    + (fs.existsSync(path.join(dir, 'governor-structured.md')) ? '\n' + fs.readFileSync(path.join(dir, 'governor-structured.md'), 'utf-8') : '');
 }
 
 describe('SKILL.md command validation', () => {
@@ -1585,7 +1586,7 @@ describe('Codex skill', () => {
     expect(content).toContain('skip the Codex passes ONLY');
     // Review log
     expect(content).toContain('adversarial-review');
-    expect(content).toContain('reasoning_effort="high"');
+    expect(content).toContain('run-with-timeout --effort high ');
     expect(content).toContain('ADVERSARIAL REVIEW SYNTHESIS');
     // Large diff structured review still gated
     expect(content).toContain('Codex structured review (large diffs only');
@@ -1618,7 +1619,9 @@ describe('Codex skill', () => {
   test('codex-host ship/review preserve adversarial review with a Claude outside voice', () => {
     for (const skill of ['ship', 'review']) {
       const content = readCodexSkillUnion(skill);
-      expect(content).not.toMatch(/codex\s+(?:exec|review)\s/);
+      expect(content).toContain('Governor codex-structured slot');
+      expect(content).toContain('Codex outside review unavailable: harness mismatch');
+      expect(content).toMatch(/GSTACK_ACTIVE_HOST[^\n]*= codex/);
       expect(content).toContain('gstack-claude-code');
       expect(content).toContain('codex_reviews');
       expect(content).toContain('adversarial-review');

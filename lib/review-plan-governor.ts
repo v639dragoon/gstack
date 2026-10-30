@@ -3,11 +3,11 @@ import type { Dispatch, ReviewPlan } from './review-depth';
 import { policyFlags } from './review-policy';
 import type { GovernorMetadata } from './review-governor-packet';
 
-export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run_id: string; cycle: number; plan: any }, requiredRedTeam = false): ReviewPlan {
+export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run_id: string; cycle: number; plan: any; bug_class?: string[] }, requiredRedTeam = false): ReviewPlan {
   const flags = policyFlags(policy);
   const g = governor?.plan;
   const metadata: GovernorMetadata | undefined = governor ? { run_id: governor.run_id, cycle: governor.cycle, tier: g.tier,
-    routed_effort: g.codexEffort ?? (g.tier === 'D' ? 'high' : 'medium'), specialist_reasons: [g.tierSource ?? 'governor-tier'], bug_class: [] } : undefined;
+    routed_effort: g.codexEffort ?? (g.tier === 'D' ? 'high' : 'medium'), specialist_reasons: [g.tierSource ?? 'governor-tier'], bug_class: governor.bug_class ?? [] } : undefined;
   const reviewing = plan.next.step === 'full' || plan.next.step === 'scoped';
   const floors = reviewing && g ? new Set<string>([
     ...g.reviewers.map((r: { gate: string }) => r.gate), 'codex-structured', ...(g.tier === 'D' ? ['red-team'] : []),

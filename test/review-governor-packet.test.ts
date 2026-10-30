@@ -68,7 +68,7 @@ describe('review packet', () => {
       expect(spawnSync(budget, ['plan', mp], { cwd: d, env, timeout: 30_000 }).status).toBe(0);
       if (withLedger) {
         const finding = (fingerprint: string, summary = fingerprint) => ({
-          record_type: 'finding', fingerprint, summary, severity: 'P1', gate: 'codex-structured', blocking: true,
+          record_type: 'finding', fingerprint, summary, bug_class: 'shared-race', severity: 'P1', gate: 'codex-structured', blocking: true,
         });
         const resolution = (fingerprint: string, action: string, extra = {}) => ({
           record_type: 'resolved', fingerprint, action, ...extra,
@@ -88,6 +88,9 @@ describe('review packet', () => {
         writeFileSync(join(state, 'projects', 'packet-test', 'budgets', 'packet-run.ledger.jsonl'),
           rows.map(row => JSON.stringify(row)).join('\n') + '\n');
       }
+      const nativePlan = spawnSync(join(root, 'bin/gstack-review-plan'), ['--base', 'main', '--run-id', 'packet-run', '--gate-tagged', '0', '--json'], { cwd: d, env, encoding: 'utf8', timeout: 30_000 });
+      expect(nativePlan.status, nativePlan.stderr).toBe(0);
+      expect(JSON.parse(nativePlan.stdout).governor.bug_class).toEqual(withLedger ? ['shared-race'] : []);
       const acc = join(state, 'acceptance.md');
       writeFileSync(acc, 'Ship the packet safely.\n');
       const r = spawnSync(packet, ['packet-run', 'main', '--acceptance', acc], {
@@ -106,6 +109,7 @@ describe('review packet', () => {
       const ledger = join(state, 'projects', 'packet-test', 'packets', 'packet-run', 'review-ledger.jsonl');
       const carrier = readLedger(ledger).find(e => e.event === 'rendered')!;
       expect(carrier.governor).toMatchObject({ tier: 'B', run_id: 'packet-run', cycle: 0, routed_effort: 'medium' });
+      expect((carrier.governor as {bug_class: string[]}).bug_class).toEqual(withLedger ? ['shared-race'] : []);
       expect(carrier.file).toBe(pp);
       const output = join(state, 'review.out');
       const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: d, encoding: 'utf8', timeout: 30_000 }).stdout.trim();

@@ -472,3 +472,5 @@ satisfy coverage.
   its source, and available costs. Continue to Step 7.
 
 ---
+
+The governor DETERMINISTIC_GATES floor remains required: tests, typecheck, build, gitleaks, redaction, verification, claim-check and pregate.

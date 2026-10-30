@@ -278,7 +278,7 @@ function main(): number {
   if (riskyRepeat && !grant && (pass >= FULL_PASS_CAP || last === 'fix-check')) plan = { ...plan, next: { step: 'stop', reason: 'risky-surface full re-review required but the upstream pass cap is exhausted' }, dispatches: [] };
   if (has('--cycle') && !/^\d+$/.test(flag('--cycle') ?? '')) { process.stderr.write('gstack-review-plan: --cycle must be a non-negative integer\n'); return EXIT.usage; }
   let governor;
-  try { if (flag('--run-id')) { const loaded = loadGovernorPlan(root, binDir, flag('--run-id')!, has('--cycle') ? Number(flag('--cycle')) : undefined); governor = { run_id: flag('--run-id')!, cycle: loaded.cycle, plan: loaded.plan }; } }
+  try { if (flag('--run-id')) { const loaded = loadGovernorPlan(root, binDir, flag('--run-id')!, has('--cycle') ? Number(flag('--cycle')) : undefined); governor = { run_id: flag('--run-id')!, cycle: loaded.cycle, plan: loaded.plan, bug_class: loaded.bugClasses }; } }
   catch (e) { process.stderr.write(`gstack-review-plan: governor plan unavailable: ${(e as Error).message}\n`); return EXIT.fail; }
   plan = governorPlan(plan, riskyRepeat ? {} : governorPolicy, governor, has('--critical-found') || has('--fixed-blocking'));
   const selection = policySelection(active && { state: 'active', specs: active.specs, keep: active.keep, excerpt: active.excerpt }, readers);

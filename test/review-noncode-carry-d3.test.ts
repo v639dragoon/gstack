@@ -168,9 +168,9 @@ test('D3 C3 caller carve-out keeps full triggers, original tokens, local-only re
   const army = readFileSync(join(root, 'ship/sections/review-army.md.tmpl'), 'utf8');
   expect(review).toContain('### Step 5e: Bounded repair verification');
   for (const text of [review, ship, army]) { expect(text).toContain('carry-forward'); expect(text).toContain('Local'); }
-  expect(review).toContain('When `NON_CODE_DELTA=false`, skip this carve-out');
-  expect(review).toContain('Auth/d-surface/env/migration/api/git failure, modified tests and every source edit stay FULL');
-  expect(army).toContain('except the policy-enabled NON_CODE_DELTA carry-forward');
+  expect(review).toContain('When `NON_CODE_DELTA=false`, skip the carry exception');
+  expect(review).toContain('Auth/authorization, RLS, billing/entitlements, migrations, secrets or configured auth/d/env surfaces require full review');
+  expect(army).toContain('only the risky-surface floor below overrides upstream selection');
   expect(ship).toContain('`FULL_RERUN=true` requires route 1 even for paths shaped as docs');
   expect(ship).toContain('Full receipts remain STALE');
   expect(army).toContain('"run_id":"{RUN_ID}","cycle":{N}');
