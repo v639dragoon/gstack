@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'child_process';
-import { policyFlags, FLAG_NAMES, surfaceFlags, readPolicy, globs, DEFAULT_ENV_SURFACES, DEFAULT_TEST_GLOBS, auditReusable, gitRead, nonCodeReviewDelta } from '../lib/review-policy';
+import { policyFlags, FLAG_NAMES, surfaceFlags, readPolicy, globs, DEFAULT_ENV_SURFACES, DEFAULT_TEST_GLOBS, auditReusable, gitRead, nonCodeReviewDelta, riskyReviewSince } from '../lib/review-policy';
 
 const argv = process.argv.slice(2);
 const command = argv.shift() || '';
@@ -397,6 +397,7 @@ if (command === 'plan') {
     reviewerSpecs,
     reviewers,
     ...flags,
+    riskyFullReview: cycle > 0 && riskyReviewSince(repoRoot, (previous?.cyclePlans?.[String(cycle - 1)] ?? previous)?.head_sha ?? '', policyRaw || {}).length > 0,
     ...surfaces,
     coverageAudit: final,
     planCompletion: final,
@@ -490,6 +491,7 @@ const registeredUpstream = (ledger: any[], cycle: number): string[] => [...new S
   .map(r => r.gate))];
 const upstreamGates = (id: string, cycle: number) => registeredUpstream(records(id), cycle);
 function gateDisabled(p: any, gate: string): boolean {
+  if (p.riskyFullReview && (gate === 'native-adversarial' || gate.startsWith('upstream-specialist:') || gate.startsWith('upstream-outside:'))) return false;
   return gate === 'native-adversarial' && p.adversarialClaude === false ||
     gate === 'upstream-outside:challenge' && p.codexChallenge === false ||
     gate === 'upstream-outside:structured' && p.upstreamStructured === false ||
@@ -501,7 +503,7 @@ if (command === 'register-upstream') {
   if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|state-machines|red-team|batched))$/.test(gate))
     fail('known upstream-required reviewer gate required');
   const cycle = requestedCycle(), p = cyclePlan(loadPlan(id), cycle);
-  if (gateDisabled(p, gate) || gate === 'upstream-specialist:red-team' && opt('--trigger') === 'loc' && p.redTeamLocTrigger === false) {
+  if (gateDisabled(p, gate) || gate === 'upstream-specialist:red-team' && opt('--trigger') === 'loc' && p.redTeamLocTrigger === false && !p.riskyFullReview) {
     console.log('REGISTER=blocked reason=policy-disabled');
     process.exit(2);
   }
@@ -1074,6 +1076,7 @@ if (command === 'rerun-check') {
   }
   const lines = rows.reduce((s, x) => s + x.n, 0);
   if (lines > 50) triggers.push('delta-lines>50');
+  triggers.push(...riskyReviewSince(repoRoot, since, p.policy));
   const unique = [...new Set(triggers)];
   const full = unique.length > 0;
   const carriedCycles = (rootPlan.cyclePlans?.['0'] ?? (rootPlan.cycle === 0 ? rootPlan : null))?.carriedCycles ?? 0;
