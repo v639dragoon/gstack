@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync } from 'fs';
 import { join } from 'path';
+import { readLedger } from '../lib/review-ledger';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 const root = join(import.meta.dir, '..'),
@@ -95,29 +96,28 @@ describe('review packet', () => {
         env,
         encoding: 'utf8',
       });
-      expect(r.status).toBe(0);
+      expect(r.status, r.stderr + r.stdout).toBe(0);
       expect(r.stdout).toContain('CI_GREEN=unknown');
       const pp = r.stdout.match(/^PACKET_PATH=(.+)$/m)![1],
         text = readFileSync(pp, 'utf8');
-      const sections = [
-        '## Acceptance criteria',
-        '## Risk',
-        '## Changed files',
-        '## Reviewed revision',
-        '## Architecture constraints',
-        '## CI / test evidence',
-        '## Unresolved blocking findings',
-        '## Resolved findings',
-        'Reviewers:',
-      ];
-      let last = -1;
-      for (const h of sections) {
-        const at = text.indexOf(h);
-        expect(at).toBeGreaterThan(last);
-        last = at;
-      }
+      expect(text).toStartWith('You are the codex-structured reviewer');
+      expect(text).toContain('## Findings contract');
+      expect(text).toContain('## Branch diff');
+      const ledger = join(state, 'projects', 'packet-test', 'packets', 'packet-run', 'review-ledger.jsonl');
+      const carrier = readLedger(ledger).find(e => e.event === 'rendered')!;
+      expect(carrier.governor).toMatchObject({ tier: 'B', run_id: 'packet-run', cycle: 0, routed_effort: 'medium' });
+      expect(carrier.file).toBe(pp);
+      const output = join(state, 'review.out');
+      const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: d, encoding: 'utf8', timeout: 30_000 }).stdout.trim();
+      writeFileSync(output, `REVIEWED_TREE: ${tree} ${realpathSync(d)}\n[P1] x.ts:1 — broken — fix — evidence: new\nRecommendation: fix because broken.\n`);
+      const dispatch = join(root, 'bin/gstack-review-dispatch');
+      expect(spawnSync(dispatch, ['sent', '--ledger', ledger, '--role', 'codex-structured', '--sent', pp], { cwd: d, env, encoding: 'utf8', timeout: 30_000 }).status).toBe(0);
+      const merged = join(state, 'merged.jsonl');
+      const result = spawnSync(dispatch, ['collect', '--ledger', ledger, '--role', 'codex-structured', '--output', output, '--merged', merged], { cwd: d, env, encoding: 'utf8', timeout: 30_000 });
+      expect([result.status, result.stdout]).toEqual([0, expect.stringContaining('findings=1')]);
+      expect(JSON.parse(readFileSync(merged, 'utf8').trim())).toMatchObject({ label: 'P1', reader: 'codex-structured', raw: expect.stringContaining('x.ts:1') });
       const unresolved = text.split('## Unresolved blocking findings\n\n')[1].split('\n\n## Resolved findings')[0];
-      const resolved = text.split('## Resolved findings\n\n')[1].split('\n\nReviewers:')[0];
+      const resolved = text.split('## Resolved findings\n\n')[1].split('\n\nResolved findings are settled:')[0];
       expect(unresolved).toBe(withLedger ? '- [P1] open (codex-structured): open' : 'none');
       expect(resolved).toBe(withLedger ? [
         '- [P1] fixed (codex-structured): fixed summary | fixed: fixed safely',
@@ -129,7 +129,7 @@ describe('review packet', () => {
       expect(text).toContain('Resolved findings are settled: do not report one again unless the current diff shows its fix is wrong or incomplete, or its recorded reason no longer holds; then cite its fingerprint and say which. When a defect is one instance of a pattern, name the pattern and list every other instance in the diff inside the same finding (a codex line appends "also at: path:line, path:line"; a JSON finding adds "instances":["path:line"]), so one fix round clears the whole class.');
       expect(text).toContain('Ship the packet safely.');
       expect(text).toContain('.claude/rules/x.md: Keep the X contract stable.');
-      expect(text).toContain('When CI_GREEN=true do not run the full build or test suite');
+      expect(text).toContain('do NOT run the build, the test suite, typecheck or any install');
       expect(readFileSync(r.stdout.match(/^DIFF_PATH=(.+)$/m)![1], 'utf8')).toContain('+new');
     } finally {
       rmSync(d, { recursive: true, force: true });
