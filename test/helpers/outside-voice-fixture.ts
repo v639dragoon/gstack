@@ -17,13 +17,17 @@ export function installOutsideReviewFixture(rendered: string, host: 'claude' | '
   if (!section.includes('Adversarial review (always-on)')) throw new Error(`Missing adversarial workflow: ${source}`);
   // Runtime paths are the only fixture substitution. Provider selection,
   // caller controls, prompt, probes, and execution code stay generated verbatim.
-  const content = (head + '\n' + section)
+  const repoint = (text: string) => text
     .replaceAll('~/.claude/skills/gstack', runtimeRoot)
     .replaceAll('$HOME/.claude/skills/gstack', runtimeRoot)
     .replaceAll('${GSTACK_BIN}', join(runtimeRoot, 'bin'))
     .replaceAll('$GSTACK_BIN', join(runtimeRoot, 'bin'))
     .replaceAll('$GSTACK_ROOT', runtimeRoot);
-  writeFileSync(join(destination, 'SKILL.md'), content);
+  const owned = fs.realpathSync(repo), actual = fs.realpathSync(destination);
+  if (actual !== owned && !actual.startsWith(owned + path.sep)) throw new Error('Outside-review fixture destination escapes its private root');
+  writeFileSync(join(destination, 'SKILL.md'), repoint(head + '\n' + section));
+  const governor = join(source, 'governor-structured.md');
+  if (existsSync(governor)) writeFileSync(join(destination, 'governor-structured.md'), repoint(readFileSync(governor, 'utf8')));
   return destination;
 }
 

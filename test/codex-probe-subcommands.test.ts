@@ -224,6 +224,12 @@ describe('gstack-codex-probe subcommands', () => {
     try {
       const tmp = path.join(f.home, 'tmp');
       fs.mkdirSync(tmp);
+      // macOS's git launcher initializes an OS cache in a fresh TMPDIR. Establish
+      // that native fixture input before asserting the probe creates no temp files.
+      const native = spawnSync('git', ['--version'], { env: { ...f.env, TMPDIR: tmp }, encoding: 'utf8', timeout: 10_000 });
+      expect(native.status).toBe(0);
+      const nativeFiles = fs.readdirSync(tmp);
+
       const gateRows = (runId: string) => {
         const rows: Array<Record<string, unknown>> = [];
         const walk = (dir: string) => {
@@ -242,7 +248,7 @@ describe('gstack-codex-probe subcommands', () => {
       expect(gateRows('effort-ordinary')).toMatchObject([{ effort: 'medium', effort_source: 'default', decision: 'resolved' }]);
       expect(probe(f, 'run-with-timeout --effort medium 20 codex exec -', { TMPDIR: tmp, GSTACK_RUN_ID: 'effort-override', GSTACK_CODEX_EFFORT: 'xhigh', GSTACK_CODEX_EFFORT_REASON: 'Owner asked' }).code).toBe(0);
       expect(gateRows('effort-override')).toMatchObject([{ effort: 'xhigh', effort_source: 'user-override', effort_reason: 'Owner asked' }]);
-      expect(fs.readdirSync(tmp)).toEqual([]);
+      expect(fs.readdirSync(tmp)).toEqual(nativeFiles);
       expect(calls(f)).toHaveLength(2);
 
       const unwritable = path.join(f.home, 'not-a-directory');
@@ -253,7 +259,7 @@ describe('gstack-codex-probe subcommands', () => {
       expect(refused.code).toBe(1);
       expect(refused.stderr).toContain('override could not be recorded; no Codex call was made.');
       expect(calls(f)).toHaveLength(3);
-      expect(fs.readdirSync(tmp)).toEqual([]);
+      expect(fs.readdirSync(tmp)).toEqual(nativeFiles);
     } finally { fs.rmSync(f.home, { recursive: true, force: true }); }
   });
 

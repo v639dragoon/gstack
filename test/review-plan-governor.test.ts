@@ -106,7 +106,7 @@ test('ordinary blocking repair uses upstream scoped selection and below-floor re
   } finally { f.cleanup(); }
 });
 
-for (const risky of ['lib/auth/access.ts', 'db/rls.sql', 'billing/entitlements.ts', 'db/migrations/a.sql', 'lib/secrets.ts'])
+for (const risky of ['lib/auth/access.ts', 'lib/oauth/token.ts', 'lib/session/token.ts', 'lib/jwt/token.ts', 'db/rls.sql', 'billing/entitlements.ts', 'db/migrations/a.sql', 'lib/secrets.ts'])
   test(`risky fix ${risky} requires full whole-branch review despite D3; cap stops`, () => {
     const f = fixture('B', { native_adversarial: false, upstream_specialists: false, codex_challenge: false, red_team_loc_trigger: false });
     try {
@@ -131,3 +131,32 @@ for (const risky of ['lib/auth/access.ts', 'db/rls.sql', 'billing/entitlements.t
       expect(cap.next.step).toBe('stop'); expect(cap.dispatches).toEqual([]);
     } finally { f.cleanup(); }
   });
+
+test('risky repair refuses a narrowed review receipt and overrides D3 registration/dispatch skips', () => {
+  const bin = path.join(root, 'bin');
+  const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'risk-callback-')));
+  try {
+    const repo = path.join(temp, 'repo'); fs.mkdirSync(repo);
+    const env = { ...process.env, GSTACK_STATE_ROOT: path.join(temp, 'state'), GSTACK_PROJECT_SLUG: 'risk', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+    const git = (...args: string[]) => { const r = spawnSync('git', args, { cwd: repo, env, encoding: 'utf8', timeout: 10_000 }); expect(r.status, r.stderr).toBe(0); };
+    const run = (name: string, args: string[]) => spawnSync(path.join(bin, name), args, { cwd: repo, env, encoding: 'utf8', timeout: 30_000 });
+    git('init', '-q', '-b', 'main'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid'); git('config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(repo, '.gstack-policy.json'), JSON.stringify({ routing: { passes: { native_adversarial: false, upstream_specialists: false } } }));
+    fs.writeFileSync(path.join(repo, 'main.ts'), 'base\n'); git('add', '.'); git('commit', '-qm', 'base');
+    const manifest = path.join(temp, 'manifest.json');
+    fs.writeFileSync(manifest, JSON.stringify({ run_id: 'risk', base: 'main', files: [{ path: 'main.ts' }], scope: {}, policy: { path: '.gstack-policy.json' }, routing: { risk_tier: 'B', tier_source: 'policy', outcome: { present: false } } }));
+    expect(run('gstack-review-budget', ['plan', manifest]).status).toBe(0);
+    const start = run('gstack-review-log', ['--start', 'review']); expect(start.status).toBe(0);
+    fs.mkdirSync(path.join(repo, 'billing')); fs.writeFileSync(path.join(repo, 'billing/entitlements.ts'), 'repair\n');
+    const saved = run('gstack-review-log', [JSON.stringify({ skill: 'review', status: 'issues_found', issues_found: 1, critical: 1, completed: true, converged: false }), '--finish', start.stdout.trim()]);
+    expect(saved.status, saved.stderr).toBe(0);
+    git('add', '.'); git('commit', '-qm', 'risky repair');
+    const narrowed = run('gstack-review-log', ['--start', 'review', '--fix-range']);
+    expect(narrowed.status).not.toBe(0); expect(narrowed.stderr).toContain('risky-surface full re-review required');
+    expect(run('gstack-review-budget', ['plan', manifest, '--cycle', '1']).status).toBe(0);
+    for (const gate of ['native-adversarial', 'upstream-specialist:testing']) {
+      expect(run('gstack-review-budget', ['register-upstream', 'risk', gate, '--cycle', '1']).status).toBe(0);
+      expect(run('gstack-review-budget', ['dispatch', 'risk', gate, '--cycle', '1']).status).toBe(0);
+    }
+  } finally { fs.rmSync(temp, { recursive: true, force: true }); }
+});

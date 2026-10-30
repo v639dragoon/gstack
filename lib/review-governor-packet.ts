@@ -19,14 +19,16 @@ export function governorProject(root: string, binDir: string): { project: string
   return { project: path.join(resolveStateRoot(), 'projects', value('REPO_SLUG')), stateBranch: value('BRANCH') };
 }
 
-export function loadGovernorPlan(repo: string, binDir: string, id: string, cycle?: number): { project: string; stateBranch: string; plan: any; cycle: number } {
+export function loadGovernorPlan(repo: string, binDir: string, id: string, cycle?: number): { project: string; stateBranch: string; plan: any; cycle: number; bugClasses: string[] } {
   if (!/^[A-Za-z0-9._-]+$/.test(id)) throw new Error('invalid governor run id');
   const { project, stateBranch } = governorProject(repo, binDir);
   const rootPlan = JSON.parse(fs.readFileSync(path.join(project, 'budgets', `${id}.json`), 'utf8'));
   const selectedCycle = cycle ?? rootPlan.cycle;
   const plan = rootPlan.cyclePlans?.[String(selectedCycle)] ?? (rootPlan.cycle === selectedCycle ? rootPlan : null);
   if (!plan) throw new Error(`governor cycle ${selectedCycle} not planned`);
-  return { project, stateBranch, plan, cycle: selectedCycle };
+  let bugClasses: string[] = [];
+  try { bugClasses = [...new Set(fs.readFileSync(path.join(project, 'budgets', `${id}.ledger.jsonl`), 'utf8').split('\n').filter(Boolean).map(s => JSON.parse(s)).filter(r => r.record_type === 'finding' && typeof r.bug_class === 'string').map(r => r.bug_class as string))]; } catch {}
+  return { project, stateBranch, plan, cycle: selectedCycle, bugClasses };
 }
 
 export function loadGovernorContext(repo: string, binDir: string, id: string, cycle?: number, acceptanceFile?: string): GovernorContext {

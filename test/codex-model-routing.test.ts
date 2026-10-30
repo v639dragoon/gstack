@@ -543,7 +543,7 @@ describe('rendered routed step carries the model', () => {
     test(`${site}: resolves the model once, pins it on packet exec, records it, never re-runs on another model`, () => {
       const union = read(site);
       const parent = site.endsWith('/governor-structured.md') ? read(site.replace('governor-structured.md', 'SKILL.md')) : union;
-      expect(parent).toContain('adversarial subagent (always runs)');
+      expect(parent).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
       if (parent !== union) {
         expect(parent).toContain('Before dispatch, Read `governor-structured.md`');
         expect(parent).toContain('Missing or unreadable asset means INCOMPLETE');

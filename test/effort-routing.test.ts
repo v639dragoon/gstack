@@ -49,7 +49,7 @@ describe('effort routing (Phase 0)', () => {
   for (const site of ADVERSARIAL_SITES) {
     test(`${site}: upstream passes coexist with the plan-routed slot`, () => {
       const content = read(site);
-      expect(content).toContain('adversarial subagent (always runs)');
+      expect(content).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
       expect(content).toContain('adversarial challenge');
       expect(content).toContain('native-adversarial');
       const line = codexLineWith(content, 'codex exec -');

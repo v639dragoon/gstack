@@ -54,7 +54,7 @@ describe('generator artifact and dry-run contract', () => {
         kind: 'asset' as const, host,
       })),
       // Fork: external /review keeps upstream's inline section policy and reads its governor slot from this asset.
-      ...ALL_HOST_NAMES.filter(host => host !== 'claude' && host !== 'codex' && includesSkill(getHostConfig(host), 'review')).map(host => ({
+      ...ALL_HOST_NAMES.filter(host => host !== 'claude' && includesSkill(getHostConfig(host), 'review')).map(host => ({
         relativePath: `${getHostConfig(host).hostSubdir}/skills/gstack-review/governor-structured.md`,
         kind: 'asset', host,
       })),
