@@ -1,28 +1,26 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
-// Governor context for the strict Codex reviewer; upstream briefs live in review-dispatch.
+// Compatibility adapter into upstream's single brief renderer and dispatch ledger.
 import * as path from 'node:path';
-import { bunIsolationArgs } from '../lib/bun-isolation';
-import { bunExecutable, runBashSync } from '../lib/script-invocation';
-const args = process.argv.slice(2);
-function main(): number {
-  const binDir = path.dirname(Bun.fileURLToPath(import.meta.url));
-  const quote = (v: string) => "'" + v.replaceAll("'", "'\\''") + "'";
-  const command = [bunExecutable(), ...bunIsolationArgs(), path.join(binDir, 'gstack-review-packet.ts'), ...args].map(quote).join(' ');
-  const r = runBashSync(`set -uo pipefail
-SCRIPT_DIR='${binDir.replaceAll("'", "'\\''")}'
-eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1
-: "\${GSTACK_STATE_ROOT:?gstack-paths did not set GSTACK_STATE_ROOT}"
-eval "$("$SCRIPT_DIR/gstack-slug")" || exit 1
-export GSTACK_PACKET_PROJECT_DIR="$GSTACK_STATE_ROOT/projects/$SLUG"
-export GSTACK_PACKET_BRANCH="$(git branch --show-current 2>/dev/null || printf '%s' "$BRANCH")"
-export GSTACK_PACKET_STATE_BRANCH="$BRANCH"
-export GSTACK_PACKET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-export GSTACK_PLANS_DIR="\${GSTACK_PLANS_DIR:-$HOME/.claude/plans}"
-exec ${command}`, {
-    encoding: 'utf8', timeout: 120_000,
-  });
-  if (r.stdout) process.stdout.write(r.stdout);
-  if (r.stderr) process.stderr.write(r.stderr);
-  return r.status ?? 1;
+import { runScriptSync } from '../lib/script-invocation';
+import { governorProject, loadGovernorContext } from '../lib/review-governor-packet';
+import { spawnSync } from 'node:child_process';
+const [id, base, ...rest] = process.argv.slice(2);
+const binDir = path.dirname(Bun.fileURLToPath(import.meta.url));
+if (!id || !base) { console.error('gstack-review-context: run id and base required'); process.exitCode = 2; }
+else {
+  try {
+    const root = process.cwd();
+    const { project } = governorProject(root, binDir);
+    const merge = [`origin/${base}`, base].map(ref => spawnSync('git', ['merge-base', ref, 'HEAD'], { cwd: root, encoding: 'utf8', timeout: 15_000 })).find(r => r.status === 0)?.stdout.trim();
+    if (!merge) throw new Error('unable to resolve merge base');
+    const out = path.join(project, 'packets', id);
+    const r = runScriptSync(path.join(binDir, 'gstack-review-dispatch'), ['render', '--role', 'codex-structured', '--out', out, '--diff-base', merge, '--run-id', id, ...rest], { cwd: root, encoding: 'utf8', timeout: 120_000 });
+    process.stdout.write(r.stdout ?? ''); process.stderr.write(r.stderr ?? '');
+    process.exitCode = r.status ?? 1;
+    if (r.status === 0) {
+      const file = path.join(out, 'codex-structured.prompt.md');
+      const ctx = loadGovernorContext(root, binDir, id);
+      console.log(`PACKET_PATH=${file}\nPACKET_PATHS=${JSON.stringify([{file, out: path.join(out, 'codex-structured.out'), read: 'whole brief'}])}\nDIFF_PATH=${file}\nCI_GREEN=${ctx.ci}`);
+    }
+  } catch (e) { console.error(`gstack-review-context: ${(e as Error).message}`); process.exitCode = 1; }
 }
-process.exitCode = main();

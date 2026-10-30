@@ -32,6 +32,7 @@ import { reviewPlanTimeoutMs } from '../lib/review-collect';
 import { resultLine } from '../lib/result-codes';
 import { runScriptSync } from '../lib/script-invocation';
 import { TARGETED_RULES, parseClassList, targetedBriefSha, targetedRead } from '../lib/review-targeted';
+import { loadGovernorContext } from '../lib/review-governor-packet';
 import { resolveBaseBranch } from '../lib/ship-policy';
 import { auditVerdict, eventsDigest, loadReaders, readersLine, scanEvents, type ToolEvent } from '../lib/review-fetch';
 import { effectiveReaders, READERS_POLICY_DEFAULT, type EffectiveReaders } from '../lib/ship-policy-readers';
@@ -156,7 +157,7 @@ function render(): number {
   let diff: string | undefined;
   const readers = readersAt(checkoutRoot(), flag('--base'));
   const resolvable = !!diffBase && git(['rev-parse', '--verify', '--quiet', `${diffBase}^{commit}`]) !== null;
-  const reads = role !== 'fix-check' && !!diffBase && (resolvable || role === 'outside-voice');
+  const reads = role !== 'fix-check' && !!diffBase && (resolvable || (role === 'outside-voice' || role === 'codex-structured'));
   const base = reads ? resolveBaseBranch(process.cwd(), flag('--base')) : undefined;
   const sel = base && diffBase ? standaloneSelection(readerKey(role, name), base, diffBase, readers) : { reader: readerKey(role, name), exclude: flag('--exclude'), keep: parseTail(flag('--keep')).filter(s => s !== '--'), disclosure: flag('--disclosure') };
   const policyItems = parseTail(sel.exclude).filter(s => s.startsWith(':(top,exclude,glob)'));
@@ -164,7 +165,7 @@ function render(): number {
     const over = ceiling('gstack-review-dispatch render', base, out, [sel], diffBase, undefined);
     if (over) { process.stderr.write(over.line + '\n'); return over.exit; }
     settleExcerpt(sel, diffBase, path.resolve(out));
-    if (role === 'outside-voice') diff = branchDiff(diffBase, sel);
+    if ((role === 'outside-voice' || role === 'codex-structured')) diff = branchDiff(diffBase, sel);
   }
   let diffFile: Slots = {};
   if (diff !== undefined) {
@@ -186,14 +187,15 @@ function render(): number {
   const workdir = checkoutRoot();
   const tree = checkoutTree(workdir);
   if (!tree) throw new BriefError(`cannot read HEAD^{tree} and the toplevel of ${workdir}; a brief names the checkout its reply must prove`);
-  const text = withWorkspace(renderBrief(role, slots, sectionTexts(ROOT)), workdir, readers);
+  const governor = flag('--run-id') ? loadGovernorContext(workdir, path.join(ROOT, 'bin'), flag('--run-id')!, flag('--cycle') === undefined ? undefined : Number(flag('--cycle')), flag('--acceptance')) : undefined;
+  const text = withWorkspace(renderBrief(role, slots, sectionTexts(ROOT)) + (governor ? '\n\n' + governor.text : ''), workdir, readers);
   fs.mkdirSync(out, { recursive: true, mode: 0o700 });
   const file = path.join(path.resolve(out), briefFile(role, name));
   fs.writeFileSync(file, text, { mode: 0o600 });
   const ledger = flag('--ledger') ?? path.join(out, 'review-ledger.jsonl');
   const sha = promptHash(text);
   const targeted = brief === undefined ? {} : { classes: parseClassList(flag('--classes')!), rules: TARGETED_RULES, brief_sha: targetedBriefSha(merged ? path.join(ROOT, 'review/specialists/targeted.md') : checklist), diff_base: diffBase ?? null, ...(diffBase ? targetedRead(process.cwd(), diffBase) : { patch_id: 'none', head: null }) };
-  appendEvent(ledger, { event: 'rendered', reader: readerKey(role, name), role, name: name ?? null, file, sha256: sha, bytes: Buffer.byteLength(text), workdir, tree, ...targeted, ...(diffFile.diff_file ? { payload: { file: diffFile.diff_file, sha256: diffFile.diff_sha256 } } : {}), ...(disclosureDigest(sel.disclosure) ? { exclude: disclosureDigest(sel.disclosure) } : {}), readers: readers.digest });
+  appendEvent(ledger, { event: 'rendered', reader: readerKey(role, name), role, name: name ?? null, file, sha256: sha, bytes: Buffer.byteLength(text), workdir, tree, ...targeted, ...(diffFile.diff_file ? { payload: { file: diffFile.diff_file, sha256: diffFile.diff_sha256 } } : {}), ...(disclosureDigest(sel.disclosure) ? { exclude: disclosureDigest(sel.disclosure) } : {}), readers: readers.digest, ...(governor ? { governor: governor.metadata } : {}) });
   process.stdout.write(`BRIEF: reader=${readerKey(role, name)} sha256=${sha} bytes=${Buffer.byteLength(text)} file=${file}\n`);
   return EXIT.ok;
 }

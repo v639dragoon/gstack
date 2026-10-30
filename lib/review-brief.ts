@@ -27,10 +27,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { renderFixCheckPrompt } from '../scripts/resolvers/fix-check';
 import { fetchParagraph } from './review-fetch';
+import { STRUCTURED_INSTRUCTIONS, STRUCTURED_CONTRACT } from './review-governor-packet';
 import { parseClassList, targetedBrief } from './review-targeted';
 import type { ReadersPolicy } from './ship-policy-readers';
 
-export const BRIEF_ROLES = ['specialist', 'specialist-batched', 'red-team', 'adversarial-native', 'outside-voice', 'fix-check', 'targeted'] as const;
+export const BRIEF_ROLES = ['specialist', 'specialist-batched', 'red-team', 'adversarial-native', 'outside-voice', 'fix-check', 'targeted', 'codex-structured'] as const;
 export type BriefRole = typeof BRIEF_ROLES[number];
 export type Slots = Record<string, string | undefined>;
 
@@ -174,6 +175,11 @@ function renderRole(role: BriefRole, slots: Slots, t: SectionTexts): string {
       const classes = parseClassList(slots.classes);
       if (!classes?.length) throw new BriefError(`slot classes must list money, gate, auth or secret, got ${JSON.stringify(slots.classes)}`);
       try { return `${targetedBrief(need(slots, 'brief'), classes)}\n\n${merged}\n\nApply the targeted brief above (${need(slots, 'checklist')}: ${classes.join(', ')}) in the same read; your reply is this diff's targeted pass.`; } catch (e) { throw e instanceof BriefError ? e : new BriefError((e as Error).message); }
+    }
+    case 'codex-structured': {
+      const head = [STRUCTURED_INSTRUCTIONS, '', '## Findings contract', STRUCTURED_CONTRACT, '', ...(slots.disclosure ? [slots.disclosure, ''] : []), `## Branch diff (git diff ${diffBase})`];
+      if (slots.diff_file) return [...head, `Read the supplied branch diff at ${slots.diff_file} (${need(slots, 'diff_bytes')} bytes, sha256 ${need(slots, 'diff_sha256')}).`, ...(slots.diff_slice ? [slots.diff_slice] : [])].join('\n');
+      return [...head, FENCE + 'diff', (slots.diff ?? '').trim(), FENCE].join('\n');
     }
     case 'outside-voice': {
       const filled = fill(t.outside, [['DIFF_BASE=$(git merge-base origin/<base> HEAD)', `DIFF_BASE=${diffBase}`]], role);

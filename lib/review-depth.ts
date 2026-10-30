@@ -8,6 +8,7 @@
  * live in lib/review-collect.ts; bin/gstack-review-plan prints the plan; the
  * review-army resolver and the skills read the same definitions.
  */
+import type { GovernorMetadata } from './review-governor-packet';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -488,7 +489,7 @@ export interface PlanInput extends ClassInput {
 /** How much review a repo runs (lib/ship-policy-review.ts) plus HEAD and the platform review found at it (lib/review-platform.ts). */
 export interface ReviewShape { panel: 'off' | 'risk' | 'all'; readerModel: string; platform: 'off' | 'on'; head: string; platformReview: { id: string; head: string; reviewer: string } | null }
 /** One reviewer. `exclude` holds git pathspec argv items the reviewer's diff leaves out; `checklists` names what the batched specialist reads. */
-export interface Dispatch { role: Role; name: string; effort: Effort; exclude: string[]; checklists?: string[]; reason?: string; keep?: string[]; model?: string; classes?: string[] }
+export interface Dispatch { role: Role; name: string; effort: Effort; exclude: string[]; checklists?: string[]; reason?: string; keep?: string[]; model?: string; classes?: string[]; governor?: GovernorMetadata }
 /** lean: R65's one reviewer; panel: today's panel (review.panel); platform: the platform review at HEAD stands in for every reader. */
 export type ReviewMode = 'lean' | 'panel' | 'platform';
 export interface ReviewPlan extends DepthResult {
