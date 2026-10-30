@@ -4,7 +4,7 @@ import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFi
 import { join } from 'node:path';
 import { deriveReviewStatus, isCriticalFinding, isOpenByAction, readJsonl } from './headless-artifacts';
 import { resultLine, type ResultCodeName } from './result-codes';
-import { readPolicy, policyFlags, nonCodeReviewDelta, gitRead } from './review-policy';
+import { readPolicy, policyFlags, nonCodeReviewDelta, gitRead, riskyReviewPaths } from './review-policy';
 
 const DIFF_REVIEWS = new Set(['review', 'review-fix-check', 'adversarial-review', 'codex-review', 'design-review-lite', 'ship']);
 const SHARED_LIBS_COVERAGE_VERSION = 1;
@@ -196,6 +196,11 @@ function fixRangeBase(skill: string, env: NodeJS.ProcessEnv): string {
   if (typeof base !== 'string' || !HASH.test(base) || git('cat-file', '-e', `${base}^{commit}`).status !== 0) refuse('the latest pass has no resolvable commit');
   if (git('rev-parse', `${base}^{tree}`).stdout.trim() !== binding.start_wtree) refuse('the latest pass started from uncommitted content, so no commit marks what it read');
   if (git('merge-base', '--is-ancestor', base, 'HEAD').status !== 0) refuse(`${base} is not an ancestor of HEAD`);
+  const changed = git('diff', '--name-only', '-z', base, '--');
+  const untracked = git('ls-files', '--others', '--exclude-standard', '-z');
+  if (changed.status !== 0 || untracked.status !== 0) refuse('cannot classify the fix paths');
+  const risky = riskyReviewPaths((changed.stdout + untracked.stdout).split('\0').filter(Boolean), readPolicy(env.GSTACK_REVIEW_REPO!));
+  if (risky.length) refuse(`risky-surface full re-review required (${risky.join(', ')})`);
   return base;
 }
 

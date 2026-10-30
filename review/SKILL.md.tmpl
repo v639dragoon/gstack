@@ -399,12 +399,12 @@ Before replying, run greptile-triage.md's **Escalation Detection** to pick Tier 
 
 ### Step 5e: Bounded repair verification
 
-When `NON_CODE_DELTA=false`, skip this carve-out and keep the full repeat below.
+When `NON_CODE_DELTA=false`, skip the carry exception and follow upstream repeat selection below.
 After fixes run Local lanes, then `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
 
 - `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false`: run `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>`, then `gstack-review-log --carry-forward "$RUN_ID"`. Require success. This audited exception carries the original reviewer verdicts, never launches reviewers. Save the new reviewed tree and audit id; verify the added tests/doc delta and refresh only Local lane receipts. Full receipts may remain STALE: retain their original results and the carry proof, never label them FRESH. Persist with the original REVIEW_START, `completed:true` only when all required checks pass and `converged:true` for this non-code exception; Step 5.8 does not repeat Steps 3–5.
-- `FULL_RERUN=false` without a non-code delta: re-dispatch ONLY each finding's reviewer after `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`; confirm the fix and quote its evidence. Never invent changed content.
-- `FULL_RERUN=true`: print `Full rerun: {RERUN_TRIGGERS}`, log `rerun_cause:"scope-expansion:{triggers}"`, refresh the same run's manifest and plan for cycle <n+1>, then repeat the whole pass. Auth/d-surface/env/migration/api/git failure, modified tests and every source edit stay FULL. All calls carry the new cycle.
+- For each fixed finding, also record its verification; this accounting never selects or skips an upstream pass: re-dispatch ONLY each finding's reviewer after `gstack-review-budget dispatch "$RUN_ID" <gate> --verify-of <fingerprint> --cycle <n>`; confirm the fix and quote its evidence. Never invent changed content.
+- After source edits, refresh the same run's manifest and plan for cycle <n+1>, carrying fix_cycle/rerun_cause and the new cycle on every call. Upstream selects the fix-range repeat and final full pass. The logger refuses narrowed starts for auth/authorization, RLS, billing/entitlements, migrations or secrets, including configured auth/d/env surfaces: run a full pass there. FULL_RERUN is accounting, not an unconditional full-repeat instruction.
 - Exit 3: persist nonconvergence and STOP. Never exceed `REPAIR_CYCLES_MAX`.
 
 ## Step 5.8: Persist Eng Review result
@@ -444,7 +444,7 @@ When `ADVERSARIAL_CLAUDE=false`, skip native receipt/completion requirements bel
 Before saving a completed pass, run `gstack-review-budget complete "$RUN_ID" --cycle <n> --require-native`. Missing or unsuccessful governed reviewers make
 COMPLETED=false. On exit 2 retain INCOMPLETE= and STOP with a blocker report after saving incomplete evidence. After edits use `gstack-review-budget rerun-check "$RUN_ID"
 --cycle <n>` and retain fix_cycle/rerun_cause; refresh the manifest and plan
-for the new candidate before repeating the whole upstream pass. The governor's
+for the new candidate before the upstream-selected fix-range or final full pass. The governor's
 REPAIR_CYCLES_MAX is an additional cap; it never increases upstream's three cycles.
 Record findings and resolutions with `gstack-review-budget finding` / `resolve`;
 when `AUTOFIX_INFORMATIONAL=true`, the policy's BLOCKING/ADVISORY metadata never overrides upstream AUTO-FIX/ASK.

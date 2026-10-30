@@ -92,7 +92,7 @@ with both sources and the stricter ASK. Keep actual specialist stats and distinc
 
 ## Step 9.4: Fix-First and persistence
 
-When `NON_CODE_DELTA=true`, after any fixes run `rerun-check` before persistence. Only `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` permits `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>` and `gstack-review-log --carry-forward "$RUN_ID"`. Require success, verify that delta and refresh Local lanes only; retain stale Full receipts and their original results explicitly. Then finish the original REVIEW_START with completed/converged true only when all required checks pass; skip the full Step 9 repeat and continue to the pending enabled Steps 10–11, reusing carried reviewer verdicts rather than dispatching again. Save the new reviewed tree/audit id. Every other edit keeps the full upstream repeat below.
+When `NON_CODE_DELTA=true`, after any fixes run `rerun-check` before persistence. Only `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` permits `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>` and `gstack-review-log --carry-forward "$RUN_ID"`. Require success, verify that delta and refresh Local lanes only; retain stale Full receipts and their original results explicitly. Then finish the original REVIEW_START with completed/converged true only when all required checks pass; skip the full Step 9 repeat and continue to the pending enabled Steps 10–11, reusing carried reviewer verdicts rather than dispatching again. Save the new reviewed tree/audit id. Every other edit follows the upstream repeat selection below.
 
 When `AUTOFIX_INFORMATIONAL=false`, override the heuristic below: BLOCKING means severity in `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`; everything else is ADVISORY. ADVISORY findings are NEVER fixed: no AUTO-FIX and no ASK. List at most `MAX_ADVISORIES`, sorted by confidence, under `## Advisories (not fixed)`. Advisory test stubs are listed, never asked. Only BLOCKING findings enter the normal fix/ASK and regression flow below.
 
@@ -242,14 +242,13 @@ finding makes that PR a draft.
 
 For each fixing cycle also run `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
 Retain fix_cycle and rerun_cause in gate rows and refresh manifest/plan before
-reviewing changed inputs. Governor REPAIR_CYCLES_MAX may stop earlier; never
-replace the full upstream review repeat with a delta-only check, except the policy-enabled NON_CODE_DELTA carry-forward for added tests or docs/release metadata. On exit 3
+reviewing changed inputs. Governor REPAIR_CYCLES_MAX may stop earlier; follow upstream frozen scope, scoped second pass, fix-check and pass caps. FULL_RERUN is governor accounting, not the repeat selector; only the risky-surface floor below overrides upstream selection. On exit 3
 persist `converged:false` and recurring findings before stopping.
 
 ### Decide whether to repeat Step 9
 
 After persistence, record missing output, CYCLES and fixes in the invocation record.
-Decision 1 always applies first. Then, under `frozen`, run `gstack-review-plan --base <base> --pass $PASS --last full`
+Decision 1 always applies first. Then, under `frozen`, run `gstack-review-plan --base <base> --run-id "$RUN_ID" --cycle "$CYCLE" --pass $PASS --last full`
 with each flag that holds (`--fixed-blocking`, `--fixed-below`, `--blocking-open`,
 `--touched-gate` for a fix to an item 2.5 path, `--critical-found` when this pass
 logged a CRITICAL, `--adversarial-ran` once Step 11's native pass ran, `--reviewed-numbers <fp>`,
@@ -258,6 +257,13 @@ in `gstack-approvals` naming `review_loop_grant` and the stop head), `--range-ba
 its `NEXT:` alone picks the next decision: `stop` 2, `full` 3, `fix-check` 3.5, `done` 4, `platform` 4. `voices` 4: Step 11 runs before the stop.
 `scoped` is 3 too. A full pass 1 always gets a full pass 2.
 Other scopes apply decisions 2–4 in order.
+
+**Risky-surface floor:** a fix touching auth/authorization, RLS, billing/entitlements,
+migrations or secrets (including configured auth/d/env surfaces) requires a FULL pass
+on the whole branch diff. Always supply the fix range so the planner can classify it;
+it prints RISKY_FULL_REVIEW: true, raises depth to full, enables the full reviewer set before build despite D3 trims,
+and the builder uses the merge base even if --range is given. That printed floor overrides every D3 skip clause for the required review passes. A cap still stops: never
+replace this full pass with fix-check or run a fourth fixing cycle.
 
 1. **Dispatched reviewer output missing:** STOP and name each failed specialist or
    Red Team. Retain queued fixes and restore coverage. If this pass made edits,

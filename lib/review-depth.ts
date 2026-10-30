@@ -495,6 +495,7 @@ export type ReviewMode = 'lean' | 'panel' | 'platform';
 export interface ReviewPlan extends DepthResult {
   /** The depth this step runs at: light raised to standard by a fixed blocker, a CRITICAL or an open blocker. */
   governor?: GovernorMetadata;
+  risky_full_review?: boolean;
   stepDepth: Depth;
   depthReasons: string[];
   next: NextStep; numbers: NumbersResult; dispatches: Dispatch[]; skipped: string[]; mode: ReviewMode;

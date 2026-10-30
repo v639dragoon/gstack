@@ -110,6 +110,21 @@ export function sensitiveTriggers(files: Delta['files'], policy: any): string[] 
   }
   return triggers;
 }
+/** The governor's risky-surface floor, shared by ship planning and /review range selection. */
+export function riskyReviewPaths(files: readonly string[], policy: any): string[] {
+  const configured = sensitiveTriggers(files.map(path => ({ path, status: 'M' })), policy).filter(t => !t.startsWith('api:'));
+  const builtIn = files.filter(p => /(?:^|[\/_.-])(?:auth[^/]*|authorization|permission[^/]*|roles?|rls|billing|entitlements?|secrets?|migrations?)(?:[\/_.-]|$)|(?:^|\/)\.env(?:[\/.]|$)/i.test(p));
+  return [...new Set([...configured, ...builtIn.map(p => `risky-surface:${p}`)])];
+}
+
+export function riskyReviewSince(repo: string, since: string, policy: any): string[] {
+  try {
+    const changed = gitRead(repo, ['diff', '--name-only', '-z', since, '--']);
+    const untracked = gitRead(repo, ['ls-files', '--others', '--exclude-standard', '-z']);
+    return riskyReviewPaths((changed + untracked).split('\0').filter(Boolean), policy);
+  } catch { return ['risky-surface:unreadable-fix-range']; }
+}
+
 export function auditReusable(repo: string, gate: string, verdict: string, from: string, to: string, policy: any) {
   const delta = treeDelta(repo, from, to);
   if (delta.error || sensitiveTriggers(delta.files, policy).length) return false;
@@ -125,7 +140,7 @@ export function auditReusable(repo: string, gate: string, verdict: string, from:
 /** One conservative exception, shared by rerun accounting and binding. */
 export function nonCodeReviewDelta(repo: string, from: string, to: string, policy: any) {
   const delta = treeDelta(repo, from, to);
-  const triggers = delta.error ? ['git-failure'] : sensitiveTriggers(delta.files, policy);
+  const triggers = delta.error ? ['git-failure'] : [...sensitiveTriggers(delta.files, policy), ...riskyReviewPaths(delta.files.map(f => f.path), policy)];
   // diff-scope's built-in auth signals stay fail-upward in the exception too.
   for (const f of delta.files) if (matchAny(f.path, ['**/*auth*', '**/*session*', '**/*jwt*', '**/*oauth*', '**/*permission*', '**/*role*']))
     triggers.push(`auth:${f.path}`);

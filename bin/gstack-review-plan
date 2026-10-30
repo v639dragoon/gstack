@@ -38,14 +38,14 @@ import { loadPolicyAt } from '../lib/ship-policy-at';
 import { loadReaders, readersLine } from '../lib/review-fetch';
 import { policySelection, selectFor } from '../lib/review-selection';
 import { effectiveReaders, READERS_POLICY_DEFAULT } from '../lib/ship-policy-readers';
-import { classifyDiff, diffCommand, keepCommand, planReview, reviewDepthLine, reviewPlanLine, scanNumbers, ROLE_EFFORT, SCOPED_RANGE_LINES, type Depth, type History } from '../lib/review-depth';
+import { classifyDiff, diffCommand, keepCommand, planReview, reviewDepthLine, reviewPlanLine, scanNumbers, ROLE_EFFORT, SCOPED_RANGE_LINES, FULL_PASS_CAP, type Depth, type History } from '../lib/review-depth';
 import { classList, targetedBriefSha, targetedClasses, targetedPatchId } from '../lib/review-targeted';
 import { targetedDelta } from '../lib/review-targeted-delta';
 import { docsChangeSince, ownChangeSince } from '../lib/ship-receipt-depth';
 import { RISK_CLASSES, type RiskClass } from '../lib/review-risk';
 import { governorPlan } from '../lib/review-plan-governor';
 import { loadGovernorPlan } from '../lib/review-governor-packet';
-import { readPolicy } from '../lib/review-policy';
+import { readPolicy, riskyReviewPaths } from '../lib/review-policy';
 import { renderFixCheckPrompt } from '../scripts/resolvers/fix-check';
 
 const HELP = `gstack-review-plan — the review depth of the next /ship step (docs/review-policy.md#review-depth)
@@ -199,6 +199,7 @@ function main(): number {
     const m = /GATE_SUMMARY: .*?tagged=\{([^}]*)\}/.exec(stdout ?? '');
     return status === 0 && m ? m[1]!.split(',').reduce((n, kv) => n + (Number(kv.split(':')[1]) || 0), 0) : null;
   };
+  const governorPolicy = readPolicy(root);
   const gateTagsOf = (args: string[]): number | null => { const g = runGateDiff(args); return tagCount(g.stdout, g.status); };
   const diffBase = collected.mergeBase ?? base;
   const scope = scopeOf([diffBase]);
@@ -229,7 +230,7 @@ function main(): number {
   const tiersSetting = runScriptSync(path.join(binDir, 'gstack-config'), ['get', 'review_effort_tiers'], { encoding: 'utf8', timeout: 15_000 });
   const auditEffort = has('--no-tiers') || (tiersSetting.stdout ?? '').trim() === 'off' ? 'host' : 'light';
   const { added, diffLines, paths, deleted, stampOnly, perPath, registry } = collected;
-  let fixRange: { base: string; runtime_lines: number | null; error?: string; touched_gate?: true } | undefined;
+  let fixRange: { base: string; runtime_lines: number | null; error?: string; touched_gate?: true; risky_surface?: string[] } | undefined;
   let own: string | null = null;
   if (rangeBase) {
     const unread = (error: string) => ({ base: rangeBase, runtime_lines: null, error });
@@ -243,12 +244,13 @@ function main(): number {
       const range = classifyDiff({ ...commit, registry, scope: scopeOf([resolved, '--head', own]), gateTagged: gateTagsOf(['--commit', own]), ...riskPaths, ...(active ? { excluded: active.excluded } : {}) });
       fixRange = range.errors.length ? unread([...range.errors.slice(0, 5).map(e => `${e.code} ${e.input}`), ...(range.errors.length > 5 ? [`+${range.errors.length - 5} more`] : [])].join('; '))
         : !commit.paths.length ? unread('the fix range is empty: commit the fix after the range base (a base merge alone is not the PR\'s own change)')
-        : { base: rangeBase, runtime_lines: range.runtimeLines, ...(range.class === 'gate' ? { touched_gate: true as const } : {}) };
+        : { base: rangeBase, runtime_lines: range.runtimeLines, ...(range.class === 'gate' ? { touched_gate: true as const } : {}), risky_surface: riskyReviewPaths(commit.paths, governorPolicy) };
     }
   }
   const targeted = targetedClasses({ ...collected, scope, gateTagged, ...(active ? { excluded: active.excluded } : {}) });
   const patch = collected.mergeBase ? targetedPatchId(process.cwd(), collected.mergeBase) : 'none';
   const brief = targetedBriefSha();
+  const riskyRepeat = !!fixRange?.risky_surface?.length && (has('--fixed-blocking') || has('--fixed-below') || (has('--post-review') && pass > 0));
   const ran = !['uncommitted', 'none'].includes(patch) && flag('--targeted-ran') === patch;
   const postReview = has('--post-review');
   const fixCheckAt = postReview && pass > 0 && last === 'fix-check' && fixRange?.runtime_lines != null ? git(['rev-parse', '--verify', '--quiet', `${rangeBase}^{commit}`])?.trim() : undefined;
@@ -256,9 +258,9 @@ function main(): number {
   const rawSince = fixCheckAt && own ? git(['diff', '--raw', '--no-renames', fixCheckAt, own]) : null;
   const carried = afterFixCheck && afterFixCheck.verdict !== 'code' && rawSince !== null && !/^:\d+ (100755|120000|160000) /m.test(rawSince) && gateTagsOf(['--commit', own!]) === 0 ? afterFixCheck : null;
   let plan = planReview({
-    ...collected, ...exclusionInput, ...riskPaths, declared: declared as RiskClass[], shape: { panel: review.panel, readerModel: review.reader_model, platform: review.platform, head, platformReview: platform?.ok ? platform.review : null }, scope, gateTagged, targeted: { classes: targeted.classes, ran }, numbers: scanNumbers(kept(added)), force, gated: list('--gated'), floor, tiers: auditEffort !== 'host',
-    criticalFound: has('--critical-found'), adversarialRan: has('--adversarial-ran'), reviewedNumbers: flag('--reviewed-numbers'),
-    history: { fullPasses: pass, last, fixedBlocking: has('--fixed-blocking'), fixedBelow: (has('--fixed-below') || (postReview && pass > 0)) && last !== 'fix-check', blockingOpen: has('--blocking-open'), touchedGate: has('--touched-gate') || (!carried && (!!fixRange?.touched_gate || (postReview && pass > 0))), pass1Depth, rangeRuntimeLines: fixRange?.runtime_lines, granted: grant, fixChecks: has('--fix-checks') ? fixChecks : undefined, postReview, chained: inLoopLink },
+    ...collected, ...exclusionInput, ...riskPaths, declared: declared as RiskClass[], shape: { panel: review.panel, readerModel: review.reader_model, platform: review.platform, head, platformReview: platform?.ok ? platform.review : null }, scope, gateTagged, targeted: { classes: targeted.classes, ran }, numbers: scanNumbers(kept(added)), force, gated: list('--gated'), floor: riskyRepeat ? 'full' : floor, tiers: auditEffort !== 'host',
+    criticalFound: has('--critical-found'), adversarialRan: riskyRepeat ? false : has('--adversarial-ran'), reviewedNumbers: flag('--reviewed-numbers'),
+    history: { fullPasses: pass, last, fixedBlocking: has('--fixed-blocking'), fixedBelow: (has('--fixed-below') || (postReview && pass > 0)) && last !== 'fix-check', blockingOpen: has('--blocking-open'), touchedGate: riskyRepeat || has('--touched-gate') || (!carried && (!!fixRange?.touched_gate || (postReview && pass > 0))), pass1Depth, rangeRuntimeLines: fixRange?.runtime_lines, granted: grant, fixChecks: has('--fix-checks') ? fixChecks : undefined, postReview, chained: inLoopLink },
   });
   if (carried) plan.next.reason = `the edits after the last fix-check ${fixCheckAt!.slice(0, 12)} are ${carried.paths.length ? `${carried.verdict === 'plain' ? 'plain docs' : `docs (${carried.paths.join(', ')})`}${carried.stamps.length ? ' and release stamps' : ''}` : 'release stamps'} (docsChangeSince), no gate-class edit (GST-1702): ${plan.next.reason}`;
   else if (postReview && pass > 0) plan.next.reason = `edits after the review bound (Step 16 stage 2.1) plan as a fix to a gate-class path, never a note: ${plan.next.reason}`;
@@ -272,11 +274,13 @@ function main(): number {
     plan.dispatches.push({ role: 'targeted', name: 'targeted', effort: ROLE_EFFORT.targeted, exclude: active ? [...active.specs] : [], classes: [...targeted.classes], ...(active?.keep.length ? { keep: [...active.keep] } : {}) });
   } else if (delta) plan.skipped.push(`targeted-only read (${delta.reason})`);
   const targetedDeltaOut = delta?.state === 'dispatch' ? { range_base: delta.range_base, paths: delta.paths, classes: targeted.classes } : null;
+  if (riskyRepeat) plan = { ...plan, risky_full_review: true };
+  if (riskyRepeat && !grant && (pass >= FULL_PASS_CAP || last === 'fix-check')) plan = { ...plan, next: { step: 'stop', reason: 'risky-surface full re-review required but the upstream pass cap is exhausted' }, dispatches: [] };
   if (has('--cycle') && !/^\d+$/.test(flag('--cycle') ?? '')) { process.stderr.write('gstack-review-plan: --cycle must be a non-negative integer\n'); return EXIT.usage; }
   let governor;
   try { if (flag('--run-id')) { const loaded = loadGovernorPlan(root, binDir, flag('--run-id')!, has('--cycle') ? Number(flag('--cycle')) : undefined); governor = { run_id: flag('--run-id')!, cycle: loaded.cycle, plan: loaded.plan }; } }
   catch (e) { process.stderr.write(`gstack-review-plan: governor plan unavailable: ${(e as Error).message}\n`); return EXIT.fail; }
-  plan = governorPlan(plan, readPolicy(root), governor, has('--critical-found') || has('--fixed-blocking'));
+  plan = governorPlan(plan, riskyRepeat ? {} : governorPolicy, governor, has('--critical-found') || has('--fixed-blocking'));
   const selection = policySelection(active && { state: 'active', specs: active.specs, keep: active.keep, excerpt: active.excerpt }, readers);
   plan.dispatches.forEach((d, i) => { if (d.role !== 'fix-check') plan.dispatches[i] = selectFor(d, selection); });
   const gateScan = { tagged: gateTagged, head };
@@ -294,6 +298,7 @@ function main(): number {
   if (platform) out.push(platform.ok ? `PLATFORM_REVIEW: ${platform.review.id} reviewer=${platform.review.reviewer} head=${platform.review.head}` : `PLATFORM_REVIEW: none (${platform.reason})`);
   if (fixRange) out.push(`FIX_RANGE: ${fixRange.runtime_lines === null ? `unread (${fixRange.error})` : `runtime_lines=${fixRange.runtime_lines}`} base=${fixRange.base}`);
   if (targetedDeltaOut) out.push(`TARGETED_DELTA: range_base=${targetedDeltaOut.range_base} paths=${targetedDeltaOut.paths.join(',')} classes=${classList(targetedDeltaOut.classes)}`);
+  out.push(`RISKY_FULL_REVIEW: ${!!plan.risky_full_review}`);
   out.push(reviewPlanLine(plan, pass + (plan.next.step === 'full' || plan.next.step === 'scoped' ? 1 : 0)), `NEXT: ${plan.next.step} (${plan.next.reason})`);
   for (const e of plan.errors) out.push(`DEPTH_ERROR: ${e.code} input=${e.input} detail=${e.detail}; fix: ${e.repair}${e.result ? ` (${e.result})` : ''}`);
   for (const d of plan.dispatches) {

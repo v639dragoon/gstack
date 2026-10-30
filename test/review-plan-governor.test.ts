@@ -33,7 +33,7 @@ function fixture(tier: string, passes: Record<string, boolean>, migrations = fal
   const flags = ['--base', 'main', '--gate-tagged', '0', '--run-id', 'integration', '--cycle', '0'];
   const plan = run('gstack-review-plan', [...flags, '--json']);
   expect(plan.status, plan.stderr).toBe(0);
-  return { temp, out, run, flags, plan: JSON.parse(plan.stdout), cleanup: () => fs.rmSync(temp, { recursive: true, force: true }) };
+  return { temp, repo, git, out, run, flags, plan: JSON.parse(plan.stdout), cleanup: () => fs.rmSync(temp, { recursive: true, force: true }) };
 }
 
 // The upstream carrier moved to review-dispatch's pass manifest; governor tier checklists share its one batched reader.
@@ -90,3 +90,44 @@ test('D3 switches cannot drop floor checklists, red-team or structured', () => {
     expect(f.plan.dispatches.some((d: { governor_gate: string }) => d.governor_gate === 'upstream-outside:challenge')).toBe(false);
   } finally { f.cleanup(); }
 });
+
+
+test('ordinary blocking repair uses upstream scoped selection and below-floor repair uses fix-check', () => {
+  const f = fixture('B', {});
+  try {
+    const since = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: f.repo, encoding: 'utf8', timeout: 10_000 }).stdout.trim();
+    fs.appendFileSync(path.join(f.repo, 'main.ts'), 'export const fixed = true;\n');
+    f.git('add', '.'); f.git('commit', '-qm', 'fix');
+    const repeat = ['--pass', '1', '--last', 'full', '--pass1-depth', 'standard', '--range-base', since];
+    const scoped = f.run('gstack-review-plan', [...f.flags, ...repeat, '--fixed-blocking', '--json']);
+    expect(JSON.parse(scoped.stdout).next.step).toBe('scoped');
+    const check = f.run('gstack-review-plan', [...f.flags, ...repeat, '--fixed-below', '--json']);
+    expect(JSON.parse(check.stdout).next.step).toBe('fix-check');
+  } finally { f.cleanup(); }
+});
+
+for (const risky of ['lib/auth/access.ts', 'db/rls.sql', 'billing/entitlements.ts', 'db/migrations/a.sql', 'lib/secrets.ts'])
+  test(`risky fix ${risky} requires full whole-branch review despite D3; cap stops`, () => {
+    const f = fixture('B', { native_adversarial: false, upstream_specialists: false, codex_challenge: false, red_team_loc_trigger: false });
+    try {
+      const since = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: f.repo, encoding: 'utf8', timeout: 10_000 }).stdout.trim();
+      fs.mkdirSync(path.dirname(path.join(f.repo, risky)), { recursive: true });
+      fs.writeFileSync(path.join(f.repo, risky), 'export const fixed = true;\n');
+      f.git('add', '.'); f.git('commit', '-qm', 'risky fix');
+      const repeat = ['--pass', '1', '--last', 'full', '--fixed-below', '--pass1-depth', 'standard', '--range-base', since];
+      const planned = f.run('gstack-review-plan', [...f.flags, ...repeat, '--json']);
+      const plan = JSON.parse(planned.stdout);
+      expect(plan.next.step).toBe('full'); expect(plan.depth).toBe('full');
+      expect(plan.dispatches.map((d: { name: string }) => d.name)).toEqual(expect.arrayContaining(['batched', 'red-team', 'adversarial', 'codex-structured']));
+      const built = f.run('gstack-review-dispatch', ['pass', '--base', 'main', '--pass', 'p2', '--out', f.out, '--', ...f.flags, ...repeat]);
+      expect(built.status, built.stderr).toBe(0);
+      const file = path.join(f.out, 'pass-manifest.json');
+      expect(f.run('gstack-review-dispatch', ['stage', '--manifest', file, '--stage', 'voices']).status).toBe(0);
+      const strict = readManifest(file).readers.find(r => r.role === 'codex-structured')!;
+      expect(fs.readFileSync(strict.file!, 'utf8')).toContain('+export const x79 = 79;');
+      // flagReader uses the first occurrence; replace it explicitly for the cap probe.
+      const capFlags = [...repeat]; capFlags[1] = '2';
+      const cap = JSON.parse(f.run('gstack-review-plan', [...f.flags, ...capFlags, '--json']).stdout);
+      expect(cap.next.step).toBe('stop'); expect(cap.dispatches).toEqual([]);
+    } finally { f.cleanup(); }
+  });
