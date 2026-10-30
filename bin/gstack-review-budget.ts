@@ -292,9 +292,11 @@ if (command === 'plan') {
     reviewerSpecs = [
       'codex-structured@high',
       'specialist:security@sonnet',
-      m.scope?.migrations ? 'specialist:data-migration@sonnet' : 'red-team@sonnet',
+      ...(m.scope?.migrations ? ['specialist:data-migration@sonnet'] : []),
+      'red-team@sonnet',
     ];
-  if (opt('--host') === 'codex') { reviewerSpecs = []; reviewerBudget = 0; }
+  // The floor applies on every host; nesting/consent failures remain incomplete coverage.
+  reviewerBudget = Math.max(reviewerBudget, reviewerSpecs.length);
   const out = m.routing.outcome || {};
   const final = out.is_final_slice || out.is_flag_flip || !out.present;
   const deterministicGates =
@@ -496,7 +498,7 @@ function gateDisabled(p: any, gate: string): boolean {
 }
 if (command === 'register-upstream') {
   const [id, gate] = argv;
-  if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|state-machines|red-team))$/.test(gate))
+  if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|state-machines|red-team|batched))$/.test(gate))
     fail('known upstream-required reviewer gate required');
   const cycle = requestedCycle(), p = cyclePlan(loadPlan(id), cycle);
   if (gateDisabled(p, gate) || gate === 'upstream-specialist:red-team' && opt('--trigger') === 'loc' && p.redTeamLocTrigger === false) {
