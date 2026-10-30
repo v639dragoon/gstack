@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v cygpath >/dev/null 2>&1; then GSTACK_BUN_CONFIG=NUL; fi ;; esac
 # gstack-codex-probe: shared helper for /codex, /autoplan and every outside
 # review. Run it as a command, one subcommand per probe (`gstack-codex-probe
 # help`): it prints KEY: value lines on stdout, human status lines where they
@@ -1043,7 +1044,7 @@ _gstack_codex_effort_check() {
     # ONE bun process builds the metadata, writes the receipt (when asked) and
     # prints the gate record: this runs inside the dispatch's shared deadline,
     # and each extra process start was charged to the Codex call.
-    _record=$(bun --no-env-file --config=/dev/null -e 'const [effort,effort_source,effort_reason,receipt]=process.argv.slice(1); const m={effort,effort_source,effort_reason}; if(receipt) require("fs").writeFileSync(receipt,JSON.stringify(m)+"\n",{mode:0o600,flag:"wx"}); process.stdout.write(JSON.stringify({...m,record_type:"gate",run_id:process.env.GSTACK_RUN_ID || "effort-"+process.pid+"-"+Date.now(),skill:"codex",gate:"codex-effort-decision",trigger:"send",decision:"resolved"}))' "$_chosen" "$_record_source" "$_reason" "${GSTACK_CODEX_EFFORT_RECEIPT:-}") || return 1
+    _record=$(bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e 'const [effort,effort_source,effort_reason,receipt]=process.argv.slice(1); const m={effort,effort_source,effort_reason}; if(receipt) require("fs").writeFileSync(receipt,JSON.stringify(m)+"\n",{mode:0o600,flag:"wx"}); process.stdout.write(JSON.stringify({...m,record_type:"gate",run_id:process.env.GSTACK_RUN_ID || "effort-"+process.pid+"-"+Date.now(),skill:"codex",gate:"codex-effort-decision",trigger:"send",decision:"resolved"}))' "$_chosen" "$_record_source" "$_reason" "${GSTACK_CODEX_EFFORT_RECEIPT:-}") || return 1
     # An ordinary effort's record is best-effort, so run-with-timeout logs it
     # BESIDE the dispatch (gstack-gate-log starts about a dozen processes) and
     # waits for it before returning; it comes back as a second output line, so

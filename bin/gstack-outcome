@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
+GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v cygpath >/dev/null 2>&1; then GSTACK_BUN_CONFIG=NUL; fi ;; esac
 # gstack-outcome — branch-scoped outcome metadata for review routing
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
 eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
 GSTACK_OUTCOME_PROJECT_DIR="$GSTACK_STATE_ROOT/projects/$SLUG" \
-GSTACK_OUTCOME_BRANCH="$(git branch --show-current 2>/dev/null || printf '%s' "$BRANCH")" bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-outcome.ts" "$@"
+GSTACK_OUTCOME_BRANCH="$(git branch --show-current 2>/dev/null || printf '%s' "$BRANCH")" bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" "$SCRIPT_DIR/gstack-outcome.ts" "$@"

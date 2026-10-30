@@ -1,10 +1,13 @@
 #!/usr/bin/env -S bun --no-env-file --config=/dev/null
 // Governor context for the strict Codex reviewer; upstream briefs live in review-dispatch.
 import * as path from 'node:path';
-import { runBashSync } from '../lib/script-invocation';
+import { bunIsolationArgs } from '../lib/bun-isolation';
+import { bunExecutable, runBashSync } from '../lib/script-invocation';
 const args = process.argv.slice(2);
 function main(): number {
   const binDir = path.dirname(Bun.fileURLToPath(import.meta.url));
+  const quote = (v: string) => "'" + v.replaceAll("'", "'\\''") + "'";
+  const command = [bunExecutable(), ...bunIsolationArgs(), path.join(binDir, 'gstack-review-packet.ts'), ...args].map(quote).join(' ');
   const r = runBashSync(`set -uo pipefail
 SCRIPT_DIR='${binDir.replaceAll("'", "'\\''")}'
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1
@@ -15,7 +18,7 @@ export GSTACK_PACKET_BRANCH="$(git branch --show-current 2>/dev/null || printf '
 export GSTACK_PACKET_STATE_BRANCH="$BRANCH"
 export GSTACK_PACKET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 export GSTACK_PLANS_DIR="\${GSTACK_PLANS_DIR:-$HOME/.claude/plans}"
-exec bun --no-env-file --config=/dev/null "$SCRIPT_DIR/gstack-review-packet.ts" ${args.map(a => "'" + a.replaceAll("'", "'\\''") + "'").join(" ")}`, {
+exec ${command}`, {
     encoding: 'utf8', timeout: 120_000,
   });
   if (r.stdout) process.stdout.write(r.stdout);

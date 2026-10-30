@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v cygpath >/dev/null 2>&1; then GSTACK_BUN_CONFIG=NUL; fi ;; esac
 # gstack-voice-row — log ONE gate row for an outside-voice pass.
 #   gstack-voice-row <skill> <voice> <completed|unavailable> <model> <model_source> <effort> <t0_epoch>
 # Keeps the rendered invocation short: the row carries purpose, model, effort,
@@ -8,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 skill="${1:-}"; voice="${2:-}"; status="${3:-unavailable}"; model="${4:-}"; src="${5:-}"; effort="${6:-}"; t0="${7:-$(date +%s)}"
 effort_source=routed
 if [ -f "${8:-}" ]; then
-  _fields=$(bun --no-env-file --config=/dev/null -e 'const m=await Bun.file(process.argv[1]).json(); if(!/^[a-z]+$/.test(m.effort)||!/^[a-z-]+$/.test(m.effort_source))process.exit(1); console.log(m.effort); console.log(m.effort_source); console.log(JSON.stringify(m.effort_reason??""))' "$8") || exit 1
+  _fields=$(bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e 'const m=await Bun.file(process.argv[1]).json(); if(!/^[a-z]+$/.test(m.effort)||!/^[a-z-]+$/.test(m.effort_source))process.exit(1); console.log(m.effort); console.log(m.effort_source); console.log(JSON.stringify(m.effort_reason??""))' "$8") || exit 1
   effort=$(printf '%s\n' "$_fields" | sed -n '1p')
   effort_source=$(printf '%s\n' "$_fields" | sed -n '2p')
   effort_reason_json=$(printf '%s\n' "$_fields" | sed -n '3p')
