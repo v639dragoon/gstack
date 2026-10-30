@@ -16,6 +16,7 @@
 // only blocks actual collisions.
 
 import { readFileSync } from "node:fs";
+import { postMergeVersionMode } from "../lib/version-mode";
 import { classifyTrainHead } from "../crew/lib/version-gate-train";
 
 const [, , jsonPath, prNumber] = process.argv;
@@ -40,6 +41,10 @@ const prVersionEnv = (process.env.PR_VERSION ?? "").trim();
 // The workflow passes BASE_REF and HEAD_SHA with the PR head checked out as cwd.
 if (process.env.BASE_REF && process.env.HEAD_SHA) {
   const train = classifyTrainHead({ repoRoot: process.cwd(), baseRef: process.env.BASE_REF, head: process.env.HEAD_SHA, author: process.env.PR_AUTHOR });
+  if (train.kind === "off" && postMergeVersionMode(process.cwd())) {
+    console.log(`✓ ${tag} uses post-merge VERSION mode without a train: no pre-merge version claim or stamp.`);
+    process.exit(0);
+  }
   if (train.kind === "unstamped") {
     if (train.entry === "kept") {
       console.log(`✓ ${tag} keeps its merge base's VERSION and package.json version, as the base's ship policy (bump never) requires.`);

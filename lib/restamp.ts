@@ -19,6 +19,7 @@
  * Policy comes from origin/<base> (lib/ship-policy.ts); repo-declared
  * commands run only with allowRepoCommands (the /ship flag).
  */
+import { postMergeVersionMode } from './version-mode';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -675,6 +676,7 @@ export function restamp(o: RestampOptions): RestampResult {
     const { loaded, label } = loadPolicy(o);
     if (loaded.errors.length) throw new Refusal(loaded.errors[0]!.code, `${SHIP_POLICY_PATH} (${label}): ${loaded.errors[0]!.message} at ${loaded.errors[0]!.path}; nothing written`);
     if (loaded.policy.bump === 'never' && !o.bump && !o.version) throw new Refusal('RESTAMP_VERSION_SOURCE', `${SHIP_POLICY_PATH} (${label}): bump never names no level; a release stamp passes --bump <level> or --version <X>; nothing written`);
+    if (!loaded.policy.train && postMergeVersionMode(o.repoRoot)) throw new Refusal('RESTAMP_VERSION_SOURCE', 'post-merge VERSION mode claims no pre-merge slot; restamp is refused outside a configured train; nothing written');
     const commands = declaredCommands(loaded.policy);
     if (commands.length && !o.allowRepoCommands) {
       throw new Refusal('REPO_COMMANDS_NOT_ALLOWED', `repo commands not executed (pass --allow-repo-commands): ${commands.map(c => `${c.key}: ${c.command}`).join('; ')}; nothing written`, { commands });

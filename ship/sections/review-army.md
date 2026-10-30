@@ -332,7 +332,7 @@ Carry these printed values as literals for the rest of the invocation:
 `COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
 `CODEX_DOC_VOICE`, `UPSTREAM_SPECIALISTS`, `UPSTREAM_STRUCTURED`, `ADVERSARIAL_CLAUDE`,
 `CODEX_CHALLENGE`, `RED_TEAM_LOC_TRIGGER`, `GREPTILE`, `COVERAGE_RATING`,
-`AUDIT_REUSE`, `NON_CODE_DELTA`, `QA_SMOKE`, `FULL_LANES_REQUIRED`, `BUILD_GATE`, `CI_BACKSTOP`, `PACKET_PATH`, `PACKET_PATHS`, `CI_GREEN`, `REUSED` and `RERUN`.
+`AUDIT_REUSE`, `NON_CODE_DELTA`, `QA_SMOKE`, `DETERMINISTIC_GATES`, `FULL_LANES_REQUIRED`, `BUILD_GATE`, `CI_BACKSTOP`, `PACKET_PATH`, `PACKET_PATHS`, `CI_GREEN`, `REUSED` and `RERUN`.
 
 `PASSES` is the whole-workflow accounting for this run: every AI pass it may
 dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
@@ -397,6 +397,8 @@ Print the selection:
 ---
 
 ### Dispatch specialists in parallel
+
+Governor reservations follow the dispatch manifest: before a reader launches, register its upstream-only governor_gate, then dispatch that gate and every governor_gates floor entry. Every allowed Agent is accounted before launch. One batched specialist reads all planned checklists and settles each floor gate only after its whole result is collected. Missing/invalid output is incomplete. Preserve upstream ship-budget reservations and state-machines/pregate accounting.
 
 Union upstream-selected specialists with planned `specialist:*` slots, retaining
 source labels. The small-diff bypass skips upstream specialists only; execute any

@@ -13,7 +13,7 @@ describe('review governor bins', () => {
     ]) {
       const p = join(root, 'bin', n);
       expect(statSync(p).mode & 0o111).not.toBe(0);
-      expect(readFileSync(p, 'utf8').startsWith('#!/usr/bin/env bash')).toBe(true);
+      expect(readFileSync(p, 'utf8').startsWith(n === 'gstack-review-packet' ? '#!/usr/bin/env -S bun --no-env-file --config=/dev/null' : '#!/usr/bin/env bash')).toBe(true);
     }
   });
 });

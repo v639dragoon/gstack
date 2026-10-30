@@ -507,7 +507,7 @@ or reset the invocation's audit attempts or repair counts.
 
 ## Step 11.5: Bind the reviews
 
-When `ADVERSARIAL_CLAUDE=false`, skip native selection/comparison in items 1–2: bind the core and governor records to the same reviewed tree/SHA; native receipt absence is intentional. Governor completion below still requires every planned slot and required enabled registration. Its CLI honours the native-off plan even with `--require-native`; deterministic gates remain required.
+When `ADVERSARIAL_CLAUDE=false`, skip native selection/comparison in items 1–2: bind the core and governor records to the same reviewed tree/SHA; native receipt absence is intentional. Governor completion below still requires every planned slot and required enabled registration. Its CLI honours the native-off plan even with `--require-native`; deterministic gates remain required (tests, typecheck, build, gitleaks, redaction, verification, claim-check and pregate).
 
 1. **Select the two reviews.** Run `~/.gemini/antigravity-cli/skills/gstack/bin/gstack-review-read`.
    Select this invocation's final Step 9 record (`skill:"review"`, `via:"ship"`, or a

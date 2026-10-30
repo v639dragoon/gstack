@@ -116,6 +116,8 @@ function diffBase(ctx: TemplateContext): string {
 function generateSpecialistDispatch(ctx: TemplateContext): string {
   return `### Dispatch specialists in parallel
 
+${ctx.skillName === 'ship' ? 'Governor reservations follow the dispatch manifest: before a reader launches, register its upstream-only governor_gate, then dispatch that gate and every governor_gates floor entry. Every allowed Agent is accounted before launch. One batched specialist reads all planned checklists and settles each floor gate only after its whole result is collected. Missing/invalid output is incomplete. Preserve upstream ship-budget reservations and state-machines/pregate accounting.' : ''}
+
 ${externalReview(ctx) ? 'Follow Dispatch accounting in `governor-structured.md` for the upstream/planned union; one attempt per frozen tree/SHA.' : governorDispatchAccounting(ctx)}
 
 For each selected specialist, launch an independent subagent via the Agent tool.

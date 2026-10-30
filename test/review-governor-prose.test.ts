@@ -19,8 +19,10 @@ describe('review governor rendered prose', () => {
   test('subagent models are explicit and never Fable or Opus', () => {
     const text = union();
     expect(text).not.toMatch(/model:\s*["']?(?:fable|opus)/i);
-    for (const root of ['ship/SKILL.md', 'review/SKILL.md', 'document-release/SKILL.md'])
-      expect(read(root)).toContain('Every Agent/subagent call');
+    // D4: upstream's packet dispatcher owns /ship model-family selection.
+    expect(read('ship/sections/review-army.md')).toContain('on the same model');
+    expect(read('review/sections/review-army.md')).toContain('Every specialist');
+    expect(read('document-release/SKILL.md')).toContain('Every Agent/subagent call');
     for (const model of text.matchAll(/model:\s*["']([^"']+)["']/g))
       expect(['sonnet', 'haiku']).toContain(model[1]);
   });
@@ -30,7 +32,7 @@ describe('review governor rendered prose', () => {
     expect(text).toContain('DIFF_LINES < 50');
     expect(text).toContain('DIFF_LINES > 200');
     expect(text).toContain('Collect and merge findings');
-    expect(text).toContain('#### 7. Hand off to Fix-First');
+    expect(text).toContain('#### 8. Hand off to Fix-First');
     expect(text).toContain('adversarial subagent (always runs)');
     expect(text).toContain('Finish the adversarial phase');
     expect(text).toContain('upstream-specialist:<name>');
@@ -42,7 +44,7 @@ describe('review governor rendered prose', () => {
     for (const gate of ['codex-structured', 'coverage-audit', 'plan-completion', 'doc-release', 'native-adversarial'])
       expect(text).toContain(`gstack-review-budget dispatch "$RUN_ID" ${gate}`);
     expect(text).toContain('manifest_wtree');
-    expect(text).toContain('CI status for the exact head SHA');
+    expect(text).toContain('The packet carries CI evidence, the exact head SHA');
     expect(text).toContain('REPAIR_CYCLES_MAX');
     expect(text).toContain('rerun-check');
   });
@@ -60,8 +62,8 @@ describe('review governor rendered prose', () => {
       expect(calls[0]).toContain('run-with-timeout --effort high 540 codex exec -');
       expect(calls[0]).toContain('--json -o "$TMPANSWER" <"$STRUCTURED_PROMPT_FILE"');
       expect(step).toContain('NO FINDINGS');
-      expect(step).toContain("<true, false or unknown: the packet's CI_GREEN value>");
-      expect(step).toContain('Whatever it is, do NOT run the build, the test suite, typecheck or any install');
+      expect(step).toContain('Whatever CI_GREEN says');
+      expect(step).toContain('do NOT run the build, the test suite, typecheck or any install');
       expect(step).not.toContain('CI_GREEN=true for the exact head SHA');
       expect(step).not.toContain('codex review --base');
       expect(step).not.toMatch(/Branch on\s*`CI_GREEN`/);
