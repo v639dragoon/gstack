@@ -16,7 +16,7 @@ export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run
     ...g.reviewers.map((r: { gate: string }) => r.gate), 'codex-structured', ...(g.tier === 'D' ? ['red-team'] : []),
   ]) : new Set<string>();
   const gateFor = (d: Dispatch) => d.name === 'codex-structured' ? 'codex-structured' : d.role === 'red-team' ? 'red-team'
-    : d.role === 'specialist' ? `specialist:${d.name}` : d.role === 'adversarial-native' ? 'native-adversarial' : d.role === 'outside-voice' ? 'upstream-outside:challenge' : 'fix-check';
+    : d.role === 'specialist' ? `specialist:${d.name}` : d.role === 'adversarial-native' ? 'native-adversarial' : d.role === 'outside-voice' ? 'upstream-outside:challenge' : `upstream-specialist:${d.role}`;
   const skipped = [...plan.skipped];
   let dispatches: Dispatch[] = plan.dispatches.filter(d => {
     if (floors.has(gateFor(d)) || d.role === 'fix-check' || d.role === 'targeted') return true;
@@ -34,7 +34,7 @@ export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run
       dispatches.push(batch);
     }
     batch.checklists = [...new Set([...(batch.checklists ?? []), ...specialistFloors.map(g => g.slice(11))])];
-    batch.governor_gates = specialistFloors;
+    batch.governor_gates = [...new Set([...specialistFloors, ...(batch.checklists?.includes('state-machines') ? ['upstream-specialist:state-machines'] : [])])];
     batch.governor_floor = true;
   }
   for (const gate of floors) {
@@ -44,8 +44,9 @@ export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run
   }
   if (metadata) for (const d of dispatches) {
     const gate = gateFor(d);
+    if (d.role === 'specialist' && d.checklists?.includes('state-machines')) d.governor_gates = [...new Set([...(d.governor_gates ?? []), 'upstream-specialist:state-machines'])];
     d.governor = { ...metadata, specialist_reasons: [d.reason ?? (floors.has(gate) ? 'governor-tier-floor' : 'upstream-selection')] };
-    d.governor_gate = floors.has(gate) || gate === 'native-adversarial' || gate === 'upstream-outside:challenge' || gate === 'fix-check' ? gate : `upstream-specialist:${d.name}`;
+    d.governor_gate = d.name === 'batched' && d.governor_floor ? specialistFloors[0] : floors.has(gate) || gate === 'native-adversarial' || gate === 'upstream-outside:challenge' || gate === 'fix-check' ? gate : `upstream-specialist:${d.name}`;
     d.governor_floor = !!d.governor_floor || floors.has(gate);
   }
   return { ...plan, dispatches, skipped, ...(metadata ? { governor: metadata } : {}) };

@@ -1,3 +1,4 @@
+import { generateGovernorReview } from '../scripts/resolvers/governor-review';
 import { generateAdversarialStep } from '../scripts/resolvers/outside-voice-steps';
 import { HOST_PATHS } from '../scripts/resolvers/types';
 /**
@@ -65,7 +66,7 @@ describe('cross-model synthesis emit instructions', () => {
     expect(resolver).toMatch(/Codex adversarial challenge[\s\S]+?Recommendation:\s*<action>\s*because/);
     // dohma fork (D4): the governor's routed codex-structured reviewer runs
     // alongside upstream's pass, and its prompt carries the same instruction.
-    expect(resolver).toMatch(/### Governor codex-structured slot[\s\S]+?codex-structured reviewer for the gstack review governor[\s\S]+?Recommendation:\s*<action>\s*because/);
+    expect(generateGovernorReview({ host: 'claude', paths: HOST_PATHS.claude, skillName: 'review', tmplPath: 'review/SKILL.md.tmpl' })).toMatch(/### Governor codex-structured slot[\s\S]+?codex-structured reviewer for the gstack review governor[\s\S]+?Recommendation:\s*<action>\s*because/);
   });
 });
 

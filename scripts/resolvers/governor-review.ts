@@ -6,12 +6,12 @@ export function generateGovernorReview(ctx: TemplateContext): string {
   return `# Governor review accounting
 
 Read this before the upstream review sections. Apply each instruction at its named step; reading this file does not launch a later step.
-Every general-purpose Agent call in the review, including the batched specialist, Red Team, targeted reader and native adversarial reader, sets \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`. The upstream effort= mapping still applies.
+Every general-purpose Agent call in the review, including the batched specialist, Red Team, targeted reader and native adversarial reader, sets \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`. The upstream effort= mapping still applies. The compact program receives an explicit Sonnet or Haiku model ID in input.models for every general-purpose reader; an absent or different model stops before launch.
 
 ${generateGovernorPlanBody(ctx)}
 
 ## Specialist dispatch (Step ${ctx.skillName === 'ship' ? '9.1' : '4.5'})
-Use the upstream plan, with governor floors and D3 filters applied before building the dispatch manifest. On /ship, every gstack-review-dispatch pass carries \`-- --run-id "$RUN_ID" --cycle "$CYCLE"\` plus the saved plan flags. One batched specialist reads the union of upstream and governor-tier checklists; its governor_gates lists every floor it must account. Before launching any logical reader, register each upstream-only governor_gate, then run \`gstack-review-budget dispatch "$RUN_ID" <governor_gate> --cycle "$CYCLE"\` and dispatch each governor_gates entry. Every allowed Agent is accounted before launch. After collect, record every gate's verdict and gate-log row. Missing or invalid output remains incomplete. Retain state-machines validation and pregate accounting.
+Use the upstream plan, with governor floors and D3 filters applied before building the dispatch manifest. On /ship, every gstack-review-dispatch pass carries \`-- --run-id "$RUN_ID" --cycle "$CYCLE"\` plus the saved plan flags. One batched specialist reads the union of upstream and governor-tier checklists; its governor_gates lists every floor it must account. The compact sent/collect callbacks automatically reserve and settle every metadata-linked gate. Do not duplicate their successful verdicts. The following manual commands apply to readers launched outside that program and to terminal errors without collection. Before launching any logical reader, register each upstream-only governor_gate, then run \`gstack-review-budget dispatch "$RUN_ID" <governor_gate> --cycle "$CYCLE"\` and dispatch each governor_gates entry. Every allowed Agent is accounted before launch. After collect, record every gate's verdict and gate-log row. Missing or invalid output remains incomplete. Retain state-machines validation and pregate accounting.
 ${governorDispatchAccounting(ctx)}
 
 ## Red Team dispatch
@@ -28,6 +28,10 @@ Absent policy keys retain upstream behavior. At Select specialists, \`UPSTREAM_S
 A fix touching auth/RLS/billing/migrations/secrets requires full whole-branch re-review; preserve the upstream pass cap and stop if exhausted. Reuse obeys recorded tree/base/policy/cycle and never credits failed or missing coverage.
 
 ## Fix and resolution accounting
+Track the fix-cycle index: cycles are 0-based; a later cycle carries \`"fix_cycle":{cycle}\` and \`"rerun_cause":"fix-loop"\`. Telemetry only: it never alters the loop.
+Add \`"run_id":"{RUN_ID}","cycle":{N}\` after the upstream review-log record's pinned skill,timestamp prefix.
+For each fixing cycle run \`gstack-review-budget rerun-check "$RUN_ID" --cycle <n>\`. Governor REPAIR_CYCLES_MAX may stop earlier; only the risky-surface floor below overrides upstream selection. On exit 3 persist converged:false and recurring findings before stopping.
+When NON_CODE_DELTA=true after fixes, only TEST_ONLY=true or DOC_ONLY=true with FULL_RERUN=false permits \`gstack-review-budget carry-forward "$RUN_ID" --cycle <n>\` and \`gstack-review-log --carry-forward "$RUN_ID"\`. Require success, verify the delta and refresh Local lanes only; retain stale Full receipts and original results. Save its tree/audit id, finish the original REVIEW_START only with required checks passing, and reuse carried verdicts at the pending steps. Other edits follow upstream repeat selection.
 Apply each fix at every listed instance (\`also at\` / \`instances\`) and at any other instance of the same pattern in the diff. Output one line per fix:
 Record the finding's bug_class and \`resolve\`; an accepted or skipped \`resolve\` takes \`--reason "<wrong|intentional|minor|deferred>: <why>"\`.
 A Fix answer covers every instance, as in item 2. Governor classification is telemetry; upstream AUTO-FIX/ASK governs.

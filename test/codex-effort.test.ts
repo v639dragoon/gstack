@@ -84,8 +84,9 @@ describe('gstack outside reviews use the same precedence', () => {
   test('review phases keep their routed challenge and strict slot defaults', () => {
     const text = read('review/sections/adversarial.md');
     const challenge = between(text, 'adversarial challenge (', 'structured review (');
-    expect(challenge).toContain('run-with-timeout --effort medium 540 codex exec');
-    const strict = text.slice(text.indexOf('### Governor codex-structured slot'));
+    expect(challenge).toContain('run-with-timeout --effort high 540 codex exec');
+    // D4: upstream's certified challenge uses high; the additional strict slot keeps routed precedence.
+    const strict = read('review/sections/governor.md');
     expect(strict).toContain('run-with-timeout --effort high 540 codex exec -');
     expect(strict).toContain('GSTACK_CODEX_GATE_DEFAULT="{PLAN_EFFORT}"');
   });

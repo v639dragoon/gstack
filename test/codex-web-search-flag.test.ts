@@ -137,7 +137,7 @@ describe('codex frontier model flag is present', () => {
         expect(call).not.toContain('review_model=');
       }
     }
-    for (const file of ['review/sections/adversarial.md', 'ship/sections/adversarial.md']) {
+    for (const file of ['review/sections/governor.md', 'ship/sections/governor.md']) {
       const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8').split('### Governor codex-structured slot')[1]!;
       const calls = rendered.split('\n').filter(line => line.includes('codex exec -') && line.includes('2>'));
       expect(calls).toHaveLength(1);

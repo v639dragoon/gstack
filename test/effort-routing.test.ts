@@ -45,12 +45,13 @@ function rowLine(content: string, skill: string): string {
 }
 
 describe('effort routing (Phase 0)', () => {
-  const ADVERSARIAL_SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/sections/adversarial.md'];
+  const ADVERSARIAL_SITES = ['ship/sections/governor.md', 'review/sections/governor.md', '.factory/skills/gstack-ship/sections/governor.md'];
   for (const site of ADVERSARIAL_SITES) {
     test(`${site}: upstream passes coexist with the plan-routed slot`, () => {
       const content = read(site);
-      expect(content).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
-      expect(content).toContain('adversarial challenge');
+      const upstream = read(site.replace('sections/governor.md', 'sections/adversarial.md'));
+      expect(upstream).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
+      expect(upstream).toContain('adversarial challenge');
       expect(content).toContain('native-adversarial');
       const line = codexLineWith(content, 'codex exec -');
       expect(line).toContain('run-with-timeout --effort');

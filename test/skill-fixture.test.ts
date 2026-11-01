@@ -333,9 +333,10 @@ describe('real-skill pins: section lists used by E2E fixtures', () => {
     expect(army).toContain('## Step 4.5: Review Army — Specialist Dispatch');
     expect(army).toContain('quality_score');
     expect(army).toContain('MULTI-SPECIALIST CONFIRMED');
-    // dohma fork (D4): the governor plan lives under upstream's heading.
-    expect(army).toContain('### Governor manifest, plan, packet');
-    expect(army).toContain('gstack-review-budget plan');
+    // D4: governor policy now lives outside upstream's certified army body.
+    const governor = fs.readFileSync(path.join(ROOT, 'review', 'sections', 'governor.md'), 'utf-8');
+    expect(governor).toContain('### Governor manifest, plan, packet');
+    expect(governor).toContain('gstack-review-budget plan');
   });
 
   test('RETRO_E2E_SECTIONS skeleton extracts from retro/SKILL.md + carved section', () => {

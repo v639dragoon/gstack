@@ -165,7 +165,8 @@ test('D3 C3 carried advice never credits changed supporting docs as unchanged sk
 test('D3 C3 caller carve-out keeps full triggers, original tokens, local-only receipts and accounting', () => {
   const review = readFileSync(join(root, 'review/SKILL.md.tmpl'), 'utf8');
   const ship = readFileSync(join(root, 'ship/SKILL.md.tmpl'), 'utf8');
-  const army = readFileSync(join(root, 'ship/sections/review-army.md.tmpl'), 'utf8');
+  // D4: accounting moved outside upstream's certified review-army section.
+  const army = readFileSync(join(root, 'ship/sections/governor.md'), 'utf8');
   expect(review).toContain('### Step 5e: Bounded repair verification');
   for (const text of [review, ship, army]) { expect(text).toContain('carry-forward'); expect(text).toContain('Local'); }
   expect(review).toContain('When `NON_CODE_DELTA=false`, skip the carry exception');

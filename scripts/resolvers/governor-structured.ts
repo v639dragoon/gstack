@@ -12,7 +12,7 @@ export function generateGovernorStructured(ctx: TemplateContext): string {
   if (ctx.skillName === 'review' && ctx.host !== 'claude') {
     return `### Governor codex-structured slot
 
-Run this additional slot only when codex-structured is planned and not in REUSED. In /ship, use every codex-structured PACKET emitted by the saved plan build, carrying its file, out and read fields. Reserve each packet through ship-budget before invoking it; dispatch the governor gate once for the logical reviewer, then record its aggregate verdict after every shard and collect settle. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
+Run this additional slot only when codex-structured is planned and not in REUSED. In /ship, use the GOVERNOR_STRUCTURED handoff from the compact program: file is PACKET_PATH, out is PACKET_OUT, ledger is BRIEF_LEDGER, and manifest is the pass manifest. It also applies when running the saved plan directly. Reserve each packet through ship-budget before invoking it; reserve the governor gate once for the logical reviewer. The metadata-linked sent/collect callbacks account successful collection; never duplicate its verdict. Record error/timeout manually only when no collection settled the attempt. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
 **STOP.** Before dispatch, Read \`governor-structured.md\` beside this SKILL.md. Apply its model/effort, preflight, verdict and telemetry steps. Missing or unreadable asset means INCOMPLETE: stop with a blocker; never credit clean coverage.`;
   }
   return generateGovernorStructuredBody(ctx);
@@ -51,7 +51,7 @@ function governorStructuredBody(ctx: TemplateContext): string {
   return `### Governor codex-structured slot
 
 
-Run this additional slot only when codex-structured is planned and not in REUSED. In /ship, use every codex-structured PACKET emitted by the saved plan build, carrying its file, out and read fields. Reserve each packet through ship-budget before invoking it; dispatch the governor gate once for the logical reviewer, then record its aggregate verdict after every shard and collect settle. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
+Run this additional slot only when codex-structured is planned and not in REUSED. In /ship, use the GOVERNOR_STRUCTURED handoff from the compact program: file is PACKET_PATH, out is PACKET_OUT, ledger is BRIEF_LEDGER, and manifest is the pass manifest. It also applies when running the saved plan directly. Reserve each packet through ship-budget before invoking it; reserve the governor gate once for the logical reviewer. The metadata-linked sent/collect callbacks account successful collection; never duplicate its verdict. Record error/timeout manually only when no collection settled the attempt. A successful NON_CODE_DELTA carry-forward also satisfies it; preserve its audit record and do not dispatch again.
 It does not replace the required native pass, upstream outside challenge, or
 structured P1 decision. Record all of them separately.
 
@@ -95,7 +95,7 @@ ${freeTextFileBash([{ variable: 'STRUCTURED_PROMPT_FILE', stem: 'structured-revi
 
 The rendered stdin brief requires: ${STRUCTURED_INSTRUCTIONS} ${STRUCTURED_CONTRACT}
 
-Copy the rendered {PACKET_PATH} byte-for-byte into the private STRUCTURED_PROMPT_FILE, including its inline diff, governor context and REVIEWED_TREE contract. Do not add a wrapper. The packet carries CI evidence, the exact head SHA and resolved findings. Record that exact stdin prompt with \`gstack-review-dispatch sent --ledger "{BRIEF_LEDGER}" --role codex-structured --sent "<prompt-file-name>"\` before invoking Codex. Save the completed response verbatim to {PACKET_OUT}, collect it through the same ledger, then mark the manifest reader collected before resuming the pass program. Do not mark a failure complete.
+Copy the rendered {PACKET_PATH} byte-for-byte into the private STRUCTURED_PROMPT_FILE, including its inline diff, governor context and REVIEWED_TREE contract. Do not add a wrapper. The packet carries CI evidence, the exact head SHA and resolved findings. Record that exact stdin prompt with \`gstack-review-dispatch sent --ledger "{BRIEF_LEDGER}" --role codex-structured --sent "<prompt-file-name>"\` before invoking Codex. Save the completed response verbatim to {PACKET_OUT}, collect it through the same ledger, then, if running a pass manifest, mark that reader collected before resuming the pass program. Standalone /review has no pass manifest; its printed BRIEF_LEDGER and PACKET_OUT bind collection. Do not mark a failure complete.
 
 \`\`\`bash
 umask 077
@@ -136,7 +136,7 @@ error/timeout, never clean/PASS. For a completed response, \`[P0]\`/\`[P1]\` mar
 found → \`GATE: FAIL\`, absent → \`GATE: PASS\`. FAIL →
 AskUserQuestion with A) investigate and fix now (recommended), B) continue.
 
-After Codex returns, record its terminal result immediately:
+After Codex returns, collect completed output through review-dispatch (which records the governor verdict). Only for an error/timeout without collection, record the terminal result immediately:
 
 \`\`\`bash
 ~/.claude/skills/gstack/bin/gstack-review-budget verdict "$RUN_ID" codex-structured <clean|issues_found|error|timeout> --cycle "\${CYCLE:?carry the plan cycle}" [--critical N --informational N]
