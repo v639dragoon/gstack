@@ -22,7 +22,7 @@ If ${outsideVoiceFor(ctx).label} is available, run a lightweight design check on
 
 Prompt: "Review the git diff on this branch. Run 7 litmus checks (YES/NO each): ${litmusList} Flag any hard rejections: ${rejectionList} 5 most important design findings only. Reference file:line."
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 300000, reasoningEffort: 'medium', voice: 'design-review', diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { timeoutMs: 300000, verbatimReview: ctx.skillName === 'ship', reasoningEffort: ctx.skillName === 'ship' ? 'high' : 'medium', voice: 'design-review', diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
 
 ${outsideVoiceProvenance(ctx, 'design-lite')}
 

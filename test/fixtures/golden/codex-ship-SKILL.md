@@ -250,6 +250,7 @@ sections. Read a section in full before doing its step; do not work from memory.
 
 | When | Read this section |
 |------|-------------------|
+| before review planning; apply at matching upstream headings | `sections/governor.md` |
 | App Store/TestFlight distribution is requested for an Apple app (.xcodeproj, .xcworkspace, or an app-product Swift package) — read at Step 0.9 before the branch gate; an Apple repository-landing request follows the normal pipeline | `sections/apple-release.md` |
 | running the test suites and (if prompt files changed) the eval suites (Steps 4-6) | `sections/tests.md` |
 | opening the PR early for a parallel Greptile review after the free tests pass (Step 6.5) | `sections/greptile-early.md` |
@@ -267,6 +268,9 @@ sections. Read a section in full before doing its step; do not work from memory.
 | Step 19 printed CAPY_PR: on (a Capy session, GSTACK_CAPY=1) — read before composing the PR body | `sections/capy-pr.md` |
 | handing the branch to a coordinator instead of opening a PR (--no-pr or an automation lane; Step 18) | `sections/handoff.md` |
 | a token cap is set or verdict=delegate printed (Step 1 on) | `sections/budget-handoff.md` |
+
+> **STOP.** Before before review planning; apply at matching upstream headings, Read `sections/governor.md` relative to the installed `gstack-ship` SKILL.md directory and execute it
+> in full. Do not work from memory — that section is the source of truth for this step.
 
 ---
 

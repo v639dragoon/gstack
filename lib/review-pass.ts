@@ -19,7 +19,8 @@ import { BriefError, briefFile, checkoutRoot, checkoutTree, promptHash, renderBr
 import { REVIEW_DIFF_MAX_BYTES, disclosureDigest } from './review-exclude';
 import { appendEvent, readerKey } from './review-ledger';
 import { policySelection, selectFor } from './review-selection';
-import { diffCommand, type Dispatch } from './review-depth';
+import { diffCommand } from './review-depth';
+import type { Dispatch } from './review-plan-governor';
 import { TARGETED_RULES, parseClassList, targetedBriefSha, targetedRead } from './review-targeted';
 import type { FetchHit } from './review-fetch';
 import type { EffectiveReaders } from './ship-policy-readers';

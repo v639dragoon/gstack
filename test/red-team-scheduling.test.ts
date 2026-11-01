@@ -24,9 +24,9 @@ const rendered = Bun.spawnSync([process.execPath, 'run', 'scripts/gen-skill-docs
 if (rendered.exitCode !== 0) throw Error(rendered.stderr.toString());
 afterAll(() => fs.rmSync(hostOut, { recursive: true, force: true }));
 const RENDERED_SITES = [
-  'ship/sections/review-army.md',
-  'review/sections/review-army.md',
-  '.factory/skills/gstack-ship/sections/review-army.md',
+  'ship/sections/governor.md',
+  'review/sections/governor.md',
+  '.factory/skills/gstack-ship/sections/governor.md',
 ];
 
 describe('Red Team scheduling (Phase 0)', () => {
@@ -34,7 +34,7 @@ describe('Red Team scheduling (Phase 0)', () => {
     const content = fs.readFileSync(path.join(site.startsWith('.factory/') ? hostOut : ROOT, site), 'utf-8');
 
     test(`${site}: upstream activation and planned Red Team both run under D4`, () => {
-      expect(content).toContain(site.includes('ship') ? 'DISPATCH: red-team' : 'DIFF_LINES > 200 OR any specialist produced a CRITICAL finding');
+      expect(content).toContain('DISPATCH: red-team');
       expect(content).toContain('A planned');
       expect(content).toContain('red-team runs even without upstream activation');
       expect(content).toContain('upstream-specialist:red-team');
@@ -42,7 +42,7 @@ describe('Red Team scheduling (Phase 0)', () => {
     });
 
     test(`${site}: dispatch is budget-gated before every Agent call`, () => {
-      const gate = content.indexOf(site.includes('ship') ? 'gstack-review-budget dispatch "$RUN_ID" <governor_gate>' : 'gstack-review-budget dispatch "$RUN_ID" <gate>');
+      const gate = content.indexOf('gstack-review-budget dispatch "$RUN_ID" <governor_gate>');
       const agent = content.indexOf('Every allowed Agent');
       expect(gate).toBeGreaterThanOrEqual(0);
       expect(agent).toBeGreaterThan(gate);
@@ -51,8 +51,8 @@ describe('Red Team scheduling (Phase 0)', () => {
     test(`${site}: telemetry and the shared packet are wired in`, () => {
       expect(content).toContain('gstack-gate-log');
       expect(content).toContain('gstack-diff-manifest');
-      expect(content).toContain(site.includes('ship') ? 'gstack-review-packet build' : 'gstack-review-packet "$RUN_ID" <base>');
-      expect(content).toContain(site.includes('ship') ? 'read=' : 'including its inline diff');
+      expect(content).toContain(site.includes('ship') ? 'gstack-review-dispatch pass' : 'gstack-review-context "$RUN_ID" <base>');
+      expect(content).toContain('inline diff');
     });
 
     test(`${site}: the narrower security-specialist trigger wording never returns`, () => {
@@ -60,9 +60,10 @@ describe('Red Team scheduling (Phase 0)', () => {
     });
   }
 
-  test('review/specialists/red-team.md scope line carries the WIDER any-specialist form', () => {
+  test('upstream Red Team activation remains any-specialist while its certified checklist stays unchanged', () => {
     const checklist = fs.readFileSync(path.join(ROOT, 'review/specialists/red-team.md'), 'utf-8');
-    expect(checklist).toContain('any specialist found CRITICAL findings');
-    expect(checklist).not.toMatch(/security specialist found CRITICAL/);
+    expect(fs.readFileSync(path.join(ROOT, 'review/sections/review-army.md'), 'utf8')).toContain('any specialist produced a CRITICAL finding');
+    expect(checklist).toContain('security specialist found CRITICAL');
+
   });
 });

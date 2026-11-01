@@ -49,14 +49,14 @@ If \`OUTCOME_MISSING=true\`, print exactly:
 export function governorDispatchAccounting(ctx: TemplateContext): string {
   return `Union upstream-selected specialists with planned \`specialist:*\` slots, retaining
 source labels. The small-diff bypass skips upstream specialists only; execute any
-governor-planned slots separately, then the parent Exploratory QA handoff.
+governor-planned checklists through the upstream batch on /ship, then the parent Exploratory QA handoff.
 Never dispatch the same specialist twice: one result may satisfy both sources
 only when both dispatch records name the same frozen tree/SHA.
 Register upstream-only selected specialists with
 \`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>\`;
 then run \`gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>\`
 before each Agent call. Every allowed Agent is accounted before launch. Every specialist
-Agent sets \`model: "sonnet"\`. Each prompt reads the upstream packet including its inline diff, with its PACKET read= ranges. On /review, PACKET_PATHS lists every shard; read all of them, never just PACKET_PATH. CI_GREEN=true
+Agent sets \`model: "sonnet"\`. Each prompt uses its rendered upstream brief including the inline diff and governor context. On /review, PACKET_PATHS names the rendered strict brief. CI_GREEN=true
 means do not repeat builds/tests. Record each terminal verdict with \`gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>\` and a best-effort
 \`gstack-gate-log\` row with model sonnet, effort agent-default, effort_source routed,
 fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream

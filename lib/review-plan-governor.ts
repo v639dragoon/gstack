@@ -1,9 +1,12 @@
 /** Governor additions and D3 filters on upstream's plan, before any packet is built. */
-import type { Dispatch, ReviewPlan } from './review-depth';
+import type { Dispatch as UpstreamDispatch, ReviewPlan } from './review-depth';
 import { policyFlags } from './review-policy';
 import type { GovernorMetadata } from './review-governor-packet';
+export type Dispatch = UpstreamDispatch & { governor?: GovernorMetadata; governor_gate?: string; governor_gates?: string[]; governor_floor?: boolean };
+export type GovernorReviewPlan = Omit<ReviewPlan, 'dispatches'> & { dispatches: Dispatch[]; governor?: GovernorMetadata; risky_full_review?: boolean };
 
-export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run_id: string; cycle: number; plan: any; bug_class?: string[] }, requiredRedTeam = false): ReviewPlan {
+
+export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run_id: string; cycle: number; plan: any; bug_class?: string[] }, requiredRedTeam = false): GovernorReviewPlan {
   const flags = policyFlags(policy);
   const g = governor?.plan;
   const metadata: GovernorMetadata | undefined = governor ? { run_id: governor.run_id, cycle: governor.cycle, tier: g.tier,
@@ -15,7 +18,7 @@ export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run
   const gateFor = (d: Dispatch) => d.name === 'codex-structured' ? 'codex-structured' : d.role === 'red-team' ? 'red-team'
     : d.role === 'specialist' ? `specialist:${d.name}` : d.role === 'adversarial-native' ? 'native-adversarial' : d.role === 'outside-voice' ? 'upstream-outside:challenge' : 'fix-check';
   const skipped = [...plan.skipped];
-  let dispatches = plan.dispatches.filter(d => {
+  let dispatches: Dispatch[] = plan.dispatches.filter(d => {
     if (floors.has(gateFor(d)) || d.role === 'fix-check' || d.role === 'targeted') return true;
     const enabled = d.role === 'specialist' ? flags.upstreamSpecialists
       : d.role === 'red-team' ? flags.redTeamLocTrigger || plan.class === 'gate' || plan.next.step === 'scoped' || requiredRedTeam

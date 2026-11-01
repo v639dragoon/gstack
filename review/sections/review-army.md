@@ -30,44 +30,6 @@ TEST_FW=""
 echo "TEST_FW: ${TEST_FW:-unknown}"
 ```
 
-### Governor manifest, plan, packet
-
-Create one manifest, deterministic reviewer plan, and shared packet:
-
-```bash
-~/.claude/skills/gstack/bin/gstack-diff-manifest <base>
-~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude
-~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
-~/.claude/skills/gstack/bin/gstack-review-context "$RUN_ID" <base>
-```
-
-Carry these printed values as literals for the rest of the invocation:
-`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `PASSES`, `REPAIR_CYCLES_MAX`,
-`COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
-`CODEX_DOC_VOICE`, `UPSTREAM_SPECIALISTS`, `UPSTREAM_STRUCTURED`, `ADVERSARIAL_CLAUDE`,
-`CODEX_CHALLENGE`, `RED_TEAM_LOC_TRIGGER`, `GREPTILE`, `COVERAGE_RATING`,
-`AUDIT_REUSE`, `NON_CODE_DELTA`, `QA_SMOKE`, `DETERMINISTIC_GATES`, `FULL_LANES_REQUIRED`, `BUILD_GATE`, `CI_BACKSTOP`, `PACKET_PATH`, `PACKET_PATHS`, `CI_GREEN`, `REUSED` and `RERUN`.
-
-`PASSES` is the whole-workflow accounting for this run: every AI pass it may
-dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
-voice) with its model and effort; Upstream-required passes join its accounting through register-upstream; a pass absent from either record never runs. `resume`
-carries forward the terminal verdicts of a PRIOR run whose content
-fingerprint, base, policy, tier, reviewer list and slice kind all equal this
-plan's (a matching commit with a dirty tree never qualifies): print
-`Reused from {RESUME_SOURCE}: {REUSED}` when non-empty, do not dispatch a gate
-listed in `REUSED` (its dispatch would be refused as duplicate-slot), and
-dispatch only `RERUN`. Only clean and issues_found verdicts are reusable;
-error, timeout and missing verdicts are never carried.
-Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
-`OUTCOME_MISSING`, `MAX_ADVISORIES`, `AUTOFIX_INFORMATIONAL`,
-`BLOCKING_SEVERITIES`, and `BLOCKING_CATEGORIES`.
-
-If `OUTCOME_MISSING=true`, print exactly:
-
-`Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: ~/.claude/skills/gstack/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]`.
-
-
-
 ### Read specialist hit rates (adaptive gating)
 
 ```bash
@@ -75,8 +37,6 @@ If `OUTCOME_MISSING=true`, print exactly:
 ```
 
 ### Select specialists
-
-When `UPSTREAM_SPECIALISTS=false`, skip this pass: upstream scope/adaptive/force selection and fan-out. Instead dispatch only governor-planned `specialist:*` / `red-team` slots; the core review, merge and QA handoff still run. When true, use the upstream selection below.
 
 Select specialists from the scope signals above.
 
@@ -112,28 +72,7 @@ Print the selection:
 
 ### Dispatch specialists in parallel
 
-
-
-Union upstream-selected specialists with planned `specialist:*` slots, retaining
-source labels. The small-diff bypass skips upstream specialists only; execute any
-governor-planned slots separately, then the parent Exploratory QA handoff.
-Never dispatch the same specialist twice: one result may satisfy both sources
-only when both dispatch records name the same frozen tree/SHA.
-Register upstream-only selected specialists with
-`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>`;
-then run `gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>`
-before each Agent call. Every allowed Agent is accounted before launch. Every specialist
-Agent sets `model: "sonnet"`. Each prompt reads the upstream packet including its inline diff, with its PACKET read= ranges. On /review, PACKET_PATHS lists every shard; read all of them, never just PACKET_PATH. CI_GREEN=true
-means do not repeat builds/tests. Record each terminal verdict with `gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>` and a best-effort
-`gstack-gate-log` row with model sonnet, effort agent-default, effort_source routed,
-fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream
-settlement and missing-coverage rules; the budget allows one corrected attempt.
-Routed codex-structured remains an additional Step 4.8 slot.
-
-
-
-
-For each selected dispatch (including the one batched specialist), launch an independent subagent via the Agent tool with `subagent_type: "general-purpose"` and `model: "sonnet"`.
+For each selected specialist, launch an independent subagent via the Agent tool.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
 
@@ -159,7 +98,7 @@ Every other specialist, including Testing, reads the full diff with fixtures.
 
 5. Instructions:
 
-"You are a specialist code reviewer. A precomputed diff/risk manifest is at {MANIFEST_PATH}; read it FIRST as an index (it never replaces the diff). Read the checklist at {checklist path}, then run
+"You are a specialist code reviewer. Read the checklist at {checklist path}, then run
 `DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"` to get the full diff. Apply the checklist against the diff.
 
 `NO FINDINGS` alone is the expected, complete result for a clean diff; never invent an item. Otherwise output one JSON object per finding per line, 400 words at most:
@@ -182,22 +121,17 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use `subagent_type: "general-purpose"` with `model: "sonnet"`
+- Use `subagent_type: "general-purpose"`
 - Pass `run_in_background: false` when available on every specialist Agent call — background is the default since Claude Code v2.1.198; omitting an available flag is not foreground. A launch receipt means it went background: await its completion notice.
 
 **Wait for readers before editing:**
 - Confirm that each task has finished or is stopped. A timeout alone does not prove termination. If a reader or writer is still active, wait; if its state is unknown, inspect its task/process status. If you cannot confirm it stopped, use the parent's Fix-First stop path without edits.
 - A failed task may be stopped without having completed its review. Record the failure and retain usable partial findings.
 - Continue independent evidence collection after a terminal failure. Missing dispatched coverage remains incomplete, never completed or clean; successful peers cannot replace it.
-**Early Red Team (large diffs):** If DIFF_LINES > 200 the trigger is ALREADY
-known — include Red Team in this SAME parallel dispatch message, prompt per
-the "Red Team dispatch" section below (EARLY path); do not dispatch it again.
 
 ---
 
 ### Step 4.6: Collect and merge findings
-
-When `AUTOFIX_INFORMATIONAL=false`, the policy overrides advice ASK-only below: BLOCKING is membership in `BLOCKING_SEVERITIES` OR `BLOCKING_CATEGORIES`; all other findings are ADVISORY. List at most `MAX_ADVISORIES` under `## Advisories (not fixed)`, never ASK or auto-fix advice. Preserve defect severity and evidence.
 
 Follow these stages in order. Validate core and specialist findings alike, but keep
 their source labels: specialist scoring is not the final review's defect count.
@@ -322,52 +256,16 @@ sources and counting overlapping savings once. Keep actual specialist stats;
 core-only advice must not create a specialist dispatch or finding.
 Normal AUTO-FIX/ASK rules apply, with advice ASK-only. Missing coverage still blocks
 completion. Advice never permits edits while readers are active or replaces a required review.
-**Persist per-gate telemetry:** for EACH dispatched specialist (and
-Red Team, either path), append one gate record, substituting {placeholder}s
-with carried literals:
-
-```bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"review","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-```
-
-Telemetry is best-effort: a failed gate-log call never blocks or changes the
-review, and the aggregate `specialists` object still goes into reviews.jsonl
-unchanged.
 
 ---
 
 ### Red Team dispatch (conditional)
 
-When `RED_TEAM_LOC_TRIGGER=false`, skip LOC activation. When `UPSTREAM_SPECIALISTS=false`, skip upstream Red Team activation; planned `red-team` always runs. Label upstream LOC registration `--trigger loc`.
-
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-Register upstream activation as `upstream-specialist:red-team` unless red-team
-already occupies a planned slot. Dispatch the chosen gate through review-budget
-before the Sonnet Agent call; record its verdict and gate row afterward. A planned
-red-team runs even without upstream activation. Upstream-required activation is
-accounted separately and does not consume the single routed escalation.
+If activated, dispatch one more subagent via the Agent tool (pass `run_in_background: false` when available — foreground; subagents default to background since Claude Code v2.1.198; A launch receipt means it went background: await its completion notice.)
 
-
-
-Two dispatch paths, ONE activation condition (the condition above is the whole trigger surface — the paths only change WHEN the dispatch happens):
-
-**EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
-dispatch message as the specialists (see "Early Red Team" above); do not
-dispatch again. It receives the checklist from
-`~/.claude/skills/gstack/review/specialists/red-team.md`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch:
-"You are a red team reviewer. N specialists are reviewing this diff
-CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
-{MANIFEST_PATH}; read it first as an index. List changed files with
-`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff --name-status "$DIFF_BASE"`,
-then read them as that fixture handling says.
-Hunt for cross-cutting concerns, integration boundary issues, and failure
-modes that specialist checklists don't cover. Output specialist-schema JSON
-findings."
-
-**LATE path (no early dispatch AND any specialist produced a CRITICAL
-finding):** dispatch one more subagent via the Agent tool now (pass `run_in_background: false` when available — foreground; subagents default to background since Claude Code v2.1.198; A launch receipt means it went background: await its completion notice.) It receives:
+The Red Team subagent receives:
 1. The red-team checklist path `~/.claude/skills/gstack/review/specialists/red-team.md` (it reads the file)
 2. The merged specialist findings from Step 4.6, one line each (so it knows what was already caught)
 3. The git diff command
@@ -382,8 +280,6 @@ don't cover."
 Tag Red Team findings `"specialist":"red-team"`.
 Add them to the original specialist outputs and rerun stages 1–8 of Step 4.6
 before Step 5 Fix-First; do not boost or count the earlier findings twice.
-
-Log its gate record with `"gate":"red-team"` and the activation reason.
 
 If the Red Team returns NO FINDINGS, note: "Red Team review: no additional issues found."
 If the Red Team fails or times out, confirm it stopped and record its review as incomplete, just as for other specialists. Continue independent Step 4.7 QA and Step 4.8 adversarial review; Step 5.8 cannot certify missing dispatched coverage as completed or clean.

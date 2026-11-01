@@ -16,7 +16,7 @@ Every repeat starts before the checklist read and captures a fresh REVIEW_START.
 Finish the complete review and QA before applying any fix in Step 9.4.
 
 **Review plan.** Pass 1 runs `~/.claude/skills/gstack/bin/gstack-review-plan
---base <base> --run-id "$RUN_ID" --cycle "$CYCLE"`, plus `--depth-floor <d>` on every plan run when the /ship prompt
+--base <base>`, plus `--depth-floor <d>` on every plan run when the /ship prompt
 gave `--depth-floor <d>` (it only raises); add `--declare-risk <classes>` when the diff touches a risk
 class the plan's `REVIEW_DEPTH:` misses (spend it reserves or binds: `money`), and give Step 16's
 receipt write the same flag; a repeat uses the plan run that picked it.
@@ -24,7 +24,8 @@ A `scoped` repeat is a full pass on the range: its `fix-check` is decision 3.5's
 reviewer and prompt with `git diff $RANGE_BASE` as the hunks, inside this pass.
 Save its `REVIEW_PLAN:` line and fingerprint, `REVIEW_DEPTH:` (depth,
 `runtime_lines`, `rules`) and `GATE_SCAN:`. Dispatch exactly its `DISPATCH:` lines
-(specialists, Red Team, Step 11's voices), each at its `effort=` with the model named by its dispatch step (`full` is the lane's reasoning, `medium` reasoning medium, `light` low; a
+(specialists, Red Team, Step 11's voices), each at its `effort=` on the same model
+family (`full` is the lane's reasoning, `medium` reasoning medium, `light` low; a
 host that cannot set it runs its default) and reading its `DIFF_CMD:`, in place of 9.1's and 9.2's own selection rules;
 `specialist batched` is one subagent reading every checklist its
 `checklists=` names (light adds Red Team), tagging each finding with its checklist.
@@ -49,37 +50,58 @@ they are tools, not reviewers. `NO FINDINGS` is the expected result for a clean 
 
 ## Confidence Calibration
 
-Verify evidence first, then score every finding (1-10) and apply its display rule.
-
-### Pre-emit verification gate
-
-1. **Quote the specific code line:** file:line and verbatim text. For a missing field,
-   quote its class definition; for a nullable value, its initialization; for a race, both sides.
-2. For framework-generated symbols, read and quote their generating metaclass,
-   descriptor, ORM Meta block, migration, decorator or schema. Missing literal
-   names in the class body or grep results do not prove absence.
-3. **If you cannot quote the motivating line(s), the finding is unverified.**
-   Force its confidence to 4-5: use 4 for appendix-only reporting, or 5 only when
-   the finding belongs in the main report with the medium-confidence caveat below.
-   Never invent speculative confidence 7+.
+Every finding MUST include a severity, CRITICAL (blocks shipping) or INFORMATIONAL
+(lower severity, still actioned), and a confidence score (1-10):
 
 | Score | Meaning | Display rule |
 |-------|---------|-------------|
-| 9-10 | Specific code verifies a concrete bug or exploit. | Show normally |
-| 7-8 | High-confidence pattern match; very likely correct. | Show normally |
-| 5-6 | Moderate; could be a false positive. | Show with caveat: "Medium confidence, verify this is actually an issue" |
-| 3-4 | Suspicious but may be fine. | Suppress from main report. Include in appendix only. |
-| 1-2 | Speculation. | Only report a suspected release-blocking catastrophe (widespread data loss, total outage or system-wide compromise); label it CRITICAL and explicitly speculative. |
+| 9-10 | Verified by reading specific code. Concrete bug or exploit demonstrated. | Show normally |
+| 7-8 | High confidence pattern match. Very likely correct. | Show normally |
+| 5-6 | Moderate. Could be a false positive. | Show with caveat: "Medium confidence, verify this is actually an issue" |
+| 3-4 | Low confidence. Pattern is suspicious but may be fine. | Suppress from main report. Include in appendix only. |
+| 1-2 | Speculation. | Only report a suspected release-blocking catastrophe (widespread data loss, total outage or system-wide compromise), at CRITICAL severity and marked explicitly speculative. |
 
 **Finding format:**
 
-`[CRITICAL|INFORMATIONAL] (confidence: N/10) file:line — description`
+\`[CRITICAL|INFORMATIONAL] (confidence: N/10) file:line — description\`
 
 Example:
-`[CRITICAL] (confidence: 9/10) user.rb:42 — SQL injection via string interpolation`
+\`[CRITICAL] (confidence: 9/10) app/models/user.rb:42 — SQL injection via string interpolation in where clause\`
+\`[INFORMATIONAL] (confidence: 5/10) app/controllers/api/v1/users_controller.rb:18 — Possible N+1 query, verify with production logs\`
+
+### Pre-emit verification gate
+
+1. **Quote the specific code line that motivates the finding** — file:line plus
+   the verbatim text of the line(s) that triggered it. If the finding is "field
+   X doesn't exist on model Y", quote the lines of class Y where the field
+   would live. If "dict.get() might return None", quote the dict initialization.
+   If "race condition between A and B", quote both A and B.
+
+2. **If you cannot quote the motivating line(s), the finding is unverified.**
+   Force its confidence to 4-5. Use 4 when it should be suppressed from the main
+   report; use 5 only when it belongs in the report with the medium-confidence
+   caveat. Never invent speculative confidence 7+.
+
+**Framework-meta nudge:** When the symbol is generated by a framework
+metaclass, descriptor, ORM Meta inner-class, or migration history (Django
+`Meta`, Rails `has_many`/`scope`, SQLAlchemy `relationship`/`Column`,
+TypeORM decorators, Sequelize `init`/`belongsTo`, Prisma generated client),
+quote the meta-construct (the `Meta` block, the migration, the decorator,
+the schema file) instead of expecting the literal name in the class body.
+The verification is "I read the source that creates this symbol", not "I
+grep'd for the name and didn't find it."
+
+False-positive classes the gate catches:
+
+| FP class | Why the gate catches it |
+|---|---|
+| "field doesn't exist on model" | Requires quoting the model class body or Meta; the field's absence becomes obvious |
+| "dict.get() might be None" | Requires quoting the dict initialization (e.g. Django form's `cleaned_data` is `{}`-initialized) |
+| "save() might lose fields" | Requires quoting the ORM signature or model definition |
+| "update_fields might miss X" | Requires quoting the field set; if X doesn't exist, the FP is self-evident |
 
 **Calibration learning:** If the user confirms a reported finding scored < 7 is
-real, log it per Operational Self-Improvement.
+real, log the corrected pattern as a learning.
 
 ### Core checklist
 
@@ -231,32 +253,24 @@ _OUTSIDE_TMP=$(mktemp -d "${TMPDIR:-/tmp}/gstack-outside.XXXXXXXX") || exit 1
 trap 'rm -rf "$_OUTSIDE_TMP"' EXIT
 _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
 cat -- '<prepared-prompt-file>' >"$_OUTSIDE_INPUT" || exit 1
-export GSTACK_CODEX_VOICE='design-review' GSTACK_CODEX_VOICE_DEFAULT=medium
-unset GSTACK_CODEX_GATE_DEFAULT
-_OUTSIDE_T0=$(date +%s)
+
 _CODEX_PROBE="$HOME/.claude/skills/gstack/bin/gstack-codex-probe"
 _CODEX_OUT=$("$_CODEX_PROBE" select-model exec) || exit 1
 _CODEX_SEL=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SEL: //p')
 _CODEX_SANDBOX_MODE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SANDBOX: //p')
 "$_CODEX_PROBE" check-sandbox || exit 1
-CODEX_MODEL=$_CODEX_SEL
-CODEX_MODEL_SOURCE=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_SOURCE: //p')
-export GSTACK_CODEX_GATE_DEFAULT=$(echo "$_CODEX_OUT" | sed -n 's/^CODEX_ROUTE_EFFORT: //p')
-CODEX_EFFORT=medium
-export GSTACK_CODEX_EFFORT_RECEIPT="$_OUTSIDE_TMP/effort.json"
 "$_CODEX_PROBE" show-first-use-notice
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout --effort medium 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+"$_CODEX_PROBE" run-with-timeout --effort high 300 codex exec - -C "$_REPO_ROOT" -s "${_CODEX_SANDBOX_MODE:?}" -c "model=\"${_CODEX_SEL:?}\"" -c skills.include_instructions=false -c 'web_search="cached"' --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
 cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"
 
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
-_row() { "$HOME/.claude/skills/gstack/bin/gstack-voice-row" 'ship' 'design-review' "${1}" "$CODEX_MODEL" "$CODEX_MODEL_SOURCE" "$CODEX_EFFORT" "$_OUTSIDE_T0" "$_OUTSIDE_TMP/effort.json" --quiet; }
 _OUTSIDE_RC=0
 bun --no-env-file --config=/dev/null "$HOME/.claude/skills/gstack/lib/outside-review-result.ts" --label 'Codex outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" --events "$_OUTSIDE_TMP/events" review "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 case "$_OUTSIDE_RC" in
-  0|3) _row completed ;;
-  4) _row unavailable; echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
-  *) _row unavailable; [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
+  0|3) ;;
+  4) echo 'OUTSIDE_STATUS: unverified provider=codex host=claude'; exit 4 ;;
+  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
 esac
 echo 'OUTSIDE_STATUS: completed provider=codex host=claude'
 ```
@@ -313,46 +327,6 @@ TEST_FW=""
 echo "TEST_FW: ${TEST_FW:-unknown}"
 ```
 
-### Governor manifest, plan, packet
-
-Reuse RUN_ID from the governed audit accounting. After Steps 7–8 finish their writes, refresh
-that run's manifest and plan, preserving its audit verdicts and attempt counts.
-Then build the shared packet from the final reviewed content:
-
-```bash
-~/.claude/skills/gstack/bin/gstack-diff-manifest <base> "$RUN_ID"
-~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude
-~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
-# All later gstack-review-plan/review-dispatch pass calls carry --run-id "$RUN_ID" --cycle "$CYCLE".
-```
-
-Carry these printed values as literals for the rest of the invocation:
-`RUN_ID`, `CYCLE`, `TIER`, `SLICE_KIND`, `REVIEWERS`, `PASSES`, `REPAIR_CYCLES_MAX`,
-`COVERAGE_AUDIT`, `PLAN_COMPLETION`, `DOC_RELEASE`,
-`CODEX_DOC_VOICE`, `UPSTREAM_SPECIALISTS`, `UPSTREAM_STRUCTURED`, `ADVERSARIAL_CLAUDE`,
-`CODEX_CHALLENGE`, `RED_TEAM_LOC_TRIGGER`, `GREPTILE`, `COVERAGE_RATING`,
-`AUDIT_REUSE`, `NON_CODE_DELTA`, `QA_SMOKE`, `DETERMINISTIC_GATES`, `FULL_LANES_REQUIRED`, `BUILD_GATE`, `CI_BACKSTOP`, `PACKET_PATH`, `PACKET_PATHS`, `CI_GREEN`, `REUSED` and `RERUN`.
-
-`PASSES` is the whole-workflow accounting for this run: every AI pass it may
-dispatch (reviewer slots, coverage audit, plan completion, doc release, doc
-voice) with its model and effort; Upstream-required passes join its accounting through register-upstream; a pass absent from either record never runs. `resume`
-carries forward the terminal verdicts of a PRIOR run whose content
-fingerprint, base, policy, tier, reviewer list and slice kind all equal this
-plan's (a matching commit with a dirty tree never qualifies): print
-`Reused from {RESUME_SOURCE}: {REUSED}` when non-empty, do not dispatch a gate
-listed in `REUSED` (its dispatch would be refused as duplicate-slot), and
-dispatch only `RERUN`. Only clean and issues_found verdicts are reusable;
-error, timeout and missing verdicts are never carried.
-Also retain `MANIFEST_WTREE`, `DOC_FP`, `OUTCOME_ID`,
-`OUTCOME_MISSING`, `MAX_ADVISORIES`, `AUTOFIX_INFORMATIONAL`,
-`BLOCKING_SEVERITIES`, and `BLOCKING_CATEGORIES`.
-
-If `OUTCOME_MISSING=true`, print exactly:
-
-`Outcome metadata missing — treating this slice as FINAL (full release review at tier {TIER}). Set it with: ~/.claude/skills/gstack/bin/gstack-outcome set --id <id> --slice <n> [--final] [--flag-flip]`.
-
-
-
 ### Read specialist hit rates (adaptive gating)
 
 ```bash
@@ -360,8 +334,6 @@ If `OUTCOME_MISSING=true`, print exactly:
 ```
 
 ### Select specialists
-
-When `UPSTREAM_SPECIALISTS=false`, skip this pass: upstream scope/adaptive/force selection and fan-out. Instead dispatch only governor-planned `specialist:*` / `red-team` slots; the core review, merge and QA handoff still run. When true, use the upstream selection below.
 
 Select specialists from the scope signals above.
 
@@ -397,28 +369,7 @@ Print the selection:
 
 ### Dispatch specialists in parallel
 
-Governor reservations follow the dispatch manifest: before a reader launches, register its upstream-only governor_gate, then dispatch that gate and every governor_gates floor entry. Every allowed Agent is accounted before launch. One batched specialist reads all planned checklists and settles each floor gate only after its whole result is collected. Missing/invalid output is incomplete. Preserve upstream ship-budget reservations and state-machines/pregate accounting.
-
-Union upstream-selected specialists with planned `specialist:*` slots, retaining
-source labels. The small-diff bypass skips upstream specialists only; execute any
-governor-planned slots separately, then the parent Exploratory QA handoff.
-Never dispatch the same specialist twice: one result may satisfy both sources
-only when both dispatch records name the same frozen tree/SHA.
-Register upstream-only selected specialists with
-`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>`;
-then run `gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>`
-before each Agent call. Every allowed Agent is accounted before launch. Every specialist
-Agent sets `model: "sonnet"`. Each prompt reads the upstream packet including its inline diff, with its PACKET read= ranges. On /review, PACKET_PATHS lists every shard; read all of them, never just PACKET_PATH. CI_GREEN=true
-means do not repeat builds/tests. Record each terminal verdict with `gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>` and a best-effort
-`gstack-gate-log` row with model sonnet, effort agent-default, effort_source routed,
-fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream
-settlement and missing-coverage rules; the budget allows one corrected attempt.
-Routed codex-structured remains an additional Step 11 slot.
-
-
-
-
-For each selected dispatch (including the one batched specialist), launch an independent subagent via the Agent tool with `subagent_type: "general-purpose"` and `model: "sonnet"`.
+For each selected specialist, launch an independent subagent via the Agent tool.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
 
@@ -455,7 +406,7 @@ Every other specialist, including Testing, reads the full diff with fixtures. In
 
 5. Instructions:
 
-"You are a specialist code reviewer. A precomputed diff/risk manifest is at {MANIFEST_PATH}; read it FIRST as an index (it never replaces the diff). Read the checklist at {checklist path}, then run
+"You are a specialist code reviewer. Read the checklist at {checklist path}, then run
 `DIFF_BASE=<diff-base> && git diff "$DIFF_BASE" <exclude>` to get the diff (`<diff-base>`: write the sha in before dispatch, the merge base on pass 1 and `RANGE_BASE` from pass 2 on; never a shell variable; `<exclude>`: everything after `<diff-base>` on this reviewer's `DIFF_CMD:` line, verbatim; empty on `DIFF_EXCLUDE: none`). Apply the checklist against the diff.
 
 `NO FINDINGS` alone is the expected, complete result for a clean diff; never invent an item. Otherwise output one JSON object per finding per line, 400 words at most:
@@ -478,22 +429,17 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use `subagent_type: "general-purpose"` with `model: "sonnet"`
+- Use `subagent_type: "general-purpose"`
 - Pass `run_in_background: false` when available on every specialist Agent call — background is the default since Claude Code v2.1.198; omitting an available flag is not foreground. A launch receipt means it went background: await its completion notice.
 
 **Wait for readers before editing:**
 - Confirm that each task has finished or is stopped. A timeout alone does not prove termination. If a reader or writer is still active, wait; if its state is unknown, inspect its task/process status. If you cannot confirm it stopped, use the parent's Fix-First stop path without edits.
 - A failed task may be stopped without having completed its review. Record the failure and retain usable partial findings.
 - Continue independent evidence collection after a terminal failure. Missing dispatched coverage remains incomplete, never completed or clean; successful peers cannot replace it.
-**Early Red Team (large diffs):** If DIFF_LINES > 200 the trigger is ALREADY
-known — include Red Team in this SAME parallel dispatch message, prompt per
-the "Red Team dispatch" section below (EARLY path); do not dispatch it again.
 
 ---
 
 ### Step 9.2: Collect and merge findings
-
-When `AUTOFIX_INFORMATIONAL=false`, the policy overrides advice ASK-only below: BLOCKING is membership in `BLOCKING_SEVERITIES` OR `BLOCKING_CATEGORIES`; all other findings are ADVISORY. List at most `MAX_ADVISORIES` under `## Advisories (not fixed)`, never ASK or auto-fix advice. Preserve defect severity and evidence.
 
 Follow these stages in order. Validate core and specialist findings alike, but keep
 their source labels: specialist scoring is not the final review's defect count.
@@ -623,52 +569,16 @@ sources and counting overlapping savings once. Keep actual specialist stats;
 core-only advice must not create a specialist dispatch or finding.
 Normal AUTO-FIX/ASK rules apply, with advice ASK-only. Missing coverage still blocks
 completion. Advice never permits edits while readers are active or replaces a required review.
-**Persist per-gate telemetry:** for EACH dispatched specialist (and
-Red Team, either path), append one gate record, substituting {placeholder}s
-with carried literals:
-
-```bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"ship","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
-```
-
-Telemetry is best-effort: a failed gate-log call never blocks or changes the
-review, and the aggregate `specialists` object still goes into reviews.jsonl
-unchanged.
 
 ---
 
 ### Red Team dispatch (conditional)
 
-When `RED_TEAM_LOC_TRIGGER=false`, skip LOC activation. When `UPSTREAM_SPECIALISTS=false`, skip upstream Red Team activation; planned `red-team` always runs. Label upstream LOC registration `--trigger loc`.
-
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-Register upstream activation as `upstream-specialist:red-team` unless red-team
-already occupies a planned slot. Dispatch the chosen gate through review-budget
-before the Sonnet Agent call; record its verdict and gate row afterward. A planned
-red-team runs even without upstream activation. Upstream-required activation is
-accounted separately and does not consume the single routed escalation.
+If activated, dispatch one more subagent via the Agent tool (pass `run_in_background: false` when available — foreground; subagents default to background since Claude Code v2.1.198; A launch receipt means it went background: await its completion notice.)
 
-
-
-Two dispatch paths, ONE activation condition (the condition above is the whole trigger surface — the paths only change WHEN the dispatch happens):
-
-**EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
-dispatch message as the specialists (see "Early Red Team" above); do not
-dispatch again. It receives the checklist from
-`~/.claude/skills/gstack/review/specialists/red-team.md`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch:
-"You are a red team reviewer. N specialists are reviewing this diff
-CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
-{MANIFEST_PATH}; read it first as an index. List changed files with
-`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff --name-status "$DIFF_BASE"`,
-then read them as that fixture handling says.
-Hunt for cross-cutting concerns, integration boundary issues, and failure
-modes that specialist checklists don't cover. Output specialist-schema JSON
-findings."
-
-**LATE path (no early dispatch AND any specialist produced a CRITICAL
-finding):** dispatch one more subagent via the Agent tool now (pass `run_in_background: false` when available — foreground; subagents default to background since Claude Code v2.1.198; A launch receipt means it went background: await its completion notice.) It receives:
+The Red Team subagent receives:
 1. The red-team checklist path `~/.claude/skills/gstack/review/specialists/red-team.md` (it reads the file)
 2. The merged specialist findings from Step 9.2, one line each (so it knows what was already caught)
 3. The git diff command
@@ -684,14 +594,10 @@ Tag Red Team findings `"specialist":"red-team"`.
 Add them to the original specialist outputs and rerun stages 1–8 of Step 9.2
 before Step 9.3 dedup, then Step 9.4 Fix-First; do not boost or count the earlier findings twice.
 
-Log its gate record with `"gate":"red-team"` and the activation reason.
-
 If the Red Team returns NO FINDINGS, note: "Red Team review: no additional issues found."
 If the Red Team fails or times out, confirm it stopped and record its review as incomplete, just as for other specialists. Return to the parent's Exploratory QA step, then dedup and persistence; Step 9.4 cannot certify missing dispatched coverage as completed or clean.
 
 ### Step 9.2.1: Exploratory QA (before Fix-First)
-
-When `QA_SMOKE=false`, skip this pass's exploratory smoke, setup and guard only; required plan checks still run with their methods/preflight. Report smoke as policy-skipped, never a not-run required probe; it does not block the parent completion gate.
 
 Only the parent runs report-only discovery.
 Never overwrite another run's reports. Batch only independent Reads.
@@ -699,8 +605,6 @@ Never overwrite another run's reports. Batch only independent Reads.
 **1. Load methods before any QA or explicit-verification probe.**
 
 > **STOP.** Before any probe, including plan checks, complete the ordered scope/method Reads in earlier responses. Never batch a probe (capture, guard start, plan check) with a Read.
-
-Read `~/.claude/skills/gstack/bin/gstack-review-budget policy-flags <base>` now and carry `QA_SMOKE`; this is manifest-free and precedes the Step 9.1 plan.
 
 1. From the installed /ship SKILL.md's directory, Read `../qa/sections/exploratory.md` in full. If the caller directory is prefixed `gstack-ship`, use `../gstack-qa/sections/exploratory.md` instead. Use this host's installation, never the product tree. If missing or unreadable, report a QA setup blocker and its affected probes as blocked; continue other safe probes (independent functional/static checks). Missing/unreadable assets block required QA.
 2. Then Read QA's `sections/scope.md` in full; pick surfaces.
@@ -779,10 +683,6 @@ Apply this procedure to checklist, specialist, exploratory QA and queued Steps
 
 ## Step 9.4: Fix-First and persistence
 
-When `NON_CODE_DELTA=true`, after any fixes run `rerun-check` before persistence. Only `TEST_ONLY=true` or `DOC_ONLY=true` with `FULL_RERUN=false` permits `gstack-review-budget carry-forward "$RUN_ID" --cycle <n>` and `gstack-review-log --carry-forward "$RUN_ID"`. Require success, verify that delta and refresh Local lanes only; retain stale Full receipts and their original results explicitly. Then finish the original REVIEW_START with completed/converged true only when all required checks pass; skip the full Step 9 repeat and continue to the pending enabled Steps 10–11, reusing carried reviewer verdicts rather than dispatching again. Save the new reviewed tree/audit id. Every other edit follows the upstream repeat selection below.
-
-When `AUTOFIX_INFORMATIONAL=false`, override the heuristic below: BLOCKING means severity in `BLOCKING_SEVERITIES` OR category in `BLOCKING_CATEGORIES`; everything else is ADVISORY. ADVISORY findings are NEVER fixed: no AUTO-FIX and no ASK. List at most `MAX_ADVISORIES`, sorted by confidence, under `## Advisories (not fixed)`. Advisory test stubs are listed, never asked. Only BLOCKING findings enter the normal fix/ASK and regression flow below.
-
 Before edits, inspect every dispatched reader/writer's handle. Wait for return
 or confirm termination; otherwise log incomplete through items 5–6 and STOP
 without edits. After terminal failure, independent evidence may support fixes,
@@ -820,7 +720,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
    the classified output marks them `scope: fix`, per the Fix-First Heuristic in
    checklist.md. Critical findings lean toward ASK; informational lean toward AUTO-FIX.
 
-2. **Auto-fix all AUTO-FIX items.** Apply each fix at every listed instance (`also at` / `instances`) and at any other instance of the same pattern in the diff. Output one line per fix:
+2. **Auto-fix all AUTO-FIX items.** Apply each fix. Output one line per fix:
    `[AUTO-FIXED] [file:line] Problem → what you did`
 
 3. **If ASK items remain,** present them in ONE AskUserQuestion (or one per item for 3 or
@@ -829,13 +729,6 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
 
    Save each explicit Skip immediately in the invocation action list with its
    identity, scope and supporting source evidence; keep it across repeats.
-
-   Record fixes and explicit skips through `gstack-review-budget finding` and
-   `resolve`; an accepted or skipped `resolve` takes `--reason "<wrong|intentional|minor|deferred>: <why>"`.
-   A Fix answer covers every instance, as in item 2. Governor classification is telemetry; upstream AUTO-FIX/ASK governs
-   action and advice remains ASK-only.
-
-   - **Track the fix-cycle index:** cycles are 0-based; a gate re-dispatched by a later cycle carries `"fix_cycle":{cycle}` and `"rerun_cause":"fix-loop"`. Telemetry only: it never alters the loop.
 
    **Gate findings** (any finding with a `gate` tag) never take Fix/Skip. Ask
    `review-gate-disposition` (include `<gstack-qid:review-gate-disposition>`; one-way,
@@ -893,7 +786,7 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
 
 6. Persist the review result to the review log:
 ```bash
-~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","run_id":"{RUN_ID}","cycle":{N},"status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES,"pass":PASS,"review_scope":"SCOPE","range_base":RANGE_BASE_OR_NULL}' --finish REVIEW_START
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"TIMESTAMP","status":"STATUS","issues_found":N,"critical":N,"informational":N,"quality_score":SCORE,"specialists":SPECIALISTS_JSON,"findings":FINDINGS_JSON,"commit":"'"$(git rev-parse --short HEAD)"'","via":"ship","completed":COMPLETED,"converged":CONVERGED,"cycles":CYCLES,"pass":PASS,"review_scope":"SCOPE","range_base":RANGE_BASE_OR_NULL}' --finish REVIEW_START
 ```
 - `TIMESTAMP`: ISO 8601. `STATUS`: `unavailable` for missing dispatched reviewer output,
   else `clean` only for completed coverage with no unresolved non-advisory defects,
@@ -927,15 +820,10 @@ but missing dispatched output still blocks continuation, even with a QA exceptio
 Save the review output and `Gate edits:` line for Step 19's PR body; an `open` gate
 finding makes that PR a draft.
 
-For each fixing cycle also run `gstack-review-budget rerun-check "$RUN_ID" --cycle <n>`.
-Retain fix_cycle and rerun_cause in gate rows and refresh manifest/plan before
-reviewing changed inputs. Governor REPAIR_CYCLES_MAX may stop earlier; follow upstream frozen scope, scoped second pass, fix-check and pass caps. FULL_RERUN is governor accounting, not the repeat selector; only the risky-surface floor below overrides upstream selection. On exit 3
-persist `converged:false` and recurring findings before stopping.
-
 ### Decide whether to repeat Step 9
 
 After persistence, record missing output, CYCLES and fixes in the invocation record.
-Decision 1 always applies first. Then, under `frozen`, run `gstack-review-plan --base <base> --run-id "$RUN_ID" --cycle "$CYCLE" --pass $PASS --last full`
+Decision 1 always applies first. Then, under `frozen`, run `gstack-review-plan --base <base> --pass $PASS --last full`
 with each flag that holds (`--fixed-blocking`, `--fixed-below`, `--blocking-open`,
 `--touched-gate` for a fix to an item 2.5 path, `--critical-found` when this pass
 logged a CRITICAL, `--adversarial-ran` once Step 11's native pass ran, `--reviewed-numbers <fp>`,
@@ -944,13 +832,6 @@ in `gstack-approvals` naming `review_loop_grant` and the stop head), `--range-ba
 its `NEXT:` alone picks the next decision: `stop` 2, `full` 3, `fix-check` 3.5, `done` 4, `platform` 4. `voices` 4: Step 11 runs before the stop.
 `scoped` is 3 too. A full pass 1 always gets a full pass 2.
 Other scopes apply decisions 2–4 in order.
-
-**Risky-surface floor:** a fix touching auth/authorization, RLS, billing/entitlements,
-migrations or secrets (including configured auth/d/env surfaces) requires a FULL pass
-on the whole branch diff. Always supply the fix range so the planner can classify it;
-it prints RISKY_FULL_REVIEW: true, raises depth to full, enables the full reviewer set before build despite D3 trims,
-and the builder uses the merge base even if --range is given. That printed floor overrides every D3 skip clause for the required review passes. A cap still stops: never
-replace this full pass with fix-check or run a fourth fixing cycle.
 
 1. **Dispatched reviewer output missing:** STOP and name each failed specialist or
    Red Team. Retain queued fixes and restore coverage. If this pass made edits,

@@ -43,7 +43,7 @@ import { classList, targetedBriefSha, targetedClasses, targetedPatchId } from '.
 import { targetedDelta } from '../lib/review-targeted-delta';
 import { docsChangeSince, ownChangeSince } from '../lib/ship-receipt-depth';
 import { RISK_CLASSES, type RiskClass } from '../lib/review-risk';
-import { governorPlan } from '../lib/review-plan-governor';
+import { governorPlan, type GovernorReviewPlan } from '../lib/review-plan-governor';
 import { loadGovernorPlan } from '../lib/review-governor-packet';
 import { readPolicy, riskyReviewPaths } from '../lib/review-policy';
 import { renderFixCheckPrompt } from '../scripts/resolvers/fix-check';
@@ -257,7 +257,7 @@ function main(): number {
   const afterFixCheck = fixCheckAt ? docsChangeSince(root, fixCheckAt, head, ref) : null;
   const rawSince = fixCheckAt && own ? git(['diff', '--raw', '--no-renames', fixCheckAt, own]) : null;
   const carried = afterFixCheck && afterFixCheck.verdict !== 'code' && rawSince !== null && !/^:\d+ (100755|120000|160000) /m.test(rawSince) && gateTagsOf(['--commit', own!]) === 0 ? afterFixCheck : null;
-  let plan = planReview({
+  let plan: GovernorReviewPlan = planReview({
     ...collected, ...exclusionInput, ...riskPaths, declared: declared as RiskClass[], shape: { panel: review.panel, readerModel: review.reader_model, platform: review.platform, head, platformReview: platform?.ok ? platform.review : null }, scope, gateTagged, targeted: { classes: targeted.classes, ran }, numbers: scanNumbers(kept(added)), force, gated: list('--gated'), floor: riskyRepeat ? 'full' : floor, tiers: auditEffort !== 'host',
     criticalFound: has('--critical-found'), adversarialRan: riskyRepeat ? false : has('--adversarial-ran'), reviewedNumbers: flag('--reviewed-numbers'),
     history: { fullPasses: pass, last, fixedBlocking: has('--fixed-blocking'), fixedBelow: (has('--fixed-below') || (postReview && pass > 0)) && last !== 'fix-check', blockingOpen: has('--blocking-open'), touchedGate: riskyRepeat || has('--touched-gate') || (!carried && (!!fixRange?.touched_gate || (postReview && pass > 0))), pass1Depth, rangeRuntimeLines: fixRange?.runtime_lines, granted: grant, fixChecks: has('--fix-checks') ? fixChecks : undefined, postReview, chained: inLoopLink },

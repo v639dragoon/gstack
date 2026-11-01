@@ -208,11 +208,15 @@ sections. Read a section in full before doing its step; do not work from memory.
 
 | When | Read this section |
 |------|-------------------|
+| before review planning; apply at matching upstream headings | `sections/governor.md` |
 | leaving Step 1.5 | `sections/plan-completion.md` |
 | Select surfaces and read QA methods | Inline in [Step 4](#step-4-critical-pass-core-review); setup and probes run in Step 4.7 |
 | dispatching the Review Army specialists and merging their findings after the critical pass (Step 4.5) | `sections/review-army.md` |
 | running the always-on native adversarial review before fixes (Step 4.8) | `sections/adversarial.md` |
 | reusing explicitly skipped shared-code advice (Step 5.0) | `sections/shared-code-reuse.md` |
+
+> **STOP.** Before before review planning; apply at matching upstream headings, Read `~/.claude/skills/gstack/review/sections/governor.md` and execute it
+> in full. Do not work from memory — that section is the source of truth for this step.
 
 ---
 

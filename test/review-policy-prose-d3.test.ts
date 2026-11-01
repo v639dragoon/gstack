@@ -2,6 +2,7 @@
 import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { generateGovernorReview } from '../scripts/resolvers/governor-review';
 import { generateGovernorStructuredBody } from '../scripts/resolvers/governor-structured';
 import { generateReviewArmy } from '../scripts/resolvers/review-army';
 import { generateAdversarialStep, generateCodexDocReview } from '../scripts/resolvers/outside-voice-steps';
@@ -11,7 +12,8 @@ const read = (p: string) => readFileSync(join(import.meta.dir, '..', p), 'utf8')
 for (const host of ['claude', 'factory'] as const) for (const skillName of ['ship', 'review']) {
   const ctx = { skillName, host, paths: HOST_PATHS[host], tmplPath: '' } as TemplateContext;
   test(`D3 ${host}/${skillName}: each upstream trim is gated; governor slot remains unconditional`, () => {
-    const army = generateReviewArmy(ctx) + generateGovernorStructuredBody(ctx), adv = generateAdversarialStep(ctx);
+    const overlay = generateGovernorReview(ctx);
+    const army = generateReviewArmy(ctx) + overlay, adv = generateAdversarialStep(ctx) + overlay;
     for (const flag of ['UPSTREAM_SPECIALISTS', 'RED_TEAM_LOC_TRIGGER', 'ADVERSARIAL_CLAUDE', 'CODEX_CHALLENGE', 'UPSTREAM_STRUCTURED'])
       expect(army + adv).toContain(`\`${flag}=false\``);
     expect(army).toContain('dispatch only governor-planned');
@@ -47,7 +49,7 @@ test('D3 rating and doc voice follow policy; audit reused is satisfied and bypas
 });
 test('D3 advisory override lists test stubs without ASK or AUTO-FIX; legacy prose retained', () => {
   for (const p of ['review/SKILL.md.tmpl', 'ship/sections/review-army.md.tmpl']) {
-    const text = read(p); expect(text).toContain('`AUTOFIX_INFORMATIONAL=false`');
+    const text = read(p) + read('ship/sections/governor.md'); expect(text).toContain('`AUTOFIX_INFORMATIONAL=false`');
     expect(text).toContain('ADVISORY findings are NEVER fixed'); expect(text).toContain('## Advisories (not fixed)');
     expect(text).toContain('Advisory test stubs'); expect(text).toContain('`MAX_ADVISORIES`');
     expect(text).toContain('AUTO-FIX'); expect(text).toContain('ASK');

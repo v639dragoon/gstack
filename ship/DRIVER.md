@@ -1,5 +1,7 @@
 <!-- AUTO-GENERATED from ship/DRIVER.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
+Before the first driver phase, Read sections/governor.md. It owns governor planning, D3 filters and floor accounting at matching steps. Phase 3 passes its RUN_ID/CYCLE to review-dispatch pass; Phase 4 dispatches the strict codex-structured reader through its consent-enforcing Codex send, never as a general-purpose reader. Before final acceptance run review-budget complete --require-audits --final and stop on incomplete coverage.
+
 # /ship driver: run /ship from a parent agent
 
 Read this, not `ship/SKILL.md`, when a parent agent runs /ship

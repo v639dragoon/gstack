@@ -7,13 +7,13 @@ describe('review governor bins', () => {
     for (const n of [
       'gstack-outcome',
       'gstack-review-budget',
-      'gstack-review-packet',
+      'gstack-review-context',
       'gstack-outcome-report',
       'gstack-context-guard',
     ]) {
       const p = join(root, 'bin', n);
       expect(statSync(p).mode & 0o111).not.toBe(0);
-      expect(readFileSync(p, 'utf8').startsWith(n === 'gstack-review-packet' ? '#!/usr/bin/env -S bun --no-env-file --config=/dev/null' : '#!/usr/bin/env bash')).toBe(true);
+      expect(readFileSync(p, 'utf8').startsWith(n === 'gstack-review-context' ? '#!/usr/bin/env -S bun --no-env-file --config=/dev/null' : '#!/usr/bin/env bash')).toBe(true);
     }
   });
 });

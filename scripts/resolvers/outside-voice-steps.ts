@@ -1,7 +1,6 @@
 import { governorNativeRegistration, governorNativeVerdict } from './governor-accounting';
 import { generateGovernorStructured } from './governor-structured';
-import { adversarialPersistResult } from './adversarial-history';
-import { generateGovernorPlan } from './review-army';
+import { generateGovernorPlanBody as generateGovernorPlan } from './governor-accounting';
 /**
  * Cross-model review resolver
  *
@@ -123,12 +122,6 @@ If A: revise the premise and note the revision. If B: proceed (and note that the
 function adversarialNativePass(ctx: TemplateContext, isShip: boolean): string {
   return `### ${outsideVoiceFor(ctx).nativeLabel} adversarial subagent (${isShip ? 'on \`DISPATCH: adversarial-native\`' : 'always runs'})
 
-When \`NON_CODE_DELTA=true\` and this native slot was carried by a successful \`carry-forward\`, reuse its audited receipt: do not register/dispatch another attempt or create a PASS_START. This exception never accepts missing native coverage.
-
-When \`ADVERSARIAL_CLAUDE=false\`, skip this pass: no Agent, registration or PASS_START. Continue to the enabled outside passes and governor slot.
-
-${ctx.host === 'codex' && !isShip ? generateGovernorPlan(ctx) : ''}
-
 Before dispatch, run \`~/.claude/skills/gstack/bin/gstack-review-log --start adversarial-review\`
 and save the returned token for this native attempt. Do the same before each outside
 adversarial or structured pass reads its diff. Keep each token with that attempt;
@@ -136,8 +129,6 @@ do not overwrite the parent's REVIEW_START. A rerun needs a new token before it
 reads, not when it saves its result. Include non-ignored untracked source in each
 reviewer's context or read instructions (\`git ls-files --others --exclude-standard\`).
 Those files are part of the recorded content too.
-
-${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 'Before this Agent call, register/dispatch per Native accounting in `governor-structured.md`.' : governorNativeRegistration(ctx)}
 
 Dispatch via the Agent tool with ${FOREGROUND_IF_AVAILABLE} (background is the default since ${CC_BACKGROUND_DEFAULT_SINCE}); findings must arrive before review concludes. ${BACKGROUND_RECOVERY} Fresh context avoids checklist bias, but this is the same harness, not an independent model unless runtime identity proves otherwise.
 
@@ -151,7 +142,6 @@ Think like an attacker and a chaos engineer. Your job is to find ways this code 
 Present findings under an \`ADVERSARIAL REVIEW (${outsideVoiceFor(ctx).nativeLabel} subagent):\` header. **FIXABLE or \`Blocks: yes\` findings** are CRITICAL and ${isShip ? 'are queued for the parent; do not edit during Step 11' : "are queued for the parent's Fix-First handling at Step 5; do not edit during Step 4.8"}. **Other INVESTIGATE findings** are informational; \`Blocks: no\` never lowers a FIXABLE one.
 
 If the subagent fails or times out, record native coverage as incomplete. Continue independent passes and persistence, not release.
-${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 'Follow Native accounting in `governor-structured.md`; keep PASS_START and incomplete coverage.' : governorNativeVerdict(ctx)}
 
 ---`;
 }
@@ -159,20 +149,13 @@ ${ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex' ? 
 function adversarialOutsideChallenge(ctx: TemplateContext, isShip: boolean): string {
   return `### ${outsideVoiceFor(ctx).label} adversarial challenge (${isShip ? 'on \`DISPATCH: outside-voice\`, when' : 'runs whenever'} \`CODEX_MODE\` is \`ready\` or \`unverified\`)
 
-When \`CODEX_CHALLENGE=false\`, skip this pass: no outside invocation or registration; continue to structured review. A successful NON_CODE_DELTA carry of upstream-outside:challenge also satisfies it; reuse the audited receipt without dispatch.
-
 ${isShip ? 'On \`DISPATCH: outside-voice\`, if' : 'If'} \`CODEX_MODE\` is \`ready\` or \`unverified\`:
-
-Before launch, register \`upstream-outside:challenge --optional\` and dispatch it
-with \`gstack-review-budget\`, carrying this run and cycle. Record the resolved
-model and effort, then its terminal verdict and gate-log row. This optional
-record preserves upstream's non-blocking failure contract.
 
 Outside prompt (supply repository context from the parent):
 
 "${CODEX_BOUNDARY}Review the changes on this branch against the base branch. Use the supplied branch diff. If it was not supplied and you have repository tools, run DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE". Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, resource leaks, failure modes, and silent data corruption paths. Be adversarial. Be thorough. No compliments — just the problems. A finding blocks only if it ${BLOCKING_FLOOR}; end each finding with \`Severity: Critical|High|Medium|Low\` and \`Blocks: yes|no\`. Then write ONE line in the canonical format \`Recommendation: <action> because <one-line reason naming the most exploitable finding>\`. Generic reasons like 'because it's safer' do not qualify; the reason must point to a specific finding or no-fix rationale. ${OUTSIDE_VERDICT_REQUEST}"
 
-${outsideVoiceInvocation(ctx, { timeoutMs: 540000, nativeAlreadyRequired: isShip ? 'dispatched' : true, reasoningEffort: isShip ? 'high' : 'medium', voice: 'adversarial', diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { verbatimReview: true, timeoutMs: 540000, nativeAlreadyRequired: isShip ? 'dispatched' : true, diffCommand: 'DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff "$DIFF_BASE"' })}
 
 Present the full output verbatim. A Critical, High or \`Blocks: yes\` finding is CRITICAL; \`Blocks: no\` never lowers one, and only a named policy ground drops it. ${isShip ? 'An unavailable outside challenge does not block shipping by itself; supported findings still enter Step 11, and the structured P0/P1 and non-convergence gates still apply.' : 'This outside challenge is informational; supported findings still enter Step 5 Fix-First, whose approval and convergence gates apply.'}
 
@@ -189,16 +172,9 @@ ${isShip ? 'Other modes skip it; the native pass follows its own DISPATCH line.'
 function adversarialStructuredReview(ctx: TemplateContext, isShip: boolean): string {
   return `### ${outsideVoiceFor(ctx).label} structured review (${isShip ? 'on \`DISPATCH: outside-voice\`, 200+ lines' : 'large diffs only, 200+ lines'})
 
-When \`UPSTREAM_STRUCTURED=false\`, skip this pass even for large diffs or user force selection. A successful NON_CODE_DELTA carry of upstream-outside:structured also satisfies it without dispatch. The separate governor codex-structured slot still runs when planned.
-
 ${isShip ? 'On \`DISPATCH: outside-voice\`, if' : 'If'} \`CODEX_MODE\` is \`ready\` or \`unverified\` and either \`DIFF_TOTAL >= 200\` or the user requested the override above:
 
-Register \`upstream-outside:structured --optional\` and dispatch it with
-\`gstack-review-budget\` before launch. Record actual model/effort, terminal
-verdict and gate-log row separately from the governor's routed slot; the
-upstream structured decision and Finish the adversarial phase still govern it.
-
-${outsideVoiceInvocation(ctx, { timeoutMs: 540000, nativeAlreadyRequired: isShip ? 'dispatched' : true, reasoningEffort: 'high', voice: 'adversarial', gate: 'structured', diffCommand: 'DIFF_BASE=$(git merge-base <base> HEAD) && git diff "$DIFF_BASE"' })}
+${outsideVoiceInvocation(ctx, { verbatimReview: true, timeoutMs: 540000, nativeAlreadyRequired: isShip ? 'dispatched' : true, gate: 'structured', diffCommand: 'DIFF_BASE=$(git merge-base <base> HEAD) && git diff "$DIFF_BASE"' })}
 
 ${outsideVoiceFor(ctx).id === 'codex' ? '' : 'The Claude Code backend receives the parent-captured base diff, including committed and working-tree changes, because review mode cannot execute git.\n\n'}Present output under \`${outsideVoiceFor(ctx).label.toUpperCase()} SAYS (code review):\` inside a \`tool-output\` fence.
 Only a completed response ending with its \`VERDICT:\` line establishes the gate. P0/P1 findings (\`[P0]\`/\`[P1]\` or native \`P0:\`/\`P1:\` labels; \`VERDICT: findings\`) → GATE: FAIL. Completed without P0/P1 → GATE: PASS. Refusal, failure, missing markers or \`OUTSIDE_STATUS: unverified\` → GATE: MISSING COVERAGE; no fix question.
@@ -223,14 +199,43 @@ If \`DIFF_TOTAL < 200\` without that override, skip structured review; the ${isS
 ---`;
 }
 
+function adversarialPersistResult(ctx: TemplateContext, isShip: boolean): string {
+  return `### Persist the review result
+
+Wait until every started task has finished or is confirmed stopped. Then save one
+record per source, phase and attempt, before the parent applies queued fixes.
+A stopped task without a completed response still has incomplete coverage.
+
+Use the template once per attempt. If it started, \`--finish PASS_START\` consumes
+its original token. If it never started because it was unavailable, disabled or
+size-gated, omit \`--finish PASS_START\` and set completed/converged false.
+Do not create or borrow a token just to save a result.
+\`\`\`bash
+~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"adversarial-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","source":"SOURCE","host":"${ctx.host}","outside_provider":"${outsideVoiceFor(ctx).id}","outside_status":"OUTSIDE_STATUS","phase":"PHASE","tier":"always","gate":"GATE","commit":"'"$(git rev-parse --short HEAD)"'","completed":COMPLETED,"converged":CONVERGED}' --finish PASS_START
+\`\`\`
+PASS_START belongs to that attempt, not the parent's REVIEW_START. Each token is consumed once.
+Fill fields from this attempt, not the parent's ${isShip ? 'Step 9.4' : 'Step 5.8'} result:
+- COMPLETED is true only with a completed response. Timeout, failure, refusal or
+  missing coverage means false. CONVERGED also requires that the attempt made no edits.
+  A fixing pass cannot certify the fixed tree without a fresh full pass.
+- PHASE is "adversarial" or "structured". SOURCE is the actual outside provider or
+  native in-host source. Preserve its actual OUTSIDE_STATUS; native completion
+  never credits outside coverage.
+- STATUS is "clean" for a completed pass without findings, "issues_found" for
+  a completed pass with findings, or "unavailable" for an incomplete pass.
+- GATE is "informational" for adversarial passes. For structured review, use
+  "pass" or "fail" from its completed result, "skipped" when size-gated, or
+  "informational" with completed:false when coverage is missing.
+
+---`;
+}
+
 export function generateAdversarialStep(ctx: TemplateContext): string {
 
   const isShip = ctx.skillName === 'ship';
   const stepNum = isShip ? '11' : '4.8';
 
   return `## Step ${stepNum}: Adversarial review${isShip ? '' : ' (always-on)'}
-
-The carried plan literals govern the passes below. When \`ADVERSARIAL_CLAUDE=false\`, skip the native pass, its registration, receipt and native-completion requirement. When \`CODEX_CHALLENGE=false\` or \`UPSTREAM_STRUCTURED=false\`, skip that upstream outside pass; if both are false skip this section's outside preflight too. The governor codex-structured slot retains its own required routing and preflight.
 
 ${isShip ? 'Unavailable' : `Every diff gets the ${outsideVoiceFor(ctx).nativeLabel} adversarial pass. Add ${outsideVoiceFor(ctx).label} when its preflight is ready; unavailable`} or disabled outside coverage stays explicit.
 
@@ -253,8 +258,6 @@ The ${outsideVoiceFor(ctx).nativeLabel} adversarial subagent always runs.`}
 **User override:** If the user explicitly requested "full review", "structured review", or "P1 gate", also run the ${outsideVoiceFor(ctx).label} structured review regardless of diff size (still requires ${isShip ? '\`DISPATCH: outside-voice\` and ' : ''}\`CODEX_MODE: ready\` (or \`unverified\`)).
 
 ---
-
-${isShip ? '**Use the Step 9 dispatch manifest at Step 11:** stage voices through gstack-review-dispatch; D3 filters and governor floors already ran in the planner. The strict codex-structured brief is required coverage, regardless of consent or availability. Rendered briefs carry governor context; reserve and record each planned gate before dispatch, and settle its verdict only when its reader completes.' : ''}
 
 ${adversarialNativePass(ctx, isShip)}
 
@@ -283,11 +286,7 @@ ADVERSARIAL REVIEW SYNTHESIS (${isShip ? '' : 'always-on, '}N lines):
 
 High-confidence findings (agreed on by multiple sources) should be prioritized for fixes.
 
-${generateGovernorStructured(ctx)}
-
 ${isShip ? `### Finish the adversarial phase
-
-When \`ADVERSARIAL_CLAUDE=false\`, skip the native-incomplete decision below. Use governor completion for required reviewer coverage; enabled passes and supported findings retain the remaining fix/completion decisions.
 
 Apply Step 9.3's matching procedure before testing the actionable fix queue below.
 Only unmatched or reopened findings remain queued. Unvalidated historical Skips

@@ -112,6 +112,9 @@ export const SECTION: ResolverFn = (ctx: TemplateContext, args?: string[]): stri
     return `> Not loaded in the ${ctx.modules!.name} loadout: skip ${entry.trigger}. Do not offer it, and treat it as not run.`;
   }
 
+  if (ctx.skillName === 'review' && id === 'governor' && ctx.host !== 'claude')
+    return '> **STOP.** Before review planning, Read `governor-structured.md` beside this SKILL.md and apply its accounting at matching steps. Missing asset means INCOMPLETE; stop.';
+
   if (usesLazySections(ctx.host, ctx.skillName)) {
     if (ctx.skillName === 'qa' || ctx.skillName === 'qa-only') {
       return [
