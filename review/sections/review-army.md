@@ -133,7 +133,7 @@ Routed codex-structured remains an additional Step 4.8 slot.
 
 
 
-For each selected specialist, launch an independent subagent via the Agent tool.
+For each selected dispatch (including the one batched specialist), launch an independent subagent via the Agent tool with `subagent_type: "general-purpose"` and `model: "sonnet"`.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
 
@@ -182,7 +182,7 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use `subagent_type: "general-purpose"`
+- Use `subagent_type: "general-purpose"` with `model: "sonnet"`
 - Pass `run_in_background: false` when available on every specialist Agent call — background is the default since Claude Code v2.1.198; omitting an available flag is not foreground. A launch receipt means it went background: await its completion notice.
 
 **Wait for readers before editing:**

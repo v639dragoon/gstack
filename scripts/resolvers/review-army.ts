@@ -120,7 +120,7 @@ ${ctx.skillName === 'ship' ? 'Governor reservations follow the dispatch manifest
 
 ${externalReview(ctx) ? 'Follow Dispatch accounting in `governor-structured.md` for the upstream/planned union; one attempt per frozen tree/SHA.' : governorDispatchAccounting(ctx)}
 
-For each selected specialist, launch an independent subagent via the Agent tool.
+For each selected dispatch (including the one batched specialist), launch an independent subagent via the Agent tool with \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
 ${ctx.skillName === 'ship' ? `
@@ -180,7 +180,7 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use \`subagent_type: "general-purpose"\`
+- Use \`subagent_type: "general-purpose"\` with \`model: "sonnet"\`
 - Pass ${FOREGROUND_IF_AVAILABLE} on every specialist Agent call — background is the default since ${CC_BACKGROUND_DEFAULT_SINCE}; omitting an available flag is not foreground. ${BACKGROUND_RECOVERY}
 
 ${WAIT_FOR_READERS}

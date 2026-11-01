@@ -19,8 +19,13 @@ describe('review governor rendered prose', () => {
   test('subagent models are explicit and never Fable or Opus', () => {
     const text = union();
     expect(text).not.toMatch(/model:\s*["']?(?:fable|opus)/i);
-    // D4: upstream's packet dispatcher owns /ship model-family selection.
-    expect(read('ship/sections/review-army.md')).toContain('on the same model');
+    // Every general-purpose dispatch names its model beside it; inheriting the
+    // session's family would launch Fable/Opus reviewers on a Fable/Opus lead.
+    for (const site of SITES) {
+      const prose = read(site);
+      for (const m of prose.matchAll(/subagent_type:\s*["']general-purpose["']/g))
+        expect(prose.slice(m.index!, m.index! + 180), site).toMatch(/model:\s*["'](?:sonnet|haiku)["']/);
+    }
     expect(read('review/sections/review-army.md')).toContain('Every specialist');
     expect(read('document-release/SKILL.md')).toContain('Every Agent/subagent call');
     for (const model of text.matchAll(/model:\s*["']([^"']+)["']/g))
