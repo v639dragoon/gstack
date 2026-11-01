@@ -23,7 +23,7 @@ describe('document-release audit telemetry (D1)', () => {
     expect(content).not.toContain('"pushed"');
   });
   test('the fix-cycle telemetry clause is present and telemetry-only', () => {
-    const reviewArmy = read('ship/sections/review-army.md');
+    const reviewArmy = read('ship/sections/governor.md');
     expect(reviewArmy).toContain('Track the fix-cycle index');
     expect(reviewArmy).toContain('"rerun_cause":"fix-loop"');
     expect(reviewArmy).toMatch(/Track the fix-cycle index[^\n]*Telemetry only/);

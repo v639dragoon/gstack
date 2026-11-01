@@ -537,14 +537,14 @@ describe('gstack-outcome-report model detail', () => {
 // Rendered prose: the packet exec call carries the model, the gate row records it
 
 describe('rendered routed step carries the model', () => {
-  const SITES = ['ship/sections/adversarial.md', 'review/sections/adversarial.md', '.factory/skills/gstack-ship/sections/adversarial.md', '.factory/skills/gstack-review/governor-structured.md'];
+  const SITES = ['ship/sections/governor.md', 'review/sections/governor.md', '.factory/skills/gstack-ship/sections/governor.md', '.factory/skills/gstack-review/governor-structured.md'];
   const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
   for (const site of SITES) {
     test(`${site}: resolves the model once, pins it on packet exec, records it, never re-runs on another model`, () => {
       const union = read(site);
-      const parent = site.endsWith('/governor-structured.md') ? read(site.replace('governor-structured.md', 'SKILL.md')) : union;
+      const parent = site.endsWith('/governor-structured.md') ? read(site.replace('governor-structured.md', 'SKILL.md')) : read(site.replace('sections/governor.md', 'sections/adversarial.md'));
       expect(parent).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
-      if (parent !== union) {
+      if (site.endsWith('/governor-structured.md')) {
         expect(parent).toContain('Before dispatch, Read `governor-structured.md`');
         expect(parent).toContain('Missing or unreadable asset means INCOMPLETE');
       }

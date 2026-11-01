@@ -491,6 +491,7 @@ const registeredUpstream = (ledger: any[], cycle: number): string[] => [...new S
   .map(r => r.gate))];
 const upstreamGates = (id: string, cycle: number) => registeredUpstream(records(id), cycle);
 function gateDisabled(p: any, gate: string): boolean {
+  if (['upstream-specialist:fix-check', 'upstream-specialist:targeted'].includes(gate)) return false;
   if (p.riskyFullReview && (gate === 'native-adversarial' || gate.startsWith('upstream-specialist:') || gate.startsWith('upstream-outside:'))) return false;
   return gate === 'native-adversarial' && p.adversarialClaude === false ||
     gate === 'upstream-outside:challenge' && p.codexChallenge === false ||
@@ -500,7 +501,7 @@ function gateDisabled(p: any, gate: string): boolean {
 }
 if (command === 'register-upstream') {
   const [id, gate] = argv;
-  if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|state-machines|red-team|batched))$/.test(gate))
+  if (!id || !gate || !/^(native-adversarial|upstream-outside:(challenge|structured)|upstream-specialist:(testing|maintainability|security|performance|data-migration|api-contract|design|simplification|state-machines|red-team|batched|fix-check|targeted))$/.test(gate))
     fail('known upstream-required reviewer gate required');
   const cycle = requestedCycle(), p = cyclePlan(loadPlan(id), cycle);
   if (gateDisabled(p, gate) || gate === 'upstream-specialist:red-team' && opt('--trigger') === 'loc' && p.redTeamLocTrigger === false && !p.riskyFullReview) {

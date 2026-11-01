@@ -1,4 +1,4 @@
 {
-  "bytes": -3591,
-  "why": "v1.92.20 upstream no-loss sections preserved; pinned governor policy/accounting moved to generated overlay and compact-driver handoff"
+  "bytes": -1644,
+  "why": "v1.92.20 upstream certified sections plus pinned governor overlay, carry-forward telemetry and compact dispatch accounting handoff"
 }

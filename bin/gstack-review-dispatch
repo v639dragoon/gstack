@@ -34,6 +34,7 @@ import { resultLine } from '../lib/result-codes';
 import { runScriptSync } from '../lib/script-invocation';
 import { TARGETED_RULES, parseClassList, targetedBriefSha, targetedRead } from '../lib/review-targeted';
 import { loadGovernorContext } from '../lib/review-governor-packet';
+import { governorSent, governorCollected } from '../lib/review-dispatch-governor';
 import { resolveBaseBranch } from '../lib/ship-policy';
 import { auditVerdict, eventsDigest, loadReaders, readersLine, scanEvents, type ToolEvent } from '../lib/review-fetch';
 import { effectiveReaders, READERS_POLICY_DEFAULT, type EffectiveReaders } from '../lib/ship-policy-readers';
@@ -571,6 +572,7 @@ function main(): number {
     const sent = readFile(flag('--sent'), 'sent prompt');
     if (!reader || sent === undefined) { process.stderr.write('gstack-review-dispatch sent: needs --role and --sent <file>\n'); return EXIT.usage; }
     const r = recordSent(ledger, reader, sent);
+    if (r.ok) governorSent(ledger, reader, path.join(ROOT, 'bin'));
     process.stdout.write(r.ok ? `BRIEF_SENT: reader=${reader} sha256=${r.sent} match\n`
       : `BRIEF_MISMATCH: reader=${reader} rendered=${r.rendered ?? 'none'} sent=${r.sent} (dispatch the rendered file unchanged; this reader's review does not count)\n`);
     return r.ok ? EXIT.ok : EXIT.fail;
@@ -589,6 +591,7 @@ function main(): number {
     if (tree && !tree.ok && mayBeUnavailable(reader) && !parseFindings(reader, output).length) {
       const why = `reviewed another tree: reported ${tree.reported}, expected ${tree.expected}`;
       const r = collect(ledger, reader, output, merged, path.resolve(outFile!), why);
+      governorCollected(ledger, reader, path.join(ROOT, 'bin'), r);
       process.stdout.write(`COLLECT_UNAVAILABLE: reader=${reader} sha256=${r.sha} reason=${JSON.stringify(why)} (missing outside coverage: unavailable, never clean)\n`);
       return EXIT.ok;
     }
@@ -596,6 +599,7 @@ function main(): number {
     let plan: ReturnType<typeof readManifest> | undefined;
     try { plan = mf ? readManifest(mf) : undefined; } catch (e) { process.stderr.write(`gstack-review-dispatch collect: ${(e as Error).message}; native FIXABLE collects as CRITICAL\n`); }
     const r = collect(ledger, reader, output, merged, path.resolve(outFile!), unavailable, tree, fixableRaises(plan && path.resolve(plan.ledger) === path.resolve(ledger) ? plan.plan_lines : undefined));
+    governorCollected(ledger, reader, path.join(ROOT, 'bin'), r);
     if (tree && !tree.ok) {
       if (mf && plan) { markReader(plan, reader, 'failed', { output: outFile, error: `reviewed another tree: ${tree.reported}` }); writeManifest(mf, plan); }
       process.stdout.write(wrongTree(reader, tree));

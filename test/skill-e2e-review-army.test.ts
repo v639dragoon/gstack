@@ -60,6 +60,7 @@ function copyReviewFiles(dir: string) {
     path.join(dir, 'review-SKILL.md'),
     [
       extractSkillSections(path.join(ROOT, 'review'), REVIEW_ARMY_SKELETON_SECTIONS),
+      readReviewSection('governor.md'),
       readReviewSection('plan-completion.md'),
       readReviewSection('review-army.md'),
     ].join('\n'),

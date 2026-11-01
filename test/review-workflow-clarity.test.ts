@@ -232,7 +232,7 @@ test('caller QA defines execution, evidence ownership and report adaptation befo
 test('review section index follows the actual pre-fix execution order', () => {
   const manifest = JSON.parse(readFileSync(join(root, 'review/sections/manifest.json'), 'utf8'));
   expect(manifest.sections.map((section: { id: string }) => section.id)).toEqual([
-    'plan-completion', 'review-army', 'adversarial', 'shared-code-reuse',
+    'governor', 'plan-completion', 'review-army', 'adversarial', 'shared-code-reuse',
   ]);
 });
 
@@ -394,7 +394,8 @@ test('review confidence uses its severity labels without an undefined P0 excepti
   expect(confidence.indexOf('Pre-emit verification gate')).toBeLessThan(confidence.indexOf('| Score |'));
   expect(confidence).not.toContain('FP classes the gate kills');
   expect(confidence).not.toContain('1539-framework-aware-review.md');
-  expect(generateConfidenceCalibration({ ...ctx, skillName: 'ship' })).toBe(confidence);
+  // D4: Ship retains upstream's certified rubric; Review keeps its clarified severity rubric.
+  expect(generateConfidenceCalibration({ ...ctx, skillName: 'ship' })).toContain('confidence score (1-10)');
 });
 
 test('review names the lifecycle and record owners before using their persistence rules', () => {

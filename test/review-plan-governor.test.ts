@@ -184,9 +184,62 @@ test('risky repair refuses a narrowed review receipt and overrides D3 registrati
       {base: 'main', out: f.out, pass: 'p1', stage: 'voices', planFlags: f.flags, startedAt: 0});
     expect(result).toContain('GOVERNOR_STRUCTURED: reader=codex-structured');
     expect(result).toContain('NEXT: governor-structured');
+    expect(result).toContain(' out=' + f.out + '/codex-structured.out');
     expect(created).toBe(0);
     const strict = readManifest(path.join(f.out, 'pass-manifest.json')).readers.find(r => r.role === 'codex-structured')!;
     expect(strict.state).toBe('rendered');
     expect(strict.governor_floor).toBe(true);
+  } finally {f.cleanup();}
+});
+
+// Value: protects=the compact send/collect callbacks own every floor's budget; fails_when=a launched batch bypasses
+// its logical specialist slots or a duplicate success reserves another attempt; seam=native dispatch CLI and budget ledger.
+test('native batched callbacks account tier floors with D3 disabled and cannot silently launch again', () => {
+  const f = fixture('D', {upstream_specialists: false}, true);
+  try {
+    expect(f.run('gstack-review-dispatch', ['pass', '--base', 'main', '--pass', 'p1', '--out', f.out, '--', ...f.flags]).status).toBe(0);
+    const mf = path.join(f.out, 'pass-manifest.json');
+    expect(f.run('gstack-review-dispatch', ['stage', '--manifest', mf, '--stage', 'specialists']).status).toBe(0);
+    const m = readManifest(mf), batch = m.readers.find(r => r.role === 'specialist-batched')!;
+    const slug = f.run('gstack-slug', ['--get', 'REPO_SLUG']).stdout.trim();
+    const budgetLedger = path.join(f.env.GSTACK_STATE_ROOT, 'projects', slug, 'budgets', 'integration.ledger.jsonl');
+    const rows = () => fs.existsSync(budgetLedger) ? fs.readFileSync(budgetLedger, 'utf8').trim().split('\n').filter(Boolean).map(s => JSON.parse(s)) : [];
+    const wrong = path.join(f.out, 'wrong.txt'); fs.writeFileSync(wrong, 'summarized prompt');
+    expect(f.run('gstack-review-dispatch', ['sent', '--ledger', m.ledger, '--role', batch.role!, '--sent', wrong]).status).not.toBe(0);
+    expect(rows().filter(r => r.record_type === 'dispatch' && r.allowed)).toHaveLength(0);
+    const send = () => f.run('gstack-review-dispatch', ['sent', '--ledger', m.ledger, '--role', batch.role!, '--sent', batch.file!]);
+    expect(send().status).toBe(0);
+    const output = path.join(f.out, 'batch.out');
+    fs.writeFileSync(output, `REVIEWED_TREE: ${batch.tree}\nNO FINDINGS\n`);
+    const collect = () => f.run('gstack-review-dispatch', ['collect', '--ledger', m.ledger, '--role', batch.role!, '--output', output, '--merged', m.merged]);
+    expect(collect().status).toBe(0);
+    expect(collect().status).toBe(0); // resume does not duplicate governor verdicts
+    for (const gate of batch.governor_gates!) {
+      expect(rows().filter(r => r.record_type === 'dispatch' && r.allowed && r.gate === gate)).toHaveLength(1);
+      expect(rows().filter(r => r.record_type === 'verdict' && r.gate === gate && r.verdict === 'clean')).toHaveLength(1);
+    }
+    expect(send().status).not.toBe(0);
+  } finally {f.cleanup();}
+});
+
+// Value: protects=the founder Sonnet pin at the actual successor launcher; fails_when=an unpinned/Opus
+// general-purpose reader reaches create; seam=checked-in Capy program with native bin callbacks and declared no-launch actor.
+for (const model of [undefined, {model_id: 'anthropic/claude-opus-5-5'}, {model_id: 'anthropic/claude-sonnet-5-5'}]) test(`compact governed batch model boundary: ${model?.model_id ?? 'default'}`, async () => {
+  const f = fixture('D', {}, true);
+  try {
+    let created = 0;
+    const tools = {
+      capy: {bash: async ({command}: {command: string}) => {
+        const r = spawnSync('bash', ['-c', command], {cwd: f.repo, env: {...f.env, PATH: path.join(root, 'bin') + path.delimiter + process.env.PATH}, encoding: 'utf8', timeout: 30_000});
+        return {exit_code: r.status ?? 1, output: r.stdout + r.stderr};
+      }, write: async ({path: file, content}: {path: string;content: string}) => {fs.mkdirSync(path.dirname(file), {recursive:true});fs.writeFileSync(file, content);}},
+      subagent: {list: async () => ({tasks: []}), create: async (args: {start: {model: unknown}}) => {created++; expect(args.start.model).toEqual(model); throw Error('fixture captured accepted model boundary');}},
+    };
+    const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (...args: string[]) => (...args: unknown[]) => Promise<string>;
+    const result = await new AsyncFunction('tools', 'sleep', 'now', 'input', fs.readFileSync(path.join(root, 'lib/capy-review-pass.js'), 'utf8'))(tools, async () => {}, async () => 0,
+      {base:'main',out:f.out,pass:'p1',planFlags:f.flags,models:{specialist:model},startedAt:0});
+    const accepted = model?.model_id.includes('sonnet');
+    expect(result).toContain(accepted ? 'fixture captured accepted model boundary' : 'requires an explicit Sonnet or Haiku model');
+    expect(created).toBe(accepted ? 1 : 0);
   } finally {f.cleanup();}
 });
