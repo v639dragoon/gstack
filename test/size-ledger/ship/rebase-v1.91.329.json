@@ -1,4 +1,4 @@
 {
-  "bytes": 48762,
-  "why": "rebase v1.91.329: keep upstream's pinned adversarial packet sentence (defensive framing, ADVERSARIAL_NATIVE, fixture summary, JSONL contract) in the governor Step 11 build paragraph, +133 bytes; name model: \"sonnet\" on the per-packet specialist dispatch so a Fable/Opus lead never launches Fable/Opus reviewers, +15 bytes"
+  "bytes": 48774,
+  "why": "rebase v1.91.329: keep upstream's pinned adversarial packet sentence (defensive framing, ADVERSARIAL_NATIVE, fixture summary, JSONL contract) in the governor Step 11 build paragraph, +133 bytes; name model: \"sonnet\" on the per-packet specialist dispatch so a Fable/Opus lead never launches Fable/Opus reviewers, +15 bytes; plan paragraph defers each reviewer's model to its dispatch step instead of the session's model family, +12 bytes"
 }
