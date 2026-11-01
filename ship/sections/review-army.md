@@ -27,8 +27,7 @@ receipt write the same flag; a repeat uses the plan run that picked it.
 Round 2 is always a `full` pass on the range, never a scoped one: every reader it plans is in the pass's manifest.
 Save its `REVIEW_PLAN:` line and fingerprint, `REVIEW_DEPTH:` (depth,
 `runtime_lines`, `rules`) and `GATE_SCAN:`. Dispatch exactly its `DISPATCH:` lines
-(specialists, Red Team, Step 11's voices), each at its `effort=` on the same model
-family (`full` is the lane's reasoning, `medium` reasoning medium, `light` low; a
+(specialists, Red Team, Step 11's voices), each at its `effort=` with the model named by its dispatch step (`full` is the lane's reasoning, `medium` reasoning medium, `light` low; a
 host that cannot set it runs its default) and reading its `DIFF_CMD:`, in place of 9.1's and 9.2's own selection rules;
 `specialist batched` is one subagent reading every checklist its
 `checklists=` names (light adds Red Team), tagging each finding with its checklist.
