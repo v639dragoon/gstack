@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { readLedger } from '../lib/review-ledger';
 import { tmpdir } from 'os';
@@ -140,4 +140,33 @@ describe('review packet', () => {
       rmSync(state, { recursive: true, force: true });
     }
   });
+});
+
+// Value: protects=governor budgets, briefs and evidence stay in their pre-marker repository bucket;
+// fails_when=a .gstack-project grouping redirects one writer but not its reader;
+// why_new=upstream added grouping markers in v1.92.14; seam=native slug, manifest, budget, context and evidence bins; no_claim=remote identity migration
+ test('project markers cannot move per-repository governor state', () => {
+  const temp = realpathSync(mkdtempSync(join(tmpdir(), 'gov-marker-')));
+  const repo = join(temp, 'repo'), state = join(temp, 'state');
+  mkdirSync(repo); mkdirSync(state); mkdirSync(join(temp, 'home'));
+  writeFileSync(join(temp, '.gstack-project'), '');
+  const env = {...process.env, HOME: join(temp, 'home'), GSTACK_STATE_ROOT: state, GSTACK_PROJECT_SLUG: '', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1'};
+  const run = (name: string, args: string[]) => spawnSync(join(root, 'bin', name), args, {cwd: repo, env, encoding: 'utf8', timeout: 30_000});
+  const git = (...args: string[]) => {const r = spawnSync('git', args, {cwd: repo, env, encoding: 'utf8', timeout: 30_000}); expect(r.status, r.stderr).toBe(0);};
+  try {
+    git('init', '-q', '-b', 'main'); git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid'); git('config', 'commit.gpgsign', 'false');
+    writeFileSync(join(repo, 'x.ts'), 'export const old = 1;\n'); git('add', '.'); git('commit', '-qm', 'base'); git('checkout', '-qb', 'feature');
+    writeFileSync(join(repo, 'x.ts'), 'export const changed = 2;\n');
+    const bucket = run('gstack-slug', ['--get', 'REPO_SLUG']).stdout.trim();
+    expect(run('gstack-slug', ['--get', 'SLUG']).stdout.trim()).not.toBe(bucket);
+    const m = run('gstack-diff-manifest', ['main']); expect(m.status, m.stderr).toBe(0);
+    const mp = /^MANIFEST_PATH=(.+)$/m.exec(m.stdout)![1];
+    const id = /^RUN_ID=(.+)$/m.exec(m.stdout)![1];
+    expect(mp).toStartWith(join(state, 'projects', bucket));
+    expect(run('gstack-review-budget', ['plan', mp]).status).toBe(0);
+    const packet = run('gstack-review-context', [id, 'main']); expect(packet.status, packet.stderr).toBe(0);
+    expect(packet.stdout).toContain(join(state, 'projects', bucket, 'packets'));
+    const evidence = run('gstack-evidence', ['run', '--label', 'tests', '--', 'echo ok']); expect(evidence.status, evidence.stderr).toBe(0);
+    expect(existsSync(join(state, 'projects', bucket, 'feature-evidence.jsonl'))).toBe(true);
+  } finally {rmSync(temp, {recursive: true, force: true});}
 });

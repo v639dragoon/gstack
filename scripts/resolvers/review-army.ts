@@ -10,23 +10,12 @@
  * Shipped as Release 2 of the self-learning roadmap (SELF_LEARNING_V0.md).
  */
 import type { TemplateContext } from './types';
-import { generateGovernorPlanBody, governorDispatchAccounting, governorRedTeamAccounting, governorSpecialistTelemetry } from './governor-accounting';
 import { CC_BACKGROUND_DEFAULT_SINCE, FOREGROUND_IF_AVAILABLE, BACKGROUND_RECOVERY } from './constants';
 import { learningsCapture, LEARNINGS_VERDICT } from './learnings';
 import { DEFENSIVE_REVIEW_FRAMING, fixtureSummaryMode } from './defensive-review';
 
-const externalReview = (ctx: TemplateContext) => ctx.skillName === 'review' && ctx.host !== 'claude' && ctx.host !== 'codex';
-
-export function generateGovernorPlan(ctx: TemplateContext): string {
-  if (!externalReview(ctx)) return generateGovernorPlanBody(ctx);
-  return `### Governor manifest, plan, packet
-
-**STOP.** Read \`governor-structured.md\` beside this SKILL.md. Apply its accounting at matching steps; structured review runs at 4.8. Missing asset: INCOMPLETE, stop.`;
-}
-
 function generateSpecialistSelection(ctx: TemplateContext): string {
   const isShip = ctx.skillName === 'ship';
-  const ship = isShip;
   const stepSel = isShip ? '9.1' : '4.5';
   const stepMerge = isShip ? '9.2' : '4.6';
   const nextStep = isShip ? 'Step 9.3 (cross-review dedup)' : 'Step 4.8 (adversarial review), then Step 5';
@@ -60,8 +49,6 @@ TEST_FW=""
 echo "TEST_FW: \${TEST_FW:-unknown}"
 \`\`\`
 
-${generateGovernorPlan(ctx)}
-
 ### Read specialist hit rates (adaptive gating)
 
 \`\`\`bash
@@ -69,8 +56,6 @@ ${ctx.paths.binDir}/gstack-specialist-stats 2>/dev/null || true
 \`\`\`
 
 ### Select specialists
-
-When \`UPSTREAM_SPECIALISTS=false\`, skip this pass: upstream scope/adaptive/force selection and fan-out. Instead dispatch only governor-planned \`specialist:*\` / \`red-team\` slots; the core review, merge and QA handoff still run. When true, use the upstream selection below.
 
 Select specialists from the scope signals above.
 
@@ -116,11 +101,7 @@ function diffBase(ctx: TemplateContext): string {
 function generateSpecialistDispatch(ctx: TemplateContext): string {
   return `### Dispatch specialists in parallel
 
-${ctx.skillName === 'ship' ? 'Governor reservations follow the dispatch manifest: before a reader launches, register its upstream-only governor_gate, then dispatch that gate and every governor_gates floor entry. Every allowed Agent is accounted before launch. One batched specialist reads all planned checklists and settles each floor gate only after its whole result is collected. Missing/invalid output is incomplete. Preserve upstream ship-budget reservations and state-machines/pregate accounting.' : ''}
-
-${externalReview(ctx) ? 'Follow Dispatch accounting in `governor-structured.md` for the upstream/planned union; one attempt per frozen tree/SHA.' : governorDispatchAccounting(ctx)}
-
-For each selected dispatch (including the one batched specialist), launch an independent subagent via the Agent tool with \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`.
+For each selected specialist, launch an independent subagent via the Agent tool.
 **Launch ALL selected specialists in a single message** (multiple Agent tool calls)
 so they run in parallel. Each subagent has fresh context — no prior review bias.
 ${ctx.skillName === 'ship' ? `
@@ -157,7 +138,7 @@ Every other specialist, including Testing, reads the full diff with fixtures.${c
 
 5. Instructions:
 
-"You are a specialist code reviewer. A precomputed diff/risk manifest is at {MANIFEST_PATH}; read it FIRST as an index (it never replaces the diff). Read the checklist at {checklist path}, then run
+"You are a specialist code reviewer. Read the checklist at {checklist path}, then run
 \`${diffBase(ctx)} && git diff "$DIFF_BASE"${ctx.skillName === 'ship' ? ' <exclude>' : ''}\` to get the ${ctx.skillName === 'ship' ? 'diff (`<diff-base>`: write the sha in before dispatch, the merge base on pass 1 and `RANGE_BASE` from pass 2 on; never a shell variable; `<exclude>`: everything after `<diff-base>` on this reviewer\'s `DIFF_CMD:` line, verbatim; empty on `DIFF_EXCLUDE: none`)' : 'full diff'}. Apply the checklist against the diff.
 
 \`NO FINDINGS\` alone is the expected, complete result for a clean diff; never invent an item. Otherwise output one JSON object per finding per line, 400 words at most:
@@ -180,19 +161,14 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use \`subagent_type: "general-purpose"\` with \`model: "sonnet"\`
+- Use \`subagent_type: "general-purpose"\`
 - Pass ${FOREGROUND_IF_AVAILABLE} on every specialist Agent call — background is the default since ${CC_BACKGROUND_DEFAULT_SINCE}; omitting an available flag is not foreground. ${BACKGROUND_RECOVERY}
 
-${WAIT_FOR_READERS}
-**Early Red Team (large diffs):** If DIFF_LINES > 200 the trigger is ALREADY
-known — include Red Team in this SAME parallel dispatch message, prompt per
-the "Red Team dispatch" section below (EARLY path); do not dispatch it again.`;
-}
-
-const WAIT_FOR_READERS = `**Wait for readers before editing:**
+**Wait for readers before editing:**
 - Confirm that each task has finished or is stopped. A timeout alone does not prove termination. If a reader or writer is still active, wait; if its state is unknown, inspect its task/process status. If you cannot confirm it stopped, use the parent's Fix-First stop path without edits.
 - A failed task may be stopped without having completed its review. Record the failure and retain usable partial findings.
 - Continue independent evidence collection after a terminal failure. Missing dispatched coverage remains incomplete, never completed or clean; successful peers cannot replace it.`;
+}
 
 function generateFindingsMerge(ctx: TemplateContext): string {
   const isShip = ctx.skillName === 'ship';
@@ -201,8 +177,6 @@ function generateFindingsMerge(ctx: TemplateContext): string {
   const critPassRef = isShip ? 'the checklist pass (Step 9)' : 'the CRITICAL pass findings from Step 4';
   const persistRef = isShip ? 'the review-log persist' : 'the review-log entry in Step 5.8';
   return `### Step ${stepMerge}: Collect and merge findings
-
-When \`AUTOFIX_INFORMATIONAL=false\`, the policy overrides advice ASK-only below: BLOCKING is membership in \`BLOCKING_SEVERITIES\` OR \`BLOCKING_CATEGORIES\`; all other findings are ADVISORY. List at most \`MAX_ADVISORIES\` under \`## Advisories (not fixed)\`, never ASK or auto-fix advice. Preserve defect severity and evidence.
 
 Follow these stages in order. Validate core and specialist findings alike, but keep
 their source labels: specialist scoring is not the final review's defect count.
@@ -331,8 +305,7 @@ Consolidate equivalent shared-code advice under the core proposal, retaining all
 sources and counting overlapping savings once. Keep actual specialist stats;
 core-only advice must not create a specialist dispatch or finding.
 Normal AUTO-FIX/ASK rules apply, with advice ASK-only. Missing coverage still blocks
-completion. Advice never permits edits while readers are active or replaces a required review.
-${externalReview(ctx) ? 'Follow Specialist telemetry in `governor-structured.md`.' : governorSpecialistTelemetry(ctx)}`;
+completion. Advice never permits edits while readers are active or replaces a required review.`;
 }
 
 function generateRedTeam(ctx: TemplateContext): string {
@@ -341,30 +314,11 @@ function generateRedTeam(ctx: TemplateContext): string {
   const fixFirstRef = isShip ? 'Step 9.3 dedup, then Step 9.4 Fix-First' : 'Step 5 Fix-First';
   return `### Red Team dispatch (conditional)
 
-When \`RED_TEAM_LOC_TRIGGER=false\`, skip LOC activation. When \`UPSTREAM_SPECIALISTS=false\`, skip upstream Red Team activation; planned \`red-team\` always runs. Label upstream LOC registration \`--trigger loc\`.
-
 **Activation:** Only if DIFF_LINES > 200 OR any specialist produced a CRITICAL finding.
 
-${externalReview(ctx) ? 'Follow Red Team accounting in `governor-structured.md`.' : governorRedTeamAccounting(ctx)}
+If activated, dispatch one more subagent via the Agent tool (pass ${FOREGROUND_IF_AVAILABLE} — foreground; subagents default to background since ${CC_BACKGROUND_DEFAULT_SINCE}; ${BACKGROUND_RECOVERY})
 
-Two dispatch paths, ONE activation condition (the condition above is the whole trigger surface — the paths only change WHEN the dispatch happens):
-
-**EARLY path (DIFF_LINES > 200):** already launched in the SAME parallel
-dispatch message as the specialists (see "Early Red Team" above); do not
-dispatch again. It receives the checklist from
-\`${ctx.paths.skillRoot}/review/specialists/red-team.md\`, the manifest path,
-and the git diff command — NOT merged findings (none exist yet). Prompt, after the defensive framing and fixture handling from item 4 of the specialist dispatch:
-"You are a red team reviewer. N specialists are reviewing this diff
-CONCURRENTLY — you will not see their findings. A diff/risk manifest is at
-{MANIFEST_PATH}; read it first as an index. List changed files with
-\`DIFF_BASE=$(git merge-base origin/<base> HEAD) && git diff --name-status "$DIFF_BASE"\`,
-then read them as that fixture handling says.
-Hunt for cross-cutting concerns, integration boundary issues, and failure
-modes that specialist checklists don't cover. Output specialist-schema JSON
-findings."
-
-**LATE path (no early dispatch AND any specialist produced a CRITICAL
-finding):** dispatch one more subagent via the Agent tool now (pass ${FOREGROUND_IF_AVAILABLE} — foreground; subagents default to background since ${CC_BACKGROUND_DEFAULT_SINCE}; ${BACKGROUND_RECOVERY}) It receives:
+The Red Team subagent receives:
 1. The red-team checklist path \`${ctx.paths.skillRoot}/review/specialists/red-team.md\` (it reads the file)
 2. The merged specialist findings from Step ${stepMerge}, one line each (so it knows what was already caught)
 3. The git diff command
@@ -379,8 +333,6 @@ don't cover."
 Tag Red Team findings \`"specialist":"red-team"\`.
 Add them to the original specialist outputs and rerun stages 1–8 of Step ${stepMerge}
 before ${fixFirstRef}; do not boost or count the earlier findings twice.
-
-Log its gate record with \`"gate":"red-team"\` and the activation reason.
 
 If the Red Team returns NO FINDINGS, note: "Red Team review: no additional issues found."
 If the Red Team fails or times out, confirm it stopped and record its review as incomplete, just as for other specialists. ${isShip ? "Return to the parent's Exploratory QA step, then dedup and persistence; Step 9.4 cannot certify missing dispatched coverage as completed or clean." : 'Continue independent Step 4.7 QA and Step 4.8 adversarial review; Step 5.8 cannot certify missing dispatched coverage as completed or clean.'}`;

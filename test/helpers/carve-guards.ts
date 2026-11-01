@@ -105,7 +105,7 @@ export interface CarveGuard {
 export const CARVE_GUARDS: Record<string, CarveGuard> = {
   ship: {
     skill: 'ship',
-    expectedSections: [
+    expectedSections: ['governor.md',
       'apple-release.md',
       'tests.md',
       'test-coverage.md',
@@ -467,7 +467,7 @@ do not launch the downstream skill or open a browser.`,
   // ── Token-reduction Phase 4 wave 1 (v1.69.x branch) ──────────────────────
   review: {
     skill: 'review',
-    expectedSections: ['plan-completion.md', 'review-army.md', 'shared-code-reuse.md', 'adversarial.md'],
+    expectedSections: ['governor.md', 'plan-completion.md', 'review-army.md', 'shared-code-reuse.md', 'adversarial.md'],
     requiredReads: ['plan-completion.md', 'review-army.md'],
     scenario:
       "The working tree has a real diff against the base branch (assume Step 1's git checks passed; the diff implements the PLAN.md cache layer). Run the /review flow: the scope-drift and plan-completion deep pass against PLAN.md, then the critical pass, then the Review Army specialist dispatch — apply the specialist checklists yourself instead of launching subagents. Produce the review report. Do NOT commit, push, or create a PR.",

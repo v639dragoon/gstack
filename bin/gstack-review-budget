@@ -5,6 +5,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
 eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
+SLUG=$("$SCRIPT_DIR/gstack-slug" --get REPO_SLUG) || exit 1 # per-repository governor records
 GSTACK_BUDGET_PROJECT_DIR="$GSTACK_STATE_ROOT/projects/$SLUG" \
 GSTACK_BUDGET_REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)" \
 bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" "$SCRIPT_DIR/gstack-review-budget.ts" "$@"

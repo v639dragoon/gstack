@@ -27,7 +27,8 @@ import { cleanMarkers, collect, fixableRaises, mayBeUnavailable, parseFindings, 
 import { buildManifest, checklistFile, chunkCount, chunkOf, manifestPath, markReader, planCyberRetry, readManifest, renderStage, withAuditModel, writeManifest, STAGES, type Extra, type Manifest, type PassReader, type ReaderState, type Stage } from '../lib/review-pass';
 import { classifyOutsideReview } from '../lib/outside-review-result';
 import { gateOutcomeLine } from '../lib/gate-outcomes';
-import { diffCommand, type Dispatch } from '../lib/review-depth';
+import { diffCommand } from '../lib/review-depth';
+import type { Dispatch } from '../lib/review-plan-governor';
 import { mayExclude, policySelection, selectFor } from '../lib/review-selection';
 import { reviewPlanTimeoutMs } from '../lib/review-collect';
 import { resultLine } from '../lib/result-codes';

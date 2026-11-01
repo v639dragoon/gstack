@@ -1,4 +1,4 @@
 {
-  "bytes": 2334,
-  "why": "Upstream v1.92.20 replay with pinned governor accounting, routing, context and post-merge contracts"
+  "bytes": -3591,
+  "why": "v1.92.20 upstream no-loss sections preserved; pinned governor policy/accounting moved to generated overlay and compact-driver handoff"
 }

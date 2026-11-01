@@ -33,7 +33,7 @@ function fixture(tier: string, passes: Record<string, boolean>, migrations = fal
   const flags = ['--base', 'main', '--gate-tagged', '0', '--run-id', 'integration', '--cycle', '0'];
   const plan = run('gstack-review-plan', [...flags, '--json']);
   expect(plan.status, plan.stderr).toBe(0);
-  return { temp, repo, git, out, run, flags, plan: JSON.parse(plan.stdout), cleanup: () => fs.rmSync(temp, { recursive: true, force: true }) };
+  return { temp, repo, env, git, out, run, flags, plan: JSON.parse(plan.stdout), cleanup: () => fs.rmSync(temp, { recursive: true, force: true }) };
 }
 
 // The upstream carrier moved to review-dispatch's pass manifest; governor tier checklists share its one batched reader.
@@ -159,4 +159,34 @@ test('risky repair refuses a narrowed review receipt and overrides D3 registrati
       expect(run('gstack-review-budget', ['dispatch', 'risk', gate, '--cycle', '1']).status).toBe(0);
     }
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
+});
+
+// Value: protects=the strict governor reviewer reaches the consent-enforcing Codex route rather than a general-purpose subagent;
+// fails_when=the pass program creates that reader or silently treats it as finished;
+// why_new=upstream's compact pass is the successor dispatcher; seam=the registered pass program and native dispatch CLI; no_claim=model output
+ test('compact pass returns the strict reader to the parent without creating any subagent', async () => {
+  const f = fixture('B', { native_adversarial: false, upstream_specialists: false, codex_challenge: false, red_team_loc_trigger: false });
+  try {
+    let created = 0;
+    const tools = {
+      capy: {
+        bash: async ({ command }: {command: string}) => {
+          const r = spawnSync('bash', ['-c', command], { cwd: f.repo, env: {...f.env, PATH: path.join(root, 'bin') + path.delimiter + process.env.PATH}, encoding: 'utf8', timeout: 30_000 });
+          return {exit_code: r.status ?? 1, output: r.stdout + r.stderr};
+        },
+        write: async () => { throw Error('strict handoff writes no prompt through the host'); },
+      },
+      subagent: {list: async () => ({tasks: []}), create: async () => {created++; throw Error('strict reviewer must not use subagent.create');}},
+    };
+    const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (...args: string[]) => (...args: unknown[]) => Promise<string>;
+    const program = fs.readFileSync(path.join(root, 'lib/capy-review-pass.js'), 'utf8');
+    const result = await new AsyncFunction('tools', 'sleep', 'now', 'input', program)(tools, async () => {}, async () => 0,
+      {base: 'main', out: f.out, pass: 'p1', stage: 'voices', planFlags: f.flags, startedAt: 0});
+    expect(result).toContain('GOVERNOR_STRUCTURED: reader=codex-structured');
+    expect(result).toContain('NEXT: governor-structured');
+    expect(created).toBe(0);
+    const strict = readManifest(path.join(f.out, 'pass-manifest.json')).readers.find(r => r.role === 'codex-structured')!;
+    expect(strict.state).toBe('rendered');
+    expect(strict.governor_floor).toBe(true);
+  } finally {f.cleanup();}
 });

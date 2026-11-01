@@ -55,6 +55,7 @@ fi
 
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
 eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
+SLUG=$("$SCRIPT_DIR/gstack-slug" --get REPO_SLUG) || exit 1 # per-repository governor records
 MANIFEST_DIR="$GSTACK_STATE_ROOT/projects/$SLUG/manifests"
 mkdir -p "$MANIFEST_DIR"
 

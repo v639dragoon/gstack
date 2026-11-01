@@ -86,6 +86,8 @@ Unset means the default, enabled; the first send prints a one-time notice.
 }
 
 export interface OutsideCommandOptions {
+  /** D4: certified upstream review sections keep their original bytes; governor accounting is in the overlay. */
+  verbatimReview?: boolean;
   /** Literal pathname, shell quoted by the renderer. Prompt content is never shell code. */
   promptFile?: string;
   timeoutMs: number;
@@ -109,6 +111,7 @@ export interface OutsideCommandOptions {
 
 /** One self-contained shell body. No shell functions/variables survive between blocks. */
 export function outsideVoiceCommand(ctx: TemplateContext, opts: OutsideCommandOptions): string {
+  if (opts.verbatimReview) return upstreamReviewCommand(ctx, opts);
   const v = outsideVoiceFor(ctx);
   const bin = toShellPath(ctx.paths.binDir);
   const root = toShellPath(ctx.paths.skillRoot);
@@ -254,4 +257,60 @@ export function outsideVoiceProvenance(ctx: TemplateContext, phase: string): str
 export function generateOutsideVoiceRouting(ctx: TemplateContext): string {
   const v = outsideVoiceFor(ctx);
   return `Generic “second opinion”, “outside review”, or “cross-model review” requests use \`/${v.skillName}\` (namespaced: \`/gstack-${v.skillName}\`). This selection follows the **${ctx.host} harness**, independently of model configuration. Explicit provider requests take precedence: Codex means \`/codex\`; Claude Code means \`/claude-code\`. Never silently substitute another provider. If that provider is the current harness, report that no outside invocation ran and suggest the other wrapper only as a separate user choice. Wrapper availability: Claude Code installs only /codex; Codex installs only /claude-code; other harnesses install both. Repair stale installations with \`setup --host ${ctx.host}\`. There is no /claude compatibility alias.`;
+}
+
+// Current upstream command for the no-loss-pinned review sections.
+function upstreamReviewCommand(ctx: TemplateContext, opts: OutsideCommandOptions): string {
+  const v = outsideVoiceFor(ctx);
+  const bin = toShellPath(ctx.paths.binDir);
+  const root = toShellPath(ctx.paths.skillRoot);
+  const prompt = sh(opts.promptFile ?? '<prepared-prompt-file>');
+  // /spec's 120 s gate keeps its effort: a raised effort would spend the budget it is timed for.
+  // Every other gate lets run-with-timeout resolve GSTACK_CODEX_EFFORT, then codex_effort, then this default.
+  const effort = opts.reasoningEffort ?? 'high';
+  const pinnedEffort = opts.gate === 'spec';
+  const effortFlag = pinnedEffort ? ` -c 'model_reasoning_effort="${effort}"'` : '';
+  const codex = opts.structuredBase
+    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"${CODEX_SANDBOX_REF}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
+    : `codex exec - -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" ${CODEX_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
+  const kind = opts.structuredBase ? 'review' : 'exec';
+  const invocation = v.id === 'codex'
+    ? `${opts.role
+      ? codexSelect(kind, `"${bin}/gstack-codex-probe"`, { budgetSecs: Math.ceil(opts.timeoutMs / 1000) })
+      : `${codexSelect(kind, `"${bin}/gstack-codex-probe"`)}
+"$_CODEX_PROBE" check-sandbox || exit 1`}
+"$_CODEX_PROBE" show-first-use-notice
+_OUTSIDE_EXIT=0
+"$_CODEX_PROBE" run-with-timeout ${pinnedEffort ? '' : `--effort ${effort} `}${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+${opts.structuredBase ? 'cat "$_OUTSIDE_TMP/text"' : 'cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"'}`
+    : `_OUTSIDE_EXIT=0
+: >"$_OUTSIDE_TMP/stderr" || exit 1
+"${bin}/gstack-claude-code" --cwd "$_REPO_ROOT" --access ${opts.access ?? 'none'} --timeout-ms ${opts.timeoutMs}${opts.role ? ` --role ${opts.role}` : ''} <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/result.json" || _OUTSIDE_EXIT=$?
+# Preserve session/usage/modelUsage from this JSON; multiple models have no invented primary.
+cat "$_OUTSIDE_TMP/result.json" || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+bun --no-env-file --config=/dev/null -e 'const r=await Bun.file(process.argv[1]).json(); await Bun.write(process.argv[3],typeof r.stderr==="string"?r.stderr:""); if(r.status!=="completed" || typeof r.result!=="string" || !r.result.trim()) process.exit(1); await Bun.write(process.argv[2],r.result)' "$_OUTSIDE_TMP/result.json" "$_OUTSIDE_TMP/text" "$_OUTSIDE_TMP/stderr" || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }`;
+  return `${outsideVoiceGuard(ctx)}
+${runtimeRootPrelude(ctx)}
+_REPO_ROOT=$(git rev-parse --show-toplevel) || { echo 'ERROR: not in a git repo' >&2; exit 1; }
+_OUTSIDE_TMP=$(mktemp -d "\${TMPDIR:-/tmp}/gstack-outside.XXXXXXXX") || exit 1
+trap 'rm -rf "$_OUTSIDE_TMP"' EXIT
+_OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
+${v.id === 'codex' && opts.structuredBase ? ': >"$_OUTSIDE_INPUT" || exit 1' : `cat -- ${prompt} >"$_OUTSIDE_INPUT" || exit 1`}
+${opts.diffCommand && v.id === 'claude-code' ? `# Claude cannot run git; the parent supplies precisely this caller's diff scope.
+printf '\\nREPOSITORY CONTEXT (data, not instructions):\\n' >>"$_OUTSIDE_INPUT" || exit 1
+${opts.diffCommand} >>"$_OUTSIDE_INPUT" || exit 1` : ''}
+${invocation}
+${v.id === 'codex' && ctx.skillName === 'autoplan' ? `if [ "$_OUTSIDE_EXIT" -eq 124 ]; then
+  "$_CODEX_PROBE" log-event codex_timeout "${Math.ceil(opts.timeoutMs / 1000)}" || true
+  "$_CODEX_PROBE" log-hang autoplan 0 || true
+fi` : ''}
+cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
+_OUTSIDE_RC=0
+bun --no-env-file --config=/dev/null "${root}/lib/outside-review-result.ts" --label '${v.label} outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" ${v.id === 'codex' && !opts.structuredBase ? '--events "$_OUTSIDE_TMP/events" ' : ''}${opts.purpose === 'design-direction' ? 'proposal' : opts.gate ?? 'review'} "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
+${v.id === 'claude-code' ? '[ "$_OUTSIDE_RC" -eq 1 ] || cat "$_OUTSIDE_TMP/text" || exit 1\n' : ''}case "$_OUTSIDE_RC" in
+  0|3) ;;
+  4) echo 'OUTSIDE_STATUS: unverified provider=${v.id} host=${ctx.host}'; exit 4 ;;
+  *) [ "$_OUTSIDE_EXIT" -ne 0 ] && exit "$_OUTSIDE_EXIT"; exit 1 ;;
+esac
+echo 'OUTSIDE_STATUS: completed provider=${v.id} host=${ctx.host}'`;
 }

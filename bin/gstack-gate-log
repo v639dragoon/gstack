@@ -54,6 +54,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
 eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
+SLUG=$("$SCRIPT_DIR/gstack-slug" --get REPO_SLUG) || exit 1 # per-repository governor records
 mkdir -p "$GSTACK_STATE_ROOT/projects/$SLUG"
 
 INPUT="$1"

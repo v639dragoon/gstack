@@ -23,10 +23,16 @@ describe('review governor rendered prose', () => {
     // session's family would launch Fable/Opus reviewers on a Fable/Opus lead.
     for (const site of SITES) {
       const prose = read(site);
+      if (/^(ship|review)\/sections\/(review-army|adversarial)\.md$/.test(site)) {
+        const overlay = read(site.split('/')[0] + '/sections/governor.md');
+        expect(overlay).toContain('Every general-purpose Agent call');
+        expect(overlay).toContain('`model: "sonnet"`');
+        continue;
+      }
       for (const m of prose.matchAll(/subagent_type:\s*["']general-purpose["']/g))
         expect(prose.slice(m.index!, m.index! + 180), site).toMatch(/model:\s*["'](?:sonnet|haiku)["']/);
     }
-    expect(read('review/sections/review-army.md')).toContain('Every specialist');
+    expect(read('review/sections/governor.md')).toContain('Every specialist');
     expect(read('document-release/SKILL.md')).toContain('Every Agent/subagent call');
     for (const model of text.matchAll(/model:\s*["']([^"']+)["']/g))
       expect(['sonnet', 'haiku']).toContain(model[1]);
@@ -56,7 +62,7 @@ describe('review governor rendered prose', () => {
 
   test('codex-structured always uses one strict packet exec before telemetry', () => {
     for (const root of ['ship', 'review']) {
-      const rendered = read(`${root}/sections/adversarial.md`);
+      const rendered = read(`${root}/sections/governor.md`);
       const start = rendered.indexOf('### Governor codex-structured slot');
       expect(start).toBeGreaterThan(-1);
       const telemetry = rendered.indexOf('Persist both logs.', start);
@@ -112,7 +118,7 @@ describe('review governor rendered prose', () => {
 
 
 test('ship fixes the whole bug class and records accepted or skipped resolution reasons', () => {
-  const text = read('ship/sections/review-army.md');
+  const text = read('ship/sections/governor.md');
   expect(text).toContain('Apply each fix at every listed instance (`also at` / `instances`) and at any other instance of the same pattern in the diff. Output one line per fix:');
   expect(text).toContain('`resolve`; an accepted or skipped `resolve` takes `--reason "<wrong|intentional|minor|deferred>: <why>"`.');
   expect(text).toContain('A Fix answer covers every instance, as in item 2. Governor classification is telemetry; upstream AUTO-FIX/ASK governs');
