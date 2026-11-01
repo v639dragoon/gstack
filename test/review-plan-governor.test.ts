@@ -219,6 +219,14 @@ test('native batched callbacks account tier floors with D3 disabled and cannot s
       expect(rows().filter(r => r.record_type === 'verdict' && r.gate === gate && r.verdict === 'clean')).toHaveLength(1);
     }
     expect(send().status).not.toBe(0);
+    // The parent owns the actual provider/model receipt. A compact callback must not add
+    // a second gate-log invocation before this existing telemetry instruction runs.
+    for (const gate of batch.governor_gates!) {
+      expect(f.run('gstack-gate-log', [JSON.stringify({record_type:'gate',run_id:'integration',gate,model:'sonnet',verdict:'clean'})]).status).toBe(0);
+    }
+    const project = path.join(f.env.GSTACK_STATE_ROOT, 'projects', slug);
+    const telemetry = fs.readdirSync(project).filter(p => p.endsWith('-gates.jsonl')).flatMap(p => fs.readFileSync(path.join(project,p),'utf8').trim().split('\n').map(s => JSON.parse(s)));
+    for (const gate of batch.governor_gates!) expect(telemetry.filter(r => r.gate === gate)).toHaveLength(1);
   } finally {f.cleanup();}
 });
 

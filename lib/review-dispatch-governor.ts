@@ -26,15 +26,7 @@ function context(ledger: string, reader: string, binDir: string) {
   };
   const stamp = (phase: string, extra: Record<string, unknown>) => appendEvent(ledger, { event: 'program', kind: `governor-${phase}`, reader, render_index: index, ...extra });
   const episode = events.slice(index + 1).filter(e => e.reader === reader && e.render_index === index);
-  const telemetry = (gate: string, sent: Record<string, unknown>, verdict: string, critical: number, informational: number) => {
-    // The transport does not know the provider's resolved model/effort. Preserve unknowns;
-    // the provider's receipt may append those separately. Telemetry never changes the gate.
-    try { runScriptSync(path.join(binDir, 'gstack-gate-log'), [JSON.stringify({record_type: 'gate', run_id: g.run_id, gate,
-      trigger: 'review-dispatch', started_at: sent.at, ended_at: new Date().toISOString(), model: null, effort: null,
-      verdict, findings: {critical, informational}, fix_cycle: g.cycle, rerun_cause: g.cycle ? 'fix-loop' : null,
-      manifest_wtree: loaded.plan.wtree, reader})], {cwd: repo, encoding: 'utf8', timeout: 15_000}); } catch {}
-  };
-  return { g, gates, records, run, stamp, episode, telemetry };
+  return { g, gates, records, run, stamp, episode };
 }
 
 export function governorSent(ledger: string, reader: string, binDir: string): void {
@@ -69,6 +61,5 @@ export function governorCollected(ledger: string, reader: string, binDir: string
     const verdict = !result.review ? 'error' : result.lines.length ? 'issues_found' : 'clean';
     c.run(['verdict', c.g.run_id, gate, verdict, '--critical', String(critical), '--informational', String(result.lines.length - critical)]);
     c.stamp('collected', { gate, attempt: sent.attempt, output_sha256: result.sha, verdict });
-    c.telemetry(gate, sent, verdict, critical, result.lines.length - critical);
   }
 }
