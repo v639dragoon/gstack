@@ -194,8 +194,9 @@ describe('finish (Steps 15-16)', () => {
 
   // Value: protects=under changelog_fragments the branch's own fragment is release metadata: version writes nothing and names it in NEXT, finish commits it as the release commit and the route counts it as metadata, and another fragment is still a feature file; fails_when=finish stops on changelog.d/<slug>.md or routes it to re-review (/ship #3648 fix-check 4, CRITICAL);
   //   why_new=releasePaths predates changelog_fragments (#3654); seam=gstack-ship-policy show-effective, gstack-wtree; no_claim=the merge step's fold
+  // Keep this policy-only fixture free of the fork's README opt-in sentinel. README mode is covered separately.
   test('under changelog_fragments the branch fragment is release metadata and Step 12 names it', () => {
-    const f = fx({ '.gstack/ship-policy.json': '{"changelog_fragments":{"dir":"changelog.d"},"min_gstack_version":"1.91.336.0"}\n', 'changelog.d/README.md': 'Fragments.\n' });
+    const f = fx({ '.gstack/ship-policy.json': '{"changelog_fragments":{"dir":"changelog.d"},"min_gstack_version":"1.91.336.0"}\n', 'changelog.d/.gitkeep': '' });
     const reviewed = wtree(f);
     const v = f.run(RELEASE, ['version', '--base', 'main']);
     expect(v.status).toBe(0);

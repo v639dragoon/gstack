@@ -545,8 +545,9 @@ describe('rendered routed step carries the model', () => {
       const parent = site.endsWith('/governor-structured.md') ? read(site.replace('governor-structured.md', 'SKILL.md')) : read(site.replace('sections/governor.md', 'sections/adversarial.md'));
       expect(parent).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
       if (site.endsWith('/governor-structured.md')) {
-        expect(parent).toContain('Before dispatch, Read `governor-structured.md`');
-        expect(parent).toContain('Missing or unreadable asset means INCOMPLETE');
+        // D4: the governor asset moved to the section index and is read before planning.
+        expect(parent).toContain('> **STOP.** Before review planning, Read `governor-structured.md`');
+        expect(parent).toContain('Missing asset means INCOMPLETE; stop.');
       }
       const text = union.slice(union.indexOf('### Governor codex-structured slot'));
       expect(text.length).toBeGreaterThan(1000);
