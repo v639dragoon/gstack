@@ -11,7 +11,7 @@ Create one manifest, deterministic reviewer plan, and shared packet:
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-diff-manifest <base>
-~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude
+~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
 ~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
 ~/.claude/skills/gstack/bin/gstack-review-context "$RUN_ID" <base>
 ```

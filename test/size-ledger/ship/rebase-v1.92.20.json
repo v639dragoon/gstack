@@ -1,4 +1,4 @@
 {
-  "bytes": -1644,
-  "why": "v1.92.20 upstream certified sections plus pinned governor overlay, carry-forward telemetry and compact dispatch accounting handoff"
+  "bytes": -1658,
+  "why": "drop the dead --host flag from the governor plan command (skill-bin-drift)"
 }

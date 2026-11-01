@@ -13,7 +13,7 @@ Then build the shared packet from the final reviewed content:
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-diff-manifest <base> "$RUN_ID"
-~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host claude
+~/.claude/skills/gstack/bin/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
 ~/.claude/skills/gstack/bin/gstack-review-budget resume "$RUN_ID"
 # All later gstack-review-plan/review-dispatch pass calls carry --run-id "$RUN_ID" --cycle "$CYCLE".
 ```
