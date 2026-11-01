@@ -13,7 +13,7 @@ Then build the shared packet from the final reviewed content:` : 'Create one man
 
 \`\`\`bash
 ${ctx.paths.binDir}/gstack-diff-manifest <base>${ship ? ' "$RUN_ID"' : ''}
-${ctx.paths.binDir}/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host ${ctx.host}
+${ctx.paths.binDir}/gstack-review-budget plan "$MANIFEST_PATH" --cycle 0
 ${ctx.paths.binDir}/gstack-review-budget resume "$RUN_ID"
 ${ship ? '# All later gstack-review-plan/review-dispatch pass calls carry --run-id "$RUN_ID" --cycle "$CYCLE".' : `${ctx.paths.binDir}/gstack-review-context "$RUN_ID" <base>`}
 \`\`\`
