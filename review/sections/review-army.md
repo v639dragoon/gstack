@@ -121,7 +121,7 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use `subagent_type: "general-purpose"`
+- Use `subagent_type: "general-purpose"` with `model: "sonnet"`
 - Pass `run_in_background: false` when available on every specialist Agent call — background is the default since Claude Code v2.1.198; omitting an available flag is not foreground. A launch receipt means it went background: await its completion notice.
 
 **Wait for readers before editing:**
