@@ -161,7 +161,7 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use \`subagent_type: "general-purpose"\`
+- Use \`subagent_type: "general-purpose"\` with \`model: "sonnet"\`
 - Pass ${FOREGROUND_IF_AVAILABLE} on every specialist Agent call — background is the default since ${CC_BACKGROUND_DEFAULT_SINCE}; omitting an available flag is not foreground. ${BACKGROUND_RECOVERY}
 
 **Wait for readers before editing:**
