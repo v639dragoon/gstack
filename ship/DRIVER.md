@@ -91,6 +91,10 @@ on the `READ_ONLY:` final review, which reads the whole PR and takes no fix); `f
 
 ## 5. Voices, bind and version: Steps 11, 11.5, 12
 
+On an Anthropic lane, the outside voice follows `.gstack-policy.json`'s
+`routing.models["outside-voice"].adversarial`, then the existing Codex model resolution
+(default `gpt-6-astra`). Keep the same-family refusal and the certified-configuration disclosure.
+
 Judge the voices; missing outside coverage is `unavailable`, never clean; queued fixes rerun Phases
 3-4. Then `gstack-review-dispatch verify` (`VERIFY: clean`) and `gstack-review-read`: the final Step 9 and 11 native rows (or `CURRENT` freshness
 after a planned skip) agree on one tree; save it (or `--stop`'s) and base `<b>`. Then

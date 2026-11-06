@@ -23,7 +23,7 @@ test('README mode chooses a bump and exact fragment without writing release file
     expect(r.stdout).toContain('bump: patch');
     expect(files.map(p => fs.readFileSync(path.join(f.work, p), 'utf8'))).toEqual(before);
     expect(f.git('status', '--porcelain').stdout).toBe('');
-    expect(releasePaths(policy, f.work, 'HEAD')).toEqual(['TODOS.md', 'changelog.d/feat.md']);
+    expect(releasePaths(policy, f.work, 'HEAD', 'main')).toEqual(['TODOS.md', 'changelog.d/feat.md']);
   }
 });
 

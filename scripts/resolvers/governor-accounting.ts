@@ -56,7 +56,7 @@ Register upstream-only selected specialists with
 \`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>\`;
 then run \`gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>\`
 before each Agent call. Every allowed Agent is accounted before launch. Every specialist
-Agent sets \`model: "sonnet"\`. Each prompt uses its rendered upstream brief including the inline diff and governor context. On /review, PACKET_PATHS names the rendered strict brief. CI_GREEN=true
+Agent sets \`model: "sonnet"\`. Each prompt uses its rendered upstream brief and supplied diff file, with governor context. On /review, PACKET_PATHS names the rendered strict brief. CI_GREEN=true
 means do not repeat builds/tests. Record each terminal verdict with \`gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>\` and a best-effort
 \`gstack-gate-log\` row with model sonnet, effort agent-default, effort_source routed,
 fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream

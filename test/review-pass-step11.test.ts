@@ -115,8 +115,8 @@ describe('Capy pass program (fake host, real bins)', () => {
     expect(h2.starts.length).toBe(starts);
     fs.writeFileSync(recorded, kept);
     const resumed = await runPass(h2, { ...base2, stage: 'voices', models: same });
-    expect(resumed).toContain('OUTSIDE_VOICE: openai/gpt-6.2-sol reasoning=medium as dispatched, started from the queue (default configuration)');
-    expect(h2.creates.find(c => c.title === 'ship x18p1 outside-voice')!.model).toEqual({ model_id: 'openai/gpt-6.2-sol', reasoning_mode: 'medium' });
+    expect(resumed).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium as dispatched, started from the queue; outside the default configuration');
+    expect(h2.creates.find(c => c.title === 'ship x18p1 outside-voice')!.model).toEqual({ model_id: 'openai/gpt-6-astra', reasoning_mode: 'medium' });
   }, 300_000);
 
   // Value: protects=a queued outside voice resumes on the models recorded when the voices were dispatched, so changed rerun inputs cannot pair it with a native voice of its own family; fails_when=the rerun's input decides the queued voice's model and the native family (outside-voice finding on #3698: two OpenAI voices started);
@@ -169,23 +169,34 @@ describe('Capy pass program (fake host, real bins)', () => {
     return { res, shas, models: Object.fromEntries(h.creates.map(c => [c.title, c.model])) };
   }
 
-  // Value: protects=an Anthropic lane's Step 11 gets the default outside voice (openai/gpt-6.2-sol at medium since R116; no-loss rounds 3-6 and A3668 ran on gpt-6.1-sol) without naming it, and every brief goes out byte for byte as it does with that model named; fails_when=the lane must pick the outside voice (gpt-6-astra in 6c/7e/8g), or the pin changes any reader's brief or another reader's model;
-  //   why_new=GSTA-167 plan R2; seam=none; no_claim=the default pair's recall (arm-L6 measured gpt-6.1-sol's, not gpt-6.2-sol's)
-  test('an anthropic lane defaults the outside voice to the default model, with every brief byte-identical to naming it', async () => {
+  // Value: protects=the fork's default outside model and byte-identical briefs when that same model is explicit;
+  //   fails_when=upstream's certified model replaces the default or model selection changes another reader's brief; seam=none; no_claim=review quality
+  test('an anthropic lane preserves the fork outside model, with every brief byte-identical to naming it', async () => {
     const { dir, env } = repo();
+    const forkOutside = { model_id: 'openai/gpt-6-astra', reasoning_mode: 'medium' };
     const pinned = await voicesRun(dir, env, 'pin');
-    expect(pinned.res).toContain('OUTSIDE_VOICE: openai/gpt-6.2-sol reasoning=medium default for an anthropic lane (default configuration)');
+    expect(pinned.res).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium default for an anthropic lane; outside the default configuration');
     expect(pinned.res).toContain('NEXT: judge the voices');
-    expect(pinned.models['ship x17p1 outside-voice']).toEqual(certified);
-    const named = await voicesRun(dir, env, 'named', { 'outside-voice': certified });
-    expect(named.res).toContain('OUTSIDE_VOICE: openai/gpt-6.2-sol reasoning=medium given (default configuration)');
+    expect(pinned.models['ship x17p1 outside-voice']).toEqual(forkOutside);
+    const named = await voicesRun(dir, env, 'named', { 'outside-voice': forkOutside });
+    expect(named.res).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium given; outside the default configuration');
     expect(named.shas).toEqual(pinned.shas);
     expect(named.models).toEqual(pinned.models);
   }, 300_000);
 
+  // Value: protects=the repo policy's model and effort reach the Capy launcher;
+  //   fails_when=the default shadows routing.models; seam=real pass builder and fake Capy launcher; no_claim=model output
+  test('the repo outside-voice route reaches the Capy launcher and keeps its effort', async () => {
+    const { dir, env } = repo();
+    fs.writeFileSync(path.join(dir, '.gstack-policy.json'), JSON.stringify({ routing: { models: { 'outside-voice': { adversarial: { model: 'gpt-6-luna', effort: 'high' } } } } }));
+    const routed = await voicesRun(dir, env, 'routed');
+    expect(routed.models['ship x17p1 outside-voice']).toEqual({ model_id: 'openai/gpt-6-luna', reasoning_mode: 'high' });
+    expect(routed.res).toContain('outside the default configuration');
+  }, 300_000);
+
   // Value: protects=an explicit cross-family override is accepted but its pass output says it is outside the default configuration; fails_when=a changed outside-voice model or reasoning passes silently as if certified;
-  //   why_new=GSTA-167 plan R2; seam=none; no_claim=the undefault configuration's recall
-  test('an explicit outside-voice override with changed reasoning runs and is recorded as outside the default, other briefs unchanged', async () => {
+  //   why_new=GSTA-167 plan R2; seam=none; no_claim=the uncertified configuration's recall
+  test('an explicit outside-voice override with changed reasoning runs and is recorded as uncertified, other briefs unchanged', async () => {
     const { dir, env } = repo();
     const high = { model_id: 'openai/gpt-6.2-sol', reasoning_mode: 'high' };
     const over = await voicesRun(dir, env, 'over', { 'outside-voice': high });
