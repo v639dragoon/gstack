@@ -172,7 +172,7 @@ function render(): number {
   let diffFile: Slots = {};
   if (diff !== undefined) {
     fs.mkdirSync(out, { recursive: true, mode: 0o700 });
-    const f = path.join(path.resolve(out), 'outside-voice.diff');
+    const f = path.join(path.resolve(out), `${role}.diff`);
     const s = sliceDiff(diff, REVIEW_DIFF_MAX_BYTES);
     fs.writeFileSync(f, s.text, { mode: 0o600 });
     diffFile = { diff_file: f, diff_bytes: String(s.bytes), diff_sha256: createHash('sha256').update(s.text).digest('hex'), ...(s.sliced ? { diff_slice: sliceNote(s, REVIEW_DIFF_MAX_BYTES) } : {}) };

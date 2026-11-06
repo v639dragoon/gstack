@@ -95,7 +95,7 @@ ${freeTextFileBash([{ variable: 'STRUCTURED_PROMPT_FILE', stem: 'structured-revi
 
 The rendered stdin brief requires: ${STRUCTURED_INSTRUCTIONS} ${STRUCTURED_CONTRACT}
 
-Copy the rendered {PACKET_PATH} byte-for-byte into the private STRUCTURED_PROMPT_FILE, including its inline diff, governor context and REVIEWED_TREE contract. Do not add a wrapper. The packet carries CI evidence, the exact head SHA and resolved findings. Record that exact stdin prompt with \`gstack-review-dispatch sent --ledger "{BRIEF_LEDGER}" --role codex-structured --sent "<prompt-file-name>"\` before invoking Codex. Save the completed response verbatim to {PACKET_OUT}, collect it through the same ledger, then, if running a pass manifest, mark that reader collected before resuming the pass program. Standalone /review has no pass manifest; its printed BRIEF_LEDGER and PACKET_OUT bind collection. Do not mark a failure complete.
+Copy the rendered {PACKET_PATH} byte-for-byte into the private STRUCTURED_PROMPT_FILE, including its supplied diff file reference, governor context and REVIEWED_TREE contract. Do not add a wrapper. The packet carries CI evidence, the exact head SHA and resolved findings. Record that exact stdin prompt with \`gstack-review-dispatch sent --ledger "{BRIEF_LEDGER}" --role codex-structured --sent "<prompt-file-name>"\` before invoking Codex. Save the completed response verbatim to {PACKET_OUT}, collect it through the same ledger, then, if running a pass manifest, mark that reader collected before resuming the pass program. Standalone /review has no pass manifest; its printed BRIEF_LEDGER and PACKET_OUT bind collection. Do not mark a failure complete.
 
 \`\`\`bash
 umask 077

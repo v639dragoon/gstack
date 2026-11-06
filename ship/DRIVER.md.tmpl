@@ -90,6 +90,10 @@ pass with `fixCheck: {fix_list, hunks, tests, callers}`; `done` or `voices`: tha
 
 ## 5. Voices, bind and version: Steps 11, 11.5, 12
 
+On an Anthropic lane, the outside voice follows `.gstack-policy.json`'s
+`routing.models["outside-voice"].adversarial`, then the existing Codex model resolution
+(default `gpt-6-astra`). Keep the same-family refusal and the certified-configuration disclosure.
+
 Judge the voices; missing outside coverage is `unavailable`, never clean; queued fixes rerun Phases
 3-4. Then `gstack-review-dispatch verify` (`VERIFY: clean`) and `gstack-review-read`: the final Step 9 and Step 11 native rows (or `CURRENT` freshness
 after a planned skip) agree on `wtree`, `start_wtree`, `end_wtree`; save that tree and base `<b>`. Then

@@ -12,7 +12,7 @@ function fixture(tier: string, passes: Record<string, boolean>, migrations = fal
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'plan-gov-')));
   const repo = path.join(temp, 'repo'), state = path.join(temp, 'state'), out = path.join(temp, 'packets');
   fs.mkdirSync(repo); fs.mkdirSync(state);
-  const env = { ...process.env, GSTACK_STATE_ROOT: state, GSTACK_PROJECT_SLUG: 'fixture', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+  const env = { ...process.env, GSTACK_STATE_ROOT: state, GSTACK_PROJECT_SLUG: 'fixture', GSTACK_PLANS_DIR: path.join(temp, 'plans'), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
   const git = (...args: string[]) => {
     const r = spawnSync('git', args, { cwd: repo, env, encoding: 'utf8', timeout: 10_000 });
     expect(r.status, r.stderr).toBe(0);
@@ -45,7 +45,7 @@ test('tier D migration plan keeps red-team, strict structured and every speciali
     expect(batch.checklists).toEqual(expect.arrayContaining(['security', 'data-migration']));
     expect(batch.governor_gates).toEqual(expect.arrayContaining(['specialist:security', 'specialist:data-migration']));
     expect(f.plan.dispatches.filter((d: { role: string }) => d.role === 'specialist')).toHaveLength(1);
-    expect(f.plan.depth).toBe('standard');
+    expect(f.plan.depth).toBe('light'); // D4: upstream risk-scaled depth; governor adds floors without lowering it.
     expect(f.plan.dispatches.find((d: { name: string }) => d.name === 'codex-structured')).toMatchObject({ governor_floor: true, governor: { routed_effort: 'high' } });
     const built = f.run('gstack-review-dispatch', ['pass', '--base', 'main', '--pass', 'p1', '--out', f.out, '--', ...f.flags]);
     expect(built.status, built.stderr).toBe(0);
@@ -124,7 +124,8 @@ for (const risky of ['lib/auth/access.ts', 'lib/oauth/token.ts', 'lib/session/to
       const file = path.join(f.out, 'pass-manifest.json');
       expect(f.run('gstack-review-dispatch', ['stage', '--manifest', file, '--stage', 'voices']).status).toBe(0);
       const strict = readManifest(file).readers.find(r => r.role === 'codex-structured')!;
-      expect(fs.readFileSync(strict.file!, 'utf8')).toContain('+export const x79 = 79;');
+      const rendered = readLedger(path.join(f.out, 'review-ledger.jsonl')).findLast(e => e.event === 'rendered' && e.reader === strict.reader) as any;
+      expect(fs.readFileSync(rendered.payload.file, 'utf8')).toContain('+export const x79 = 79;');
       // flagReader uses the first occurrence; replace it explicitly for the cap probe.
       const capFlags = [...repeat]; capFlags[1] = '2';
       const cap = JSON.parse(f.run('gstack-review-plan', [...f.flags, ...capFlags, '--json']).stdout);

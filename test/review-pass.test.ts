@@ -130,7 +130,7 @@ function writeManifestFile(m: Manifest): string {
 /** A repository on a feature branch with enough runtime lines for a full plan. */
 function repo(): { dir: string; env: NodeJS.ProcessEnv } {
   const dir = tmp('rp-repo-');
-  const env = { ...process.env, PATH: BIN + path.delimiter + process.env.PATH, GSTACK_STATE_ROOT: path.join(dir, '.state'), GSTACK_SWEEP_ROOTS: dir, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+  const env = { ...process.env, CODEX_HOME: path.join(dir, '.state/codex'), GSTACK_CODEX_MODEL: undefined, PATH: BIN + path.delimiter + process.env.PATH, GSTACK_STATE_ROOT: path.join(dir, '.state'), GSTACK_SWEEP_ROOTS: dir, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
   const sh = (c: string) => { const r = spawnSync('bash', ['-c', c], { cwd: dir, env, encoding: 'utf8', timeout: 60_000 }); if (r.status !== 0) throw new Error(r.stderr); };
   sh("git init -q -b main && echo '{}' > package.json && mkdir src && echo 'export const a = 1;' > src/a.ts && echo .state > .gitignore && git add -A && git commit -qm base && git checkout -qb feat");
   sh('for i in $(seq 1 80); do echo "export const v$i = $i;" >> src/a.ts; done && git commit -qam feat');
@@ -465,8 +465,8 @@ describe('Capy pass program (fake host, real bins)', () => {
     expect(h2.starts.length).toBe(starts);
     fs.writeFileSync(recorded, kept);
     const resumed = await runPass(h2, { ...base2, stage: 'voices', models: same });
-    expect(resumed).toContain('OUTSIDE_VOICE: openai/gpt-6.1-sol reasoning=medium as dispatched, started from the queue (certified configuration)');
-    expect(h2.creates.find(c => c.title === 'ship x18p1 outside-voice')!.model).toEqual({ model_id: 'openai/gpt-6.1-sol', reasoning_mode: 'medium' });
+    expect(resumed).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium as dispatched, started from the queue; outside the certified configuration');
+    expect(h2.creates.find(c => c.title === 'ship x18p1 outside-voice')!.model).toEqual({ model_id: 'openai/gpt-6-astra', reasoning_mode: 'medium' });
   }, 300_000);
 
   // Value: protects=a queued outside voice resumes on the models recorded when the voices were dispatched, so changed rerun inputs cannot pair it with a native voice of its own family; fails_when=the rerun's input decides the queued voice's model and the native family (outside-voice finding on #3698: two OpenAI voices started);
@@ -521,16 +521,26 @@ describe('Capy pass program (fake host, real bins)', () => {
 
   // Value: protects=an Anthropic lane's Step 11 gets the certified outside voice (openai/gpt-6.1-sol at medium, as rounds 3-6 and A3668 ran) without naming it, and every brief goes out byte for byte as it does with that model named; fails_when=the lane must pick the outside voice (gpt-6-astra in 6c/7e/8g), or the pin changes any reader's brief or another reader's model;
   //   why_new=GSTA-167 plan R2; seam=none; no_claim=the certified pair's recall, which arm-L6 measured
-  test('an anthropic lane defaults the outside voice to the certified model, with every brief byte-identical to naming it', async () => {
+  test('an anthropic lane preserves the fork outside model, with every brief byte-identical to naming it', async () => {
     const { dir, env } = repo();
     const pinned = await voicesRun(dir, env, 'pin');
-    expect(pinned.res).toContain('OUTSIDE_VOICE: openai/gpt-6.1-sol reasoning=medium default for an anthropic lane (certified configuration)');
+    expect(pinned.res).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium default for an anthropic lane; outside the certified configuration');
     expect(pinned.res).toContain('NEXT: judge the voices');
-    expect(pinned.models['ship x17p1 outside-voice']).toEqual(certified);
-    const named = await voicesRun(dir, env, 'named', { 'outside-voice': certified });
-    expect(named.res).toContain('OUTSIDE_VOICE: openai/gpt-6.1-sol reasoning=medium given (certified configuration)');
+    expect(pinned.models['ship x17p1 outside-voice']).toEqual({ model_id: 'openai/gpt-6-astra', reasoning_mode: 'medium' });
+    const named = await voicesRun(dir, env, 'named', { 'outside-voice': { model_id: 'openai/gpt-6-astra', reasoning_mode: 'medium' } });
+    expect(named.res).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium given; outside the certified configuration');
     expect(named.shas).toEqual(pinned.shas);
     expect(named.models).toEqual(pinned.models);
+  }, 300_000);
+
+  // Value: protects=the fork's repository model route wins over its native outside default;
+  // fails_when=upstream's certified pin shadows routing.models; seam=real pass builder and Capy launcher; no_claim=model output
+  test('the repo outside-voice route reaches the Capy launcher and keeps its effort', async () => {
+    const { dir, env } = repo();
+    fs.writeFileSync(path.join(dir, '.gstack-policy.json'), JSON.stringify({ routing: { models: { 'outside-voice': { adversarial: { model: 'gpt-6-luna', effort: 'high' } } } } }));
+    const routed = await voicesRun(dir, env, 'routed');
+    expect(routed.models['ship x17p1 outside-voice']).toEqual({ model_id: 'openai/gpt-6-luna', reasoning_mode: 'high' });
+    expect(routed.res).toContain('outside the certified configuration');
   }, 300_000);
 
   // Value: protects=an explicit cross-family override is accepted but its pass output says it is outside the certified configuration; fails_when=a changed outside-voice model or reasoning passes silently as if certified;

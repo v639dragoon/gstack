@@ -953,7 +953,8 @@ function gradeRecord(latest: EvidenceRecord, o: { maxAgeHours?: number; expectCm
     verdict = "STALE";
     reason = "command changed (cmd_sha256 mismatch)";
   }
-  if (verdict === "FRESH") {
+  // CI rows bind the verified run's identity and tree; the local Node runtime is not their toolchain.
+  if (verdict === "FRESH" && latest.source !== "ci") {
     const nodeThen = latest.toolchain?.node;
     const nodeNow = currentToolchain().node;
     if (!nodeThen || (nodeNow && nodeThen !== nodeNow)) {

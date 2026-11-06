@@ -134,8 +134,8 @@ export function renderBrief(role: BriefRole, slots: Slots, t: SectionTexts): str
   const rendered = renderRole(role, held, t);
   const keep = slots.keep ? ` Read the files kept despite a match as well: \`git diff ${slots.diff_base} -- ${slots.keep}\`.` : '';
   const excerpt = slots.excerpt_file ? ` ${need(slots, 'excerpt_files')} kept files have no keep reason but a changed line that reads a credential, so no git diff command above shows them: read every such line, with context, in the file ${slots.excerpt_file} (${need(slots, 'excerpt_bytes')} bytes, sha256 ${need(slots, 'excerpt_sha256')}).` : '';
-  const text = slots.disclosure && role !== 'fix-check' && role !== 'outside-voice' ? `${rendered}\n\n${slots.disclosure}${keep}${excerpt}` : rendered;
-  const left = role === 'fix-check' || role === 'outside-voice' ? [] : PLACEHOLDERS.filter(p => text.includes(p));
+  const text = slots.disclosure && role !== 'fix-check' && role !== 'outside-voice' && role !== 'codex-structured' ? `${rendered}\n\n${slots.disclosure}${keep}${excerpt}` : rendered;
+  const left = role === 'fix-check' || role === 'outside-voice' || role === 'codex-structured' ? [] : PLACEHOLDERS.filter(p => text.includes(p));
   if (left.length) throw new BriefError(`${role}: unfilled placeholder ${left.join(', ')}`);
   return keys.reduce((out, k) => out.split(held[k]!).join(slots[k]!.trim()), text);
 }
@@ -177,7 +177,7 @@ function renderRole(role: BriefRole, slots: Slots, t: SectionTexts): string {
       try { return `${targetedBrief(need(slots, 'brief'), classes)}\n\n${merged}\n\nApply the targeted brief above (${need(slots, 'checklist')}: ${classes.join(', ')}) in the same read; your reply is this diff's targeted pass.`; } catch (e) { throw e instanceof BriefError ? e : new BriefError((e as Error).message); }
     }
     case 'codex-structured': {
-      const head = [STRUCTURED_INSTRUCTIONS, '', '## Findings contract', STRUCTURED_CONTRACT, '', ...(slots.disclosure ? [slots.disclosure, ''] : []), `## Branch diff (git diff ${diffBase})`];
+      const head = [STRUCTURED_INSTRUCTIONS, ...(slots.policy_exclude ? [`Selection: git diff ${diffBase} -- . ${slots.policy_exclude}`, ''] : []), '', '## Findings contract', STRUCTURED_CONTRACT, '', ...(slots.disclosure ? [slots.disclosure, ''] : []), `## Branch diff (git diff ${diffBase})`];
       if (slots.diff_file) return [...head, `Read the supplied branch diff at ${slots.diff_file} (${need(slots, 'diff_bytes')} bytes, sha256 ${need(slots, 'diff_sha256')}).`, ...(slots.diff_slice ? [slots.diff_slice] : [])].join('\n');
       return [...head, FENCE + 'diff', (slots.diff ?? '').trim(), FENCE].join('\n');
     }

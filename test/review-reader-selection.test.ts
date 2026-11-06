@@ -130,6 +130,7 @@ describe('every reader path builds its diff from the base policy\'s selection', 
       'red-team': ['--findings-file', findings, '--specialists', '1'],
       'adversarial-native': [],
       'outside-voice': [],
+      'codex-structured': [],
       targeted: ['--classes', 'secret', '--disclosure', disclosure],
       'fix-check': { none: 'reads decision 3.5\'s fix list and touched hunks, never a git diff' },
     };
@@ -144,8 +145,8 @@ describe('every reader path builds its diff from the base policy\'s selection', 
       expect({ role, exclude: ev.map(e => e.exclude) }).toEqual({ role, exclude: [x.digest] });
       const brief = fs.readFileSync(ev[0].file, 'utf8');
       expect({ role, spec: brief.includes(QUOTED), digest: brief.includes('(selection ' + x.digest + ')') }).toEqual({ role, spec: true, digest: true });
-      if (role === 'outside-voice') {
-        const supplied = fs.readFileSync(path.join(out, 'outside-voice.diff'), 'utf8');
+      if (role === 'outside-voice' || role === 'codex-structured') {
+        const supplied = fs.readFileSync(path.join(out, `${role}.diff`), 'utf8');
         expect(supplied).toContain('## Secret-line excerpts (2 files)');
         expect(supplied).not.toContain('diff --git a/docs/benchmarks/r/t0.json');
         expect(Buffer.byteLength(supplied)).toBeLessThan(REVIEW_DIFF_MAX_BYTES);

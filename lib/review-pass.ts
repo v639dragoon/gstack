@@ -14,6 +14,8 @@
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { readPolicy } from './review-policy';
+import { resolveCodexRuntimeModel } from '../scripts/resolve-codex-generation-model';
 import { AgentModelError, resolveAgentModel } from './agent-model';
 import { BriefError, briefFile, checkoutRoot, checkoutTree, promptHash, renderBrief, sliceDiff, sliceNote, withWorkspace, type BriefRole, type SectionTexts, type Slots } from './review-brief';
 import { REVIEW_DIFF_MAX_BYTES, disclosureDigest } from './review-exclude';
@@ -59,6 +61,7 @@ export interface PassReader {
 }
 export interface Manifest {
   governor?: GovernorContext;
+  outside_model?: PassModel;
   version: 1; pass: string; out: string; ledger: string; merged: string; base: string; diff_base: string;
   stack: string; test_fw: string; learnings: string | null; checklist_root: string;
   next: string; plan_lines: string[]; readers: PassReader[]; before?: { tokens: number; credits: number };
@@ -140,6 +143,13 @@ export function buildManifest(o: {
   targetedClasses?: readonly string[]; mergeBase?: string; rangeBase?: string; fixCheck?: FixCheckFiles; reviewExclude?: Record<string, unknown>; disclosure?: string; readers?: EffectiveReaders; voices?: boolean;
 }): Manifest {
   if (o.voices && o.extras?.length) throw new BriefError(`Step 11's voices pass sends no audit reader, so it takes no --extras: ${o.extras.map(e => e.name).join(', ')}`);
+  // Preserve the fork's outside-voice resolution instead of upstream's certified pin.
+  const route = readPolicy(o.root)?.routing?.models?.['outside-voice']?.adversarial;
+  const explicit = typeof route === 'string' ? route : typeof route?.model === 'string' ? route.model : undefined;
+  const effort = typeof route?.effort === 'string' ? route.effort : 'medium';
+  if (!['low', 'medium', 'high'].includes(effort)) throw new BriefError('outside-voice effort must be low|medium|high');
+  const chosen = resolveCodexRuntimeModel({ kind: 'exec', explicit });
+  const outsideModel = { model_id: chosen.model.includes('/') ? chosen.model : `openai/${chosen.model}`, reasoning_mode: effort };
   const readers: PassReader[] = [];
   const selection = policySelection(o.reviewExclude, o.readers);
   for (const planned of o.dispatches) {
@@ -172,7 +182,7 @@ export function buildManifest(o: {
   if (new Set(readers.map(r => r.reader)).size !== readers.length) throw new BriefError('two readers share a key in this pass');
   const out = path.resolve(o.out);
   return {
-    version: 1, pass: o.pass, out, ledger: path.resolve(o.ledger), merged: path.join(out, 'merged.jsonl'), base: o.base, diff_base: o.diffBase,
+    version: 1, outside_model: outsideModel, pass: o.pass, out, ledger: path.resolve(o.ledger), merged: path.join(out, 'merged.jsonl'), base: o.base, diff_base: o.diffBase,
     stack: detectStack(o.root), test_fw: detectTestFw(o.root), learnings: o.learnings ?? null, checklist_root: o.checklistRoot,
     next: o.next, plan_lines: o.planLines, readers, ...(o.governor ? { governor: o.governor } : {}), ...(o.voices ? { voices_only: true as const } : {}), ...(o.reviewExclude ? { review_exclude: o.reviewExclude } : {}), ...(o.disclosure ? { disclosure: o.disclosure } : {}), ...(o.readers ? { fetch_policy: o.readers } : {}),
     ...(o.fixCheck ? { fix_check: Object.fromEntries(Object.entries(o.fixCheck).filter(([, v]) => v).map(([k, v]) => [k, path.resolve(v as string)])) as unknown as FixCheckFiles } : {}),
