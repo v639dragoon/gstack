@@ -36,12 +36,10 @@ import {
   type LoadedPolicy, type QueueMode, type ShipPolicy,
 } from './ship-policy';
 import { bumpVersion, cmpVersion, extractVersion, fmtVersion, parseVersion, versionWidth, type Bump } from './version-source';
-
 export const JOURNAL_REL = '.gstack/tmp/restamp-journal.json';
 export const GATE_AHEAD_REL = '.gstack/tmp/gate-ahead.json';
 const BIN_DIR = path.resolve(import.meta.dir, '..', 'bin');
 const NPM_LOCKFILES = ['package-lock.json', 'npm-shrinkwrap.json'];
-
 export type StageName = 'restamp_command' | 'version' | 'release_tool' | 'changelog' | 'stamp_paths' | 'mirror' | 'apply';
 export interface JournalWrite { path: string; pre_sha256: string | null; post_sha256: string | null; applied: boolean }
 export interface StageRecord { name: StageName; status: 'pending' | 'done' | 'skipped' | 'failed'; detail?: string; writes?: JournalWrite[] }
