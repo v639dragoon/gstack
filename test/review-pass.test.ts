@@ -564,7 +564,7 @@ describe('Capy pass program (fake host, real bins)', () => {
       const { dir, env } = repo();
       const out = path.join(dir, '.state/run/p1');
       const h = host(dir, env, { ...o, epoch: Date.now() });
-      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'] };
+      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'], models: { 'outside-voice': { model_id: 'openai/gpt-6.1-sol', reasoning_mode: 'medium' } } };
       expect(await runPass(h, base)).toContain('NEXT: judge (Phase 4)');
       let res = '';
       for (let i = 0; i < 6; i++) {
@@ -603,7 +603,7 @@ describe('Capy pass program (fake host, real bins)', () => {
       const { dir, env } = repo();
       const out = path.join(dir, '.state/run/p1');
       const h = host(dir, env, { ...o, keepSummary: true, output: (t: string) => (t.endsWith('outside-voice') ? '1. **A guard fails open** - `src/a.ts:1` accepts any input. Severity: Medium. Blocks: no.\n\nRecommendation: fix the guard because it fails open' : cleanReply(t)), epoch: Date.now() });
-      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'] };
+      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'], models: { 'outside-voice': { model_id: 'openai/gpt-6.1-sol', reasoning_mode: 'medium' } } };
       expect(await runPass(h, base)).toContain('NEXT: judge (Phase 4)');
       let res = '';
       for (let i = 0; i < 6; i++) {

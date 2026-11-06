@@ -52,7 +52,7 @@ describe('Red Team scheduling (Phase 0)', () => {
       expect(content).toContain('gstack-gate-log');
       expect(content).toContain('gstack-diff-manifest');
       expect(content).toContain(site.includes('ship') ? 'gstack-review-dispatch pass' : 'gstack-review-context "$RUN_ID" <base>');
-      expect(content).toContain('inline diff');
+      expect(content).toContain('supplied diff file'); // D4: upstream briefs now reference their shared disk payload.
     });
 
     test(`${site}: the narrower security-specialist trigger wording never returns`, () => {

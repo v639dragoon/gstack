@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, realpathSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { readLedger } from '../lib/review-ledger';
+import { workspaceStep } from '../lib/review-brief';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 const root = join(import.meta.dir, '..'),
@@ -103,7 +104,8 @@ describe('review packet', () => {
       expect(r.stdout).toContain('CI_GREEN=unknown');
       const pp = r.stdout.match(/^PACKET_PATH=(.+)$/m)![1],
         text = readFileSync(pp, 'utf8');
-      expect(text).toStartWith('You are the codex-structured reviewer');
+      expect(text).toStartWith(workspaceStep(realpathSync(d)));
+      expect(text).toContain('You are the codex-structured reviewer');
       expect(text).toContain('## Findings contract');
       expect(text).toContain('## Branch diff');
       const ledger = join(state, 'projects', 'packet-test', 'packets', 'packet-run', 'review-ledger.jsonl');

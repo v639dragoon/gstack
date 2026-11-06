@@ -20,7 +20,7 @@ else {
     if (r.status === 0) {
       const file = path.join(out, 'codex-structured.prompt.md');
       const ctx = loadGovernorContext(root, binDir, id);
-      console.log(`PACKET_PATH=${file}\nPACKET_PATHS=${JSON.stringify([{file, out: path.join(out, 'codex-structured.out'), read: 'whole brief'}])}\nPACKET_OUT=${path.join(out, 'codex-structured.out')}\nBRIEF_LEDGER=${path.join(out, 'review-ledger.jsonl')}\nDIFF_PATH=${file}\nCI_GREEN=${ctx.ci}`);
+      console.log(`PACKET_PATH=${file}\nPACKET_PATHS=${JSON.stringify([{file, out: path.join(out, 'codex-structured.out'), read: 'whole brief'}])}\nPACKET_OUT=${path.join(out, 'codex-structured.out')}\nBRIEF_LEDGER=${path.join(out, 'review-ledger.jsonl')}\nDIFF_PATH=${path.join(out, 'codex-structured.diff')}\nCI_GREEN=${ctx.ci}`);
     }
   } catch (e) { console.error(`gstack-review-context: ${(e as Error).message}`); process.exitCode = 1; }
 }
