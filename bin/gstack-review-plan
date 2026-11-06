@@ -275,7 +275,7 @@ function main(): number {
   } else if (delta) plan.skipped.push(`targeted-only read (${delta.reason})`);
   const targetedDeltaOut = delta?.state === 'dispatch' ? { range_base: delta.range_base, paths: delta.paths, classes: targeted.classes } : null;
   if (riskyRepeat) plan = { ...plan, risky_full_review: true };
-  if (riskyRepeat && !grant && (pass >= FULL_PASS_CAP || last === 'fix-check')) plan = { ...plan, next: { step: 'stop', reason: 'risky-surface full re-review required but the upstream pass cap is exhausted' }, dispatches: [] };
+  if (riskyRepeat && (pass >= FULL_PASS_CAP || last === 'fix-check')) plan = { ...plan, next: { step: 'stop', reason: 'risky-surface full re-review required but the upstream pass cap is exhausted' }, dispatches: [] };
   if (has('--cycle') && !/^\d+$/.test(flag('--cycle') ?? '')) { process.stderr.write('gstack-review-plan: --cycle must be a non-negative integer\n'); return EXIT.usage; }
   let governor;
   try { if (flag('--run-id')) { const loaded = loadGovernorPlan(root, binDir, flag('--run-id')!, has('--cycle') ? Number(flag('--cycle')) : undefined); governor = { run_id: flag('--run-id')!, cycle: loaded.cycle, plan: loaded.plan, bug_class: loaded.bugClasses }; } }

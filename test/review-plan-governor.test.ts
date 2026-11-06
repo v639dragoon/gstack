@@ -12,7 +12,7 @@ function fixture(tier: string, passes: Record<string, boolean>, migrations = fal
   const temp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'plan-gov-')));
   const repo = path.join(temp, 'repo'), state = path.join(temp, 'state'), out = path.join(temp, 'packets');
   fs.mkdirSync(repo); fs.mkdirSync(state);
-  const env = { ...process.env, GSTACK_STATE_ROOT: state, GSTACK_PROJECT_SLUG: 'fixture', GSTACK_PLANS_DIR: path.join(temp, 'plans'), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+  const env = { ...process.env, GSTACK_STATE_ROOT: state, GSTACK_PROJECT_SLUG: 'fixture', GSTACK_APPROVALS_MIRROR: '0', GSTACK_PLANS_DIR: path.join(temp, 'plans'), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
   const git = (...args: string[]) => {
     const r = spawnSync('git', args, { cwd: repo, env, encoding: 'utf8', timeout: 10_000 });
     expect(r.status, r.stderr).toBe(0);
@@ -130,6 +130,15 @@ for (const risky of ['lib/auth/access.ts', 'lib/oauth/token.ts', 'lib/session/to
       const capFlags = [...repeat]; capFlags[1] = '2';
       const cap = JSON.parse(f.run('gstack-review-plan', [...f.flags, ...capFlags, '--json']).stdout);
       expect(cap.next.step).toBe('stop'); expect(cap.dispatches).toEqual([]);
+      if (risky === 'lib/auth/access.ts') {
+        const approval = f.run('gstack-approvals', ['add', '--ask', `Owner grant: scoped fix-check (review_loop_grant ${since.slice(0, 12)})`, '--words', 'do it', '--by', 'GStack Minder', '--scope', 'this /ship invocation', '--json']);
+        expect(approval.status, approval.stderr).toBe(0);
+        const id = JSON.parse(approval.stdout).added[0];
+        const granted = JSON.parse(f.run('gstack-review-plan', [...f.flags, ...capFlags, '--grant', id, '--json']).stdout);
+        expect(granted.next.step).toBe('stop'); // A scoped-only grant cannot satisfy the whole-branch floor.
+        expect(granted.dispatches).toEqual([]);
+      }
+
     } finally { f.cleanup(); }
   });
 
