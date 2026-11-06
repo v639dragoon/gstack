@@ -65,6 +65,12 @@ export const PRICING: Record<string, ModelPricing> = {
   'gpt-6-sol':          { input_per_mtok: 2.00,  output_per_mtok: 10.00, cached_input_per_mtok: 0.20, as_of: '2026-10' },
   // https://developers.openai.com/api/docs/models/gpt-6-luna (fetched 2026-10-31; standard tier, up to 272K input)
   'gpt-6-luna':         { input_per_mtok: 0.10,  output_per_mtok: 0.50,  cached_input_per_mtok: 0.01, as_of: '2026-10' },
+  // https://developers.openai.com/api/docs/models/gpt-5.6-terra (fetched 2026-11-05; dohma local row)
+  'gpt-5.6-terra':      { input_per_mtok: 2.00,  output_per_mtok: 12.00, cached_input_per_mtok: 0.20, as_of: '2026-11' },
+  // https://developers.openai.com/api/docs/models/gpt-image-2.6-sunburst (fetched 2026-11-05; dohma local rows).
+  // Image models: input priced at the IMAGE-input rate ($8; text input is $5), output = image output tokens.
+  'gpt-image-2.5-sunburst': { input_per_mtok: 8.00, output_per_mtok: 30.00, cached_input_per_mtok: 2.00, as_of: '2026-11' },
+  'gpt-image-2.6-sunburst': { input_per_mtok: 8.00, output_per_mtok: 30.00, cached_input_per_mtok: 2.00, as_of: '2026-11' },
   'gpt-5.4':            { input_per_mtok: 2.50,  output_per_mtok: 10.00, as_of: '2026-04' },
   // https://developers.openai.com/api/docs/models/gpt-4o (fetched 2026-10-13; gbrain's LongMemEval judge, the official scorer's model;
   // the alias only: the gpt-4o-2024-05-13 snapshot has its own price)
