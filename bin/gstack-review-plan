@@ -250,7 +250,9 @@ function main(): number {
   const targeted = targetedClasses({ ...collected, scope, gateTagged, ...(active ? { excluded: active.excluded } : {}) });
   const patch = collected.mergeBase ? targetedPatchId(process.cwd(), collected.mergeBase) : 'none';
   const brief = targetedBriefSha();
-  const riskyRepeat = !!fixRange?.risky_surface?.length && (has('--fixed-blocking') || has('--fixed-below') || (has('--post-review') && pass > 0));
+  // Upstream ignores --fixed-below after a completed fix-check: it describes the
+  // fixes already checked, not a new risky repair requiring another full pass.
+  const riskyRepeat = !!fixRange?.risky_surface?.length && (has('--fixed-blocking') || (has('--fixed-below') && last !== 'fix-check') || (has('--post-review') && pass > 0));
   const ran = !['uncommitted', 'none'].includes(patch) && flag('--targeted-ran') === patch;
   const postReview = has('--post-review');
   const fixCheckAt = postReview && pass > 0 && last === 'fix-check' && fixRange?.runtime_lines != null ? git(['rev-parse', '--verify', '--quiet', `${rangeBase}^{commit}`])?.trim() : undefined;
