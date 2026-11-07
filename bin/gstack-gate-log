@@ -53,26 +53,51 @@ GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
-eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)"
-SLUG=$("$SCRIPT_DIR/gstack-slug" --get REPO_SLUG) || exit 1 # per-repository governor records
-mkdir -p "$GSTACK_STATE_ROOT/projects/$SLUG"
+# Only the repository slug is needed (project markers never route gate rows).
+# Match gstack-slug's branch spelling without a second full slug resolution.
+RAW_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || RAW_BRANCH=""
+BRANCH=$(printf '%s' "$RAW_BRANCH" | tr '/' '-' | tr -cd 'a-zA-Z0-9._-')
+BRANCH="${BRANCH:-unknown}"
+# A private effort receipt's sibling can carry identity to the terminal voice
+# row in the SAME dispatch. Bind it to cwd, state root, branch, explicit slug
+# and remote routing; a stale handoff falls back to normal derivation.
+CONTEXT_IN=""; CONTEXT_OUT=""
+case "${2:-}" in
+  --context-in) CONTEXT_IN="${3:-}" ;;
+  --context-out) CONTEXT_OUT="${3:-}" ;;
+esac
+CONTEXT_CWD=$(pwd -P)
+CONTEXT_ROUTING=$(git config --get-regexp '^(remote\..*\.url|branch\..*\.(remote|merge))$' 2>/dev/null || true)
+SLUG=""
+if [ -n "$CONTEXT_IN" ]; then
+  SLUG=$(GSTACK_GATE_CONTEXT="$CONTEXT_IN" GSTACK_GATE_ROOT="$GSTACK_STATE_ROOT" GSTACK_GATE_CWD="$CONTEXT_CWD" GSTACK_GATE_BRANCH="$BRANCH" GSTACK_GATE_ROUTING="$CONTEXT_ROUTING" bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e '
+    try {
+      const c=JSON.parse(process.env.GSTACK_GATE_CONTEXT), e=process.env;
+      if(c.root===e.GSTACK_GATE_ROOT && c.cwd===e.GSTACK_GATE_CWD && c.branch===e.GSTACK_GATE_BRANCH && c.routing===e.GSTACK_GATE_ROUTING && c.override===(e.GSTACK_PROJECT_SLUG||"") && /^[a-zA-Z0-9._-]+$/.test(c.slug) && ![".",".."].includes(c.slug)) process.stdout.write(c.slug);
+    } catch {}' 2>/dev/null || true)
+fi
+SLUG_PENDING=0
+if [ -z "$SLUG" ]; then
+  # Identity and content stamps are independent. Resolve identity beside the
+  # git reads, retaining the helper's status without a shared temporary file.
+  exec 3< <("$SCRIPT_DIR/gstack-slug" --get REPO_SLUG; printf '%s\n' "$?")
+  SLUG_PENDING=1
+fi
 
 INPUT="$1"
 
 # Governor identity stamps. These are authoritative just like commit/tree:
 # caller-supplied values are discarded. Missing metadata is stamped as null.
-OUTCOME_JSON=$("$SCRIPT_DIR/gstack-outcome" show --json 2>/dev/null || printf '%s' '{"present":false}')
+# The TS entrypoint already accepts the wrapper's resolved context. Pass only
+# values derived here, in this process tree and cwd; do not accept an inherited
+# slug/project-dir shortcut that could redirect a standalone gate-log call.
+# Outcome config keys use the RAW branch, unlike the sanitized JSONL filename.
+OUTCOME_BRANCH=$(git branch --show-current 2>/dev/null || printf '%s' "$BRANCH")
 MANIFEST_WTREE=$(printf '%s' "$INPUT" | bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e 'try { const r=JSON.parse(await Bun.stdin.text()); if(typeof r.manifest_wtree==="string") process.stdout.write(r.manifest_wtree) } catch {}' 2>/dev/null || true)
-RISK_TIER=""
-if [ -n "$MANIFEST_WTREE" ]; then
-  MANIFEST_FILE="$GSTACK_STATE_ROOT/projects/$SLUG/manifests/${MANIFEST_WTREE:0:12}.json"
-  if [ -f "$MANIFEST_FILE" ]; then
-    RISK_TIER=$(bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e 'try { const r=JSON.parse(await Bun.file(process.argv[1]).text()); process.stdout.write(r.routing?.risk_tier || "") } catch {}' "$MANIFEST_FILE" 2>/dev/null || true)
-  fi
-fi
 
 # Compute binding fields (best-effort; empty outside a git repo).
-COMMIT_FULL=$(git rev-parse HEAD 2>/dev/null || true)
+HEAD_EXISTS=1
+COMMIT_FULL=$(git rev-parse HEAD 2>/dev/null) || HEAD_EXISTS=0
 TREE=""
 COMMIT_SHORT=""
 WTREE=""
@@ -80,7 +105,14 @@ DIRTY=""
 if [ -n "$COMMIT_FULL" ]; then
   TREE=$(git rev-parse 'HEAD^{tree}' 2>/dev/null || true)
   COMMIT_SHORT=$(git rev-parse --short HEAD 2>/dev/null || true)
-  WTREE=$("$SCRIPT_DIR/gstack-wtree" 2>/dev/null || true)
+  # With neither HEAD nor an index, wtree necessarily fails at read-tree HEAD.
+  # Keep all historical stamp bytes (including rev-parse's failure stdout),
+  # but avoid launching that redundant failed derivation in an unborn repo.
+  if [ "$HEAD_EXISTS" = 0 ] && [ ! -f "$(git rev-parse --git-path index 2>/dev/null)" ]; then
+    WTREE=""
+  else
+    WTREE=$("$SCRIPT_DIR/gstack-wtree" 2>/dev/null || true)
+  fi
   if [ -n "$(git status --porcelain -uno 2>/dev/null | head -1)" ]; then
     DIRTY="true"
   else
@@ -88,10 +120,22 @@ if [ -n "$COMMIT_FULL" ]; then
   fi
 fi
 
+if [ "$SLUG_PENDING" = 1 ]; then
+  IFS= read -r SLUG <&3 || exit 1
+  IFS= read -r SLUG_STATUS <&3 || exit 1
+  exec 3<&-
+  [ "$SLUG_STATUS" = 0 ] || exit 1
+fi
+mkdir -p "$GSTACK_STATE_ROOT/projects/$SLUG"
+MANIFEST_FILE=""
+if [ -n "$MANIFEST_WTREE" ]; then
+  MANIFEST_FILE="$GSTACK_STATE_ROOT/projects/$SLUG/manifests/${MANIFEST_WTREE:0:12}.json"
+fi
+
 # Validate (reject malformed input, missing gate identity, or an unrecorded
 # effort override) AND stamp in one pass. Caller values for the binding keys
 # are dropped before stamping.
-STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" GSTACK_STAMP_COMMIT_SHORT="$COMMIT_SHORT" GSTACK_STAMP_OUTCOME_JSON="$OUTCOME_JSON" GSTACK_STAMP_RISK_TIER="$RISK_TIER" bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e "
+STAMPED=$(printf '%s' "$INPUT" | GSTACK_STAMP_COMMIT_FULL="$COMMIT_FULL" GSTACK_STAMP_TREE="$TREE" GSTACK_STAMP_WTREE="$WTREE" GSTACK_STAMP_DIRTY="$DIRTY" GSTACK_STAMP_COMMIT_SHORT="$COMMIT_SHORT" GSTACK_OUTCOME_MODULE="$SCRIPT_DIR/gstack-outcome.ts" GSTACK_OUTCOME_BRANCH="$OUTCOME_BRANCH" GSTACK_STAMP_MANIFEST_FILE="$MANIFEST_FILE" GSTACK_GATE_CONTEXT_OUT="$CONTEXT_OUT" GSTACK_GATE_ROOT="$GSTACK_STATE_ROOT" GSTACK_GATE_CWD="$CONTEXT_CWD" GSTACK_GATE_BRANCH="$BRANCH" GSTACK_GATE_ROUTING="$CONTEXT_ROUTING" GSTACK_GATE_SLUG="$SLUG" bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e "
 const rec = JSON.parse(await Bun.stdin.text());
 const fail = (msg) => { console.error('gstack-gate-log: ' + msg); process.exit(1); };
 if (rec.record_type !== 'gate') fail('record_type must be \"gate\"');
@@ -138,10 +182,17 @@ if (rec.commit === undefined && env.GSTACK_STAMP_COMMIT_SHORT) rec.commit = env.
 if (rec.diff_scope === undefined) rec.diff_scope = 'full';
 if (rec.critical_path === undefined) rec.critical_path = true;
 let outcome = { present: false };
-try { outcome = JSON.parse(env.GSTACK_STAMP_OUTCOME_JSON || ''); } catch {}
+try { outcome = (await import(env.GSTACK_OUTCOME_MODULE)).readOutcome(env.GSTACK_OUTCOME_BRANCH); } catch {}
 rec.outcome_id = outcome.present ? outcome.outcome_id : null;
 rec.outcome_slice = outcome.present ? outcome.slice_number : null;
-rec.risk_tier = /^[ABCD]$/.test(env.GSTACK_STAMP_RISK_TIER || '') ? env.GSTACK_STAMP_RISK_TIER : null;
+let riskTier = '';
+try { riskTier = (await Bun.file(env.GSTACK_STAMP_MANIFEST_FILE).json()).routing?.risk_tier || ''; } catch {}
+rec.risk_tier = typeof riskTier === 'string' && /^[ABCD]$/.test(riskTier) ? riskTier : null;
+if (env.GSTACK_GATE_CONTEXT_OUT) {
+  // Exclusive creation beside the already-exclusive private effort receipt.
+  // This is internal context, never an extra field in a telemetry record.
+  try { require('fs').writeFileSync(env.GSTACK_GATE_CONTEXT_OUT, JSON.stringify({root:env.GSTACK_GATE_ROOT,cwd:env.GSTACK_GATE_CWD,branch:env.GSTACK_GATE_BRANCH,routing:env.GSTACK_GATE_ROUTING,override:env.GSTACK_PROJECT_SLUG||'',slug:env.GSTACK_GATE_SLUG}), {mode:0o600,flag:'wx'}); } catch {}
+}
 console.log(JSON.stringify(rec));
 ") || {
   echo "gstack-gate-log: invalid or rejected record, skipping" >&2

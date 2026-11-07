@@ -4,7 +4,11 @@ GSTACK_BUN_CONFIG=/dev/null; case "${OSTYPE:-}" in msys*|cygwin*) if command -v 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 eval "$("$SCRIPT_DIR/gstack-paths")" || exit 1; : "${GSTACK_STATE_ROOT:?gstack-paths failed; reinstall with ./setup or /gstack-upgrade}"
-eval "$("$SCRIPT_DIR/gstack-slug" 2>/dev/null)" || exit 1
+# Resolve the repository slug once; the default project slug is unused here.
+# Keep gstack-slug's sanitized fallback for a failed branch --show-current.
+RAW_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null) || RAW_BRANCH=""
+BRANCH=$(printf '%s' "$RAW_BRANCH" | tr '/' '-' | tr -cd 'a-zA-Z0-9._-')
+BRANCH="${BRANCH:-unknown}"
 SLUG=$("$SCRIPT_DIR/gstack-slug" --get REPO_SLUG) || exit 1 # per-repository governor records
 GSTACK_OUTCOME_PROJECT_DIR="$GSTACK_STATE_ROOT/projects/$SLUG" \
 GSTACK_OUTCOME_BRANCH="$(git branch --show-current 2>/dev/null || printf '%s' "$BRANCH")" bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" "$SCRIPT_DIR/gstack-outcome.ts" "$@"

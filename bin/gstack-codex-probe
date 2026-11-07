@@ -1052,7 +1052,7 @@ _gstack_codex_effort_check() {
     # before any call, so it stays synchronous and refuses when it cannot be.
     if [ "$_record_source" != user-override ] && [ "${_GSTACK_CODEX_EFFORT_DEFER:-0}" = 1 ]; then
       _deferred="$_record"
-    elif ! "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_record" >/dev/null 2>&1; then
+    elif ! "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_record" --context-out "${GSTACK_CODEX_EFFORT_RECEIPT:+$GSTACK_CODEX_EFFORT_RECEIPT.gate-context}" >/dev/null 2>&1; then
       if [ "$_record_source" = user-override ]; then
         echo 'CODEX_EFFORT: override could not be recorded; no Codex call was made.' >&2
         return 1
@@ -1231,7 +1231,7 @@ CODEX_EFFORT_RECORD: }" ;;
         [ -z "$_GSTACK_CODEX_EFFORT_DEFAULT" ] || set -- "$@" -c "model_reasoning_effort=\"${_GSTACK_CODEX_EFFORT_LINE#CODEX_EFFORT: }\""
       fi
       if [ -n "$_effort_record" ]; then
-        "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_effort_record" </dev/null >/dev/null 2>&1 &
+        "$_GSTACK_CODEX_BIN/gstack-gate-log" "$_effort_record" --context-out "${GSTACK_CODEX_EFFORT_RECEIPT:+$GSTACK_CODEX_EFFORT_RECEIPT.gate-context}" </dev/null >/dev/null 2>&1 &
         _effort_log_pid=$!
       fi
       _rc=0

@@ -8,17 +8,34 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 skill="${1:-}"; voice="${2:-}"; status="${3:-unavailable}"; model="${4:-}"; src="${5:-}"; effort="${6:-}"; t0="${7:-$(date +%s)}"
 effort_source=routed
+gate_context=""
 if [ -f "${8:-}" ]; then
-  _fields=$(bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e 'const m=await Bun.file(process.argv[1]).json(); if(!/^[a-z]+$/.test(m.effort)||!/^[a-z-]+$/.test(m.effort_source))process.exit(1); console.log(m.effort); console.log(m.effort_source); console.log(JSON.stringify(m.effort_reason??""))' "$8") || exit 1
-  effort=$(printf '%s\n' "$_fields" | sed -n '1p')
-  effort_source=$(printf '%s\n' "$_fields" | sed -n '2p')
-  effort_reason_json=$(printf '%s\n' "$_fields" | sed -n '3p')
+  _fields=$(bun --no-env-file --config="${GSTACK_BUN_CONFIG:-/dev/null}" -e 'const m=await Bun.file(process.argv[1]).json(); if(!/^[a-z]+$/.test(m.effort)||!/^[a-z-]+$/.test(m.effort_source))process.exit(1); console.log(m.effort); console.log(m.effort_source); console.log(JSON.stringify(m.effort_reason??"")); try { console.log(JSON.stringify(await Bun.file(process.argv[1]+".gate-context").json())) } catch {}' "$8") || exit 1
+  {
+    IFS= read -r effort
+    IFS= read -r effort_source
+    IFS= read -r effort_reason_json
+    IFS= read -r gate_context || true
+  } <<< "$_fields"
 else
   effort_reason_json='""'
 fi
 if [ "${9:-}" != --quiet ] && [ -f "${8:-}" ]; then printf 'CODEX_EFFORT_DECISION: '; cat "$8"; fi
-q() { printf '%s' "$1" | tr -d '"\\'; }
+# These fields need only the same quote/backslash removal as before; bash
+# substitution avoids a tr subprocess for every field (including repeats).
+q() {
+  Q="${1//\"/}"; Q="${Q//\\/}"
+  # Command substitution previously removed trailing newlines after tr.
+  while [[ "$Q" == *$'\n' ]]; do Q="${Q%$'\n'}"; done
+}
+q "$skill"; skill="$Q"
+q "$voice"; voice="$Q"
+q "$status"; status="$Q"
+q "$model"; model="$Q"
+q "$src"; src="$Q"
+q "$effort"; effort="$Q"
+q "$effort_source"; effort_source="$Q"
 elapsed=$(( $(date +%s) - t0 )); [ "$elapsed" -ge 0 ] || elapsed=0
-[ "${9:-}" = --quiet ] || echo "Outside voice $(q "$voice"): $(q "$status") on $(q "$model") ($(q "$src")) at $(q "$effort"), ${elapsed}s"
-"$SCRIPT_DIR/gstack-gate-log" "{\"record_type\":\"gate\",\"run_id\":\"${GSTACK_RUN_ID:-voice-$$-$(date +%s)}\",\"skill\":\"$(q "$skill")\",\"gate\":\"outside-voice:$(q "$voice")\",\"purpose\":\"$(q "$voice")\",\"trigger\":\"$(q "$voice")\",\"model\":\"$(q "$model")\",\"model_source\":\"$(q "$src")\",\"model_reason\":\"upstream model selection: $(q "$src")\",\"effort\":\"$(q "$effort")\",\"effort_source\":\"$(q "$effort_source")\",\"effort_reason\":$effort_reason_json,\"budget\":1,\"retry\":\"none\",\"status\":\"$(q "$status")\",\"elapsed_s\":$elapsed}" >/dev/null 2>&1 || true
+[ "${9:-}" = --quiet ] || echo "Outside voice ${voice}: ${status} on ${model} (${src}) at ${effort}, ${elapsed}s"
+"$SCRIPT_DIR/gstack-gate-log" "{\"record_type\":\"gate\",\"run_id\":\"${GSTACK_RUN_ID:-voice-$$-$(date +%s)}\",\"skill\":\"${skill}\",\"gate\":\"outside-voice:${voice}\",\"purpose\":\"${voice}\",\"trigger\":\"${voice}\",\"model\":\"${model}\",\"model_source\":\"${src}\",\"model_reason\":\"upstream model selection: ${src}\",\"effort\":\"${effort}\",\"effort_source\":\"${effort_source}\",\"effort_reason\":$effort_reason_json,\"budget\":1,\"retry\":\"none\",\"status\":\"${status}\",\"elapsed_s\":$elapsed}" --context-in "$gate_context" >/dev/null 2>&1 || true
 exit 0
