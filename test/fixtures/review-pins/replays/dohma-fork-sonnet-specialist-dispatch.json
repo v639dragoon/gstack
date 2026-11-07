@@ -1,0 +1,4 @@
+{
+  "replay": "dohma-fork-sonnet-specialist-dispatch",
+  "justification": "dohma fork carries one line naming model: \"sonnet\" on the general-purpose specialist dispatch (fork 49cd4ed4,\nfounder ruling 2026-11-02). dohma's tests/unit/docs/gstackRouting.test.ts requires an explicit Sonnet or Haiku model\nwithin 180 characters of each general-purpose dispatch in the rendered review-army section. The reviewer prompts,\nchecklists and depth rules are byte-identical to upstream; only the dispatch model line differs. No no-loss replay\nwas run for this fork-carried model selection. Rebased onto upstream 4414f4cc (v1.99.2.0 plus three fixes); upstream ship review-army pin changes retained, with only the founder-required Sonnet specialist dispatch delta repinned."
+}
