@@ -116,7 +116,7 @@ for (const mode of [
       "BRANCH",
     ]).trim();
     const project = path.join(env.GSTACK_STATE_ROOT, "projects", slug);
-    const metadata =
+    const metadata: Record<string, string> =
       mode === "branch"
         ? {
             GIT_CONFIG_COUNT: "5",
