@@ -2,15 +2,15 @@ import type { TemplateContext } from './types';
 import { generateGovernorPlanBody, governorDispatchAccounting, governorRedTeamAccounting, governorSpecialistTelemetry, governorNativeRegistration, governorNativeVerdict, governorAdversarialTelemetry } from './governor-accounting';
 import { generateGovernorStructuredBody } from './governor-structured';
 
-export function generateGovernorReview(ctx: TemplateContext): string {
+export function generateGovernorReviewSection(ctx: TemplateContext): string {
   // D4: SECTION retains upstream's external inline policy; this fork resolver
   // owns the pointer to its supplemental accounting asset.
   if (ctx.skillName === 'review' && ctx.host !== 'claude')
     return '> **STOP.** Before review planning, Read `governor-structured.md` beside this SKILL.md and apply its accounting at matching steps. Missing asset means INCOMPLETE; stop.';
-  return generateGovernorReviewBody(ctx);
+  return generateGovernorReview(ctx);
 }
 
-export function generateGovernorReviewBody(ctx: TemplateContext): string {
+export function generateGovernorReview(ctx: TemplateContext): string {
   return `# Governor review accounting
 
 Read this before the upstream review sections. Apply each instruction at its named step; reading this file does not launch a later step.
