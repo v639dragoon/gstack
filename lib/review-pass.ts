@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { readPolicy } from './review-policy';
 import { resolveCodexRuntimeModel } from '../scripts/resolve-codex-generation-model';
 import { AgentModelError, resolveAgentModel } from './agent-model';
-import { BriefError, briefFile, checkoutRoot, checkoutTree, promptHash, renderBrief, sliceDiff, sliceNote, withWorkspace, type BriefRole, type SectionTexts, type Slots } from './review-brief';
+import { BriefError, assertCodexInputFits, briefFile, checkoutRoot, checkoutTree, promptHash, renderBrief, sliceDiff, sliceNote, withWorkspace, type BriefRole, type SectionTexts, type Slots } from './review-brief';
 import { REVIEW_DIFF_MAX_BYTES, disclosureDigest } from './review-exclude';
 import { appendEvent, readerKey } from './review-ledger';
 import { policySelection, selectFor } from './review-selection';
@@ -266,6 +266,7 @@ export function renderStage(m: Manifest, stage: Stage, t: SectionTexts, diffFor:
       targeted = { classes: parseClassList(slots.classes!), rules: TARGETED_RULES, brief_sha: targetedBriefSha(checklist), diff_base: slots.diff_base, ...targetedRead(process.cwd(), slots.diff_base!) };
     }
     const text = withWorkspace(renderBrief(role, slots, t) + (m.governor ? '\n\n' + m.governor.text : ''), workdir, m.fetch_policy);
+    assertCodexInputFits(role, text);
     const file = path.join(briefs, briefFile(role, r.name));
     fs.writeFileSync(file, text, { mode: 0o600 });
     const sha = promptHash(text);

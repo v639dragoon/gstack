@@ -103,6 +103,65 @@ export function sectionTexts(root: string): SectionTexts {
 
 const SHA = /^[0-9a-f]{7,40}$/;
 const FENCE = '`'.repeat(3);
+/**
+ * Codex refuses a turn whose input exceeds this many characters (turn/start: input_too_large, max_chars 1048576).
+ * The inline-diff roles (codex-structured, outside-voice) go to Codex on stdin, so their whole packet must fit.
+ */
+export const CODEX_INPUT_MAX_CHARS = 1_048_576;
+/** Room kept for the brief around the inline diff: instructions, governor context, workspace paragraph, omitted list. */
+export const INLINE_DIFF_RESERVE_CHARS = 65_536;
+const INLINE_DIFF_ROLES: readonly BriefRole[] = ['codex-structured', 'outside-voice'];
+/** Data and prose files leave the inline diff before any code file does. */
+const DATA_FILE = /\.(json|jsonl|ndjson|csv|tsv|md|txt|svg|snap|lock)$/i;
+
+export interface FittedDiff { diff: string; total: number; omitted: Array<{ path: string; chars: number }> }
+
+/**
+ * Fit a branch diff into `budget` characters by leaving whole files out of it, data and prose files first, then the
+ * largest first (ties by path), and keeping the rest in their original order. The omitted files stay part of the
+ * change under review: the packet lists them by path for the reader to open read-only. Deterministic for one diff.
+ */
+export function fitInlineDiff(diff: string, budget: number): FittedDiff {
+  const total = diff.length;
+  if (total <= budget) return { diff, total, omitted: [] };
+  const starts = [...diff.matchAll(/^diff --git /gm)].map(m => m.index!);
+  if (!starts.length) throw new BriefError(`the inline diff is ${total} characters, over the ${budget}-character budget, and holds no per-file section to leave out`);
+  const head = diff.slice(0, starts[0]);
+  const files = starts.map((s, i) => {
+    const text = diff.slice(s, starts[i + 1] ?? diff.length);
+    const line = text.slice(0, text.indexOf('\n') === -1 ? text.length : text.indexOf('\n'));
+    const at = line.lastIndexOf(' b/');
+    const p = (at === -1 ? line.slice('diff --git '.length) : line.slice(at + 3)).replace(/^"|"$/g, '');
+    return { index: i, path: p, text, data: DATA_FILE.test(p) };
+  });
+  const order = [...files].sort((a, b) => Number(b.data) - Number(a.data) || b.text.length - a.text.length || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const out = new Set<number>();
+  let size = total;
+  let list = 0;
+  for (const f of order) {
+    if (size + list <= budget) break;
+    out.add(f.index);
+    size -= f.text.length;
+    list += f.path.length + 32;
+  }
+  if (size + list > budget) throw new BriefError(`the inline diff cannot fit ${budget} characters even with every file listed instead of inlined`);
+  const kept = files.filter(f => !out.has(f.index)).map(f => f.text).join('');
+  return { diff: (head + kept).trimEnd(), total, omitted: files.filter(f => out.has(f.index)).map(f => ({ path: f.path, chars: f.text.length })) };
+}
+
+function omittedSection(fit: FittedDiff, diffBase: string): string[] {
+  if (!fit.omitted.length) return [];
+  return ['', '## Omitted from the inline diff',
+    `The full branch diff is ${fit.total} characters and Codex accepts at most ${CODEX_INPUT_MAX_CHARS}, so the diffs of these ${fit.omitted.length} files are not inline (data and prose files first, largest first). They are part of the change under review: read any of them read-only with \`git diff ${diffBase} -- <path>\`.`,
+    ...fit.omitted.map(o => `- ${o.path} (${o.chars} chars)`)];
+}
+
+/** Refuse to write an inline-diff packet Codex would reject before reading it. */
+export function assertCodexInputFits(role: BriefRole, text: string): void {
+  if (INLINE_DIFF_ROLES.includes(role) && text.length > CODEX_INPUT_MAX_CHARS) {
+    throw new BriefError(`${role}: the packet is ${text.length} characters; Codex accepts at most ${CODEX_INPUT_MAX_CHARS} (raise INLINE_DIFF_RESERVE_CHARS in lib/review-brief.ts)`);
+  }
+}
 function need(slots: Slots, key: string): string {
   const v = slots[key];
   if (v === undefined || v === '') throw new BriefError(`missing slot ${key}`);
@@ -179,14 +238,16 @@ function renderRole(role: BriefRole, slots: Slots, t: SectionTexts): string {
     case 'codex-structured': {
       const head = [STRUCTURED_INSTRUCTIONS, ...(slots.policy_exclude ? [`Selection: git diff ${diffBase} -- . ${slots.policy_exclude}`, ''] : []), '', '## Findings contract', STRUCTURED_CONTRACT, '', ...(slots.disclosure ? [slots.disclosure, ''] : []), `## Branch diff (git diff ${diffBase})`];
       if (slots.diff_file) return [...head, `Read the supplied branch diff at ${slots.diff_file} (${need(slots, 'diff_bytes')} bytes, sha256 ${need(slots, 'diff_sha256')}).`, ...(slots.diff_slice ? [slots.diff_slice] : [])].join('\n');
-      return [...head, FENCE + 'diff', (slots.diff ?? '').trim(), FENCE].join('\n');
+      const fit = fitInlineDiff((slots.diff ?? '').trim(), CODEX_INPUT_MAX_CHARS - INLINE_DIFF_RESERVE_CHARS);
+      return [...head, FENCE + 'diff', fit.diff, FENCE, ...omittedSection(fit, diffBase)].join('\n');
     }
     case 'outside-voice': {
       const filled = fill(t.outside, [['DIFF_BASE=$(git merge-base origin/<base> HEAD)', `DIFF_BASE=${diffBase}`]], role);
       const body = slots.policy_exclude ? filled.split('git diff "$DIFF_BASE".').join(`git diff "$DIFF_BASE" -- . ${slots.policy_exclude}${slots.keep ? ` and git diff "$DIFF_BASE" -- ${slots.keep}` : ''}.`) : filled;
       const head = [body, '', ...(slots.disclosure ? [slots.disclosure, ''] : []), `## Branch diff (git diff ${diffBase})`];
       if (slots.diff_file) return [...head, `The supplied branch diff is the file ${slots.diff_file} (${need(slots, 'diff_bytes')} bytes, sha256 ${need(slots, 'diff_sha256')}). Read it from disk; it is ${slots.diff_slice ? 'the part of the diff under review' : 'the whole diff under review'}.`, ...(slots.diff_slice ? [slots.diff_slice] : [])].join('\n');
-      return [...head, FENCE + 'diff', (slots.diff ?? '').trim(), FENCE].join('\n');
+      const fit = fitInlineDiff((slots.diff ?? '').trim(), CODEX_INPUT_MAX_CHARS - INLINE_DIFF_RESERVE_CHARS);
+      return [...head, FENCE + 'diff', fit.diff, FENCE, ...omittedSection(fit, diffBase)].join('\n');
     }
     case 'targeted': {
       const classes = parseClassList(need(slots, 'classes'));
