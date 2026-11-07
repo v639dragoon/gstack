@@ -34,7 +34,7 @@ import { generateLearningsSearch, generateLearningsLog } from './learnings';
 import { generateConfidenceCalibration } from './confidence';
 import { generateGateScanBlock } from './gate-scan';
 import { generateInvokeSkill, generateAutoplanReviewFile, generateAutoplanSnapshotTool, generateAutoplanPublicationHook, generateCeoModeHandoffHook } from './composition';
-import { generateGovernorReview } from './governor-review';
+import { generateGovernorReview, generateGovernorReviewBody } from './governor-review';
 import { generateReviewArmy } from './review-army';
 import { generateDxFramework, generateDxErrorCompact, generateDxErrorItems } from './dx';
 import { generateGBrainContextLoad, generateGBrainSaveResults, generateBrainPreflight, generateBrainCacheRefresh, generateBrainWriteBack } from './gbrain';
@@ -167,6 +167,7 @@ export const RESOLVERS: Record<string, ResolverFn> = {
   CHANGELOG_WORKFLOW: generateChangelogWorkflow,
   REVIEW_ARMY: generateReviewArmy,
   GOVERNOR_REVIEW: generateGovernorReview,
+  GOVERNOR_REVIEW_BODY: generateGovernorReviewBody,
   CROSS_REVIEW_DEDUP: generateCrossReviewDedup,
   DX_FRAMEWORK: generateDxFramework,
   DX_ERROR_ITEMS: generateDxErrorItems,
