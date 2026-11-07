@@ -1,3 +1,4 @@
+import { governorSpecialistConfiguration } from './review-army';
 import type { TemplateContext } from './types';
 import { generateGovernorPlanBody, governorDispatchAccounting, governorRedTeamAccounting, governorSpecialistTelemetry, governorNativeRegistration, governorNativeVerdict, governorAdversarialTelemetry } from './governor-accounting';
 import { generateGovernorStructuredBody } from './governor-structured';
@@ -6,11 +7,12 @@ export function generateGovernorReview(ctx: TemplateContext): string {
   return `# Governor review accounting
 
 Read this before the upstream review sections. Apply each instruction at its named step; reading this file does not launch a later step.
-Every general-purpose Agent call in the review, including the batched specialist, Red Team, targeted reader and native adversarial reader, sets \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`. The upstream effort= mapping still applies. The compact program receives an explicit Sonnet or Haiku model ID in input.models for every general-purpose reader; an absent or different model stops before launch.
+Every general-purpose Agent call (batched specialist, Red Team, targeted and native adversarial readers) uses this configuration. The upstream effort= mapping still applies. The compact program receives an explicit Sonnet or Haiku model ID in input.models for every general-purpose reader; an absent or different model stops before launch.
 
 ${generateGovernorPlanBody(ctx)}
 
 ## Specialist dispatch (Step ${ctx.skillName === 'ship' ? '9.1' : '4.5'})
+${governorSpecialistConfiguration()}
 Use the upstream plan, with governor floors and D3 filters applied before building the dispatch manifest. On /ship, every gstack-review-dispatch pass carries \`-- --run-id "$RUN_ID" --cycle "$CYCLE"\` plus the saved plan flags. One batched specialist reads the union of upstream and governor-tier checklists; its governor_gates lists every floor it must account. The compact sent/collect callbacks automatically reserve and settle every metadata-linked gate. Do not duplicate their successful verdicts. The following manual commands apply to readers launched outside that program and to terminal errors without collection. Before launching any logical reader, register each upstream-only governor_gate, then run \`gstack-review-budget dispatch "$RUN_ID" <governor_gate> --cycle "$CYCLE"\` and dispatch each governor_gates entry. Every allowed Agent is accounted before launch. After collect, record every gate's verdict and gate-log row. Missing or invalid output remains incomplete. Retain state-machines validation and pregate accounting.
 ${governorDispatchAccounting(ctx)}
 
