@@ -1,7 +1,7 @@
 import { resolveStateRoot } from '../lib/state-root';
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawnSync } from 'child_process';
+import { runScriptSync } from '../lib/script-invocation';
 /**
  * gstack-context-fence — PreToolUse hook that ENFORCES the context guard's
  * handoff line. Once bin/gstack-context-guard has written the session's
@@ -69,7 +69,7 @@ async function main() {
       return;
     }
     const cwd = typeof hook.cwd === 'string' && hook.cwd ? hook.cwd : process.cwd();
-    const slugOut = spawnSync(path.join(path.dirname(Bun.fileURLToPath(import.meta.url)), 'gstack-slug'), {
+    const slugOut = runScriptSync(path.join(path.dirname(Bun.fileURLToPath(import.meta.url)), 'gstack-slug'), [], {
       cwd,
       encoding: 'utf8',
       timeout: 4000,

@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'child_process';
+import { wtreeFingerprint } from '../lib/script-invocation';
 import { policyFlags, FLAG_NAMES, surfaceFlags, readPolicy, globs, DEFAULT_ENV_SURFACES, DEFAULT_TEST_GLOBS, auditReusable, gitRead, nonCodeReviewDelta, riskyReviewSince } from '../lib/review-policy';
 
 const argv = process.argv.slice(2);
@@ -167,10 +168,8 @@ if (command === 'policy-flags') {
   process.exit(0);
 }
 const currentWtree = () => {
-  const result = spawnSync(path.join(import.meta.dir, 'gstack-wtree'), [], {
-    cwd: repoRoot, encoding: 'utf8', timeout: 30_000,
-  });
-  return result.status === 0 && !result.error ? result.stdout.trim() : null;
+  const result = wtreeFingerprint({ cwd: repoRoot, timeoutMs: 30_000 });
+  return 'tree' in result ? result.tree : null;
 };
 
 if (command === 'plan') {

@@ -2,6 +2,7 @@ import { resolveStateRoot } from '../lib/state-root';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { runScriptSync } from '../lib/script-invocation';
 /**
  * gstack-context-resume — SessionStart hook (matcher: compact|resume|clear).
  * After an auto-compaction or a resumed session it injects the head of the
@@ -52,7 +53,7 @@ async function main() {
     const home =
       resolveStateRoot();
     const cwd = typeof hook.cwd === 'string' && hook.cwd ? hook.cwd : process.cwd();
-    const slugOut = spawnSync(path.join(path.dirname(Bun.fileURLToPath(import.meta.url)), 'gstack-slug'), {
+    const slugOut = runScriptSync(path.join(path.dirname(Bun.fileURLToPath(import.meta.url)), 'gstack-slug'), [], {
       cwd,
       encoding: 'utf8',
       timeout: 4000,
