@@ -255,8 +255,9 @@ When `ADVERSARIAL_CLAUDE=false`, skip native selection/comparison in items 1–2
 ## Step 12: Version bump (auto-decide)
 
 **Post-merge:** Choose `BUMP_LEVEL` in item 2, including MINOR/MAJOR questions,
-then pass it to the one call below. It skips classify/write/repair and queue;
-`NEW_VERSION` stays unset. **In-branch:** The command follows policy or items 1–5.
+then pass it to the one call below.
+Skip classify/write/repair, `gstack-next-version`, queue, and `NEW_VERSION`.
+**In-branch:** The command follows policy or items 1–5.
 
 Item 3 needs `BUMP_LEVEL`: reuse this invocation's saved level. Otherwise FRESH
 chooses it in item 2 and ALREADY_BUMPED derives it in item 1.
