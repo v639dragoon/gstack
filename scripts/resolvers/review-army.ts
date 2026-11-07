@@ -161,7 +161,7 @@ Stack context: {STACK}
 Past learnings: {learnings or 'none'}"
 
 **Subagent configuration:**
-- Use \`subagent_type: "general-purpose"\`
+- Use \`subagent_type: "general-purpose"\` with \`model: "sonnet"\`
 - Pass ${FOREGROUND_IF_AVAILABLE} on every specialist Agent call — background is the default since ${CC_BACKGROUND_DEFAULT_SINCE}; omitting an available flag is not foreground. ${BACKGROUND_RECOVERY}
 
 **Wait for readers before editing:**
@@ -350,9 +350,4 @@ export function generateReviewArmy(ctx: TemplateContext): string {
   ];
 
   return sections.join('\n\n---\n\n');
-}
-
-/** Fork model override lives in the governor section, outside upstream's pinned briefs. */
-export function governorSpecialistConfiguration(): string {
-  return `- Use \`subagent_type: "general-purpose"\` with \`model: "sonnet"\``;
 }
