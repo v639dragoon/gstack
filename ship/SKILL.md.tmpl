@@ -254,9 +254,9 @@ When `ADVERSARIAL_CLAUDE=false`, skip native selection/comparison in items 1–2
 
 ## Step 12: Version bump (auto-decide)
 
-**Post-merge:** Use item 2 for `BUMP_LEVEL`, including MINOR/MAJOR questions.
-Skip classify/write/repair, `gstack-next-version`, queue, and `NEW_VERSION`.
-**In-branch:** Follow items 1–5 below.
+**Post-merge:** Choose `BUMP_LEVEL` in item 2, including MINOR/MAJOR questions,
+then pass it to the one call below. It skips classify/write/repair and queue;
+`NEW_VERSION` stays unset. **In-branch:** The command follows policy or items 1–5.
 
 Item 3 needs `BUMP_LEVEL`: reuse this invocation's saved level. Otherwise FRESH
 chooses it in item 2 and ALREADY_BUMPED derives it in item 1.
@@ -268,7 +268,7 @@ runs items 1 and 3–5; item commands serve only a `STOP:`, which names its reru
 `VERSION: skipped` or `VERSION: <v> kept (…; no write)` ends Step 12 with
 `NEW_VERSION` unset: Step 13 follows its `NEXT:`; Steps 18 and 20 take NO_VERSION's branch
 (`kept`: VERSION stays `<v>`).
-In in-branch mode, `ship: queue_mode stamp-at-merge` replaces items 1–4.
+The command handles `ship: queue_mode stamp-at-merge` through `VERSION: skipped`.
 Post-merge keeps its fragment workflow even with ship policy; never assign a version on that branch. Other policy gates apply.
 
 1. **Classify state** — pure reader, never writes:
