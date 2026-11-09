@@ -44,6 +44,7 @@ import { adapterFor, readRange, STALL_IDLE, supervise, type Counter, type Superv
 import { ranFiles, verifyFromRun, type RunProfile } from '../../run-evidence';
 import { matchesAny } from '../../ship-policy';
 import type { CheckDef, CheckResult, PregateContext, RemoteObligation } from '../types';
+import { playwrightFileArgs, selectPlaywrightConfigs, shellQuote } from './playwright-config';
 
 /** The runner a `.py`-only selection gets; it needs the pytest module importable by python3 (`pytestMissing`). */
 const PYTEST = 'python3 -m pytest {files}';
@@ -199,7 +200,7 @@ function importsPlaywright(text: string): boolean {
 const PLAYWRIGHT_NO_BROWSERS = /^.*(?:Executable doesn't exist at|download new browsers).*$/m;
 
 /** The run plan: the groups that can run, the files no runner claims, tools missing from PATH, `.dart` files with no pubspec.yaml above, and the files a declared runner cannot run (not run, not counted as covered). */
-export interface RunPlan { groups: RunGroup[]; unclaimed: string[]; missing: string[]; noPubspec: string[]; dropped?: string[] }
+export interface RunPlan { groups: RunGroup[]; unclaimed: string[]; missing: string[]; noPubspec: string[]; dropped?: string[]; collectionDetails?: string[] }
 
 /** The files a declared runner's test tool runs, by extension: JS/TS for `bun test`, `node --test`, `deno test`, vitest, jest, mocha, ava and playwright; `.py` for pytest. A tool counts as a whole command word (`./node_modules/.bin/jest` does, `tests/node/run.sh` does not). Null for any other command (a dispatcher such as `node scripts/run-tests.js` may run any language), or one naming both kinds: it takes every file. */
 function declaredRunnerFiles(runner: string): RegExp | null {
@@ -301,7 +302,7 @@ export function planRuns(ctx: PregateContext, files: readonly string[]): RunPlan
 /** Why `plan` leaves files unrun: their count, the missing SDKs, `.dart` files outside any package, and the fix. */
 function planGap(ctx: PregateContext, plan: RunPlan, total: number): Pick<CheckResult, 'code' | 'detail' | 'fix' | 'cause' | 'environment'> {
   const { unclaimed, missing, noPubspec } = plan;
-  const detail = `no test runner detected for ${unclaimed.length} of ${total} selected file(s): ${unclaimed.slice(0, 8).join(' ')}${unclaimed.length > 8 ? ' …' : ''}${missing.length ? `; not on PATH: ${missing.join(', ')}` : ''}${noPubspec.length ? `; no pubspec.yaml above ${noPubspec.length} .dart file(s)` : ''}`;
+  const detail = `no test runner detected for ${unclaimed.length} of ${total} selected file(s): ${unclaimed.slice(0, 8).join(' ')}${unclaimed.length > 8 ? ' …' : ''}${missing.length ? `; not on PATH: ${missing.join(', ')}` : ''}${noPubspec.length ? `; no pubspec.yaml above ${noPubspec.length} .dart file(s)` : ''}${plan.collectionDetails?.length ? `; ${plan.collectionDetails.join('; ')}` : ''}`;
   // A tool missing from PATH is this machine's gap, not the diff's; no runner declared or no pubspec is the repo's.
   if (missing.length) return { code: 'PREGATE_ENVIRONMENT', cause: 'environment', environment: launchCause('missing-binary', `not on PATH: ${missing.join(', ')}`), detail, fix: `install ${missing.join(' and ')}${fvmPinnedFor(ctx.repoRoot, unclaimed) ? ' (or fvm, which this repo pins)' : ''} on this machine and rerun, or run the lane remotely; the diff is not at fault` };
   const fix = noPubspec.length ? `commit the Dart package's pubspec.yaml, or declare \`runner\` (with {files}) in ${ctx.configFile}`
@@ -362,11 +363,11 @@ export function parseSummary(raw: string, runner = ''): RunnerSummary {
 
 interface LocalRun { exit: number | null; outcome: Supervised['outcome']; signal: string | null; observedStart: boolean; ran: number | null; failed: number | null; tail: string[]; runner: string; command: string; files: string[]; lastFile: string | null; ms: number; error?: string; noBrowsers?: string }
 
-const quote = (f: string) => `'${f.replace(/'/g, `'\\''`)}'`;
+const quote = shellQuote;
 
 async function runOnce(ctx: PregateContext, env: NodeJS.ProcessEnv, g: RunGroup, files: string[], log: string, counter: Counter): Promise<LocalRun> {
   // playwright test reads each file argument as a case-insensitive regex: escape it and anchor it to a path segment, so `a[1].spec.ts` runs that file, not `a1.spec.ts`.
-  const args = /(?<![\w-])playwright\s+test(?![\w-])/.test(g.runner) ? files.map(f => `(?:^|/)${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) : files;
+  const args = /(?<![\w-])playwright\s+test(?![\w-])/.test(g.runner) ? playwrightFileArgs(files) : files;
   const joined = args.map(quote).join(' ');
   const run = g.runner.replace('{files}', () => joined);
   const command = g.cwd ? `(cd ${quote(g.cwd)} && ${run})` : run;
@@ -556,15 +557,20 @@ async function runSelected(ctx: PregateContext, sel: Selection, base: CheckResul
   const tier = sel.declaredTier.reduce((n, d) => n + d.tests.length, 0);
   if (sel.localTests.length === 0) return { ...base, status: sel.remote.length ? 'requires-remote' : 'pass', detail: `no local lane; ${sel.remote.length} requires-remote obligation(s)${tier ? `; ${tier} test file(s) in declared test trees not run here` : ''}` };
   // Runnable groups run even when other files are unclaimed: a real failure is reported as one, and an all-green run is still incomplete.
-  const plan = planRuns(ctx, sel.localTests);
-  const gap = plan.unclaimed.length ? planGap(ctx, plan, sel.localTests.length) : null;
+  let plan = planRuns(ctx, sel.localTests);
   const dropped = plan.dropped ? `${plan.dropped.length} selected file(s) the declared runner cannot run (not run, not counted as covered): ${plan.dropped.join(' ')}` : '';
   if (!plan.groups.length && dropped) return { ...base, status: sel.remote.length ? 'requires-remote' : 'pass', detail: `no selected file is one the declared runner can run; ${dropped}` };
+  if (!plan.groups.length) {
+    const gap = planGap(ctx, plan, sel.localTests.length);
+    return { ...base, status: 'incomplete', ...gap, ...(gap.environment ? { lines: [...lines, environmentLine(gap.environment)] } : {}) };
+  }
+  const runtime = launchRuntime(ctx.repoRoot, ctx.env);
+  if (runtime.refusal) return { ...base, ...runtime.refusal, cause: 'environment', environment: launchCause('runtime', runtime.refusal.detail), lines: [`runtime: ${runtime.label}`, environmentLine(launchCause('runtime', runtime.refusal.detail))] };
+  plan = await selectPlaywrightConfigs(ctx, runtime.env, plan);
+  const gap = plan.unclaimed.length ? planGap(ctx, plan, sel.localTests.length) : null;
   if (!plan.groups.length) return { ...base, status: 'incomplete', ...gap, ...(gap?.environment ? { lines: [...lines, environmentLine(gap.environment)] } : {}) };
   const { groups } = plan;
   const total = groups.reduce((n, g) => n + g.files.length, 0);
-  const runtime = launchRuntime(ctx.repoRoot, ctx.env);
-  if (runtime.refusal) return { ...base, ...runtime.refusal, cause: 'environment', environment: launchCause('runtime', runtime.refusal.detail), lines: [`runtime: ${runtime.label}`, environmentLine(launchCause('runtime', runtime.refusal.detail))] };
   const r = await runLocal(ctx, runtime.env, groups);
   const adapters = [...new Set(groups.map(g => adapterFor(g.runner)).filter(Boolean))];
   const runLines = [...lines, ...(dropped ? [`not run: ${dropped}`] : []), `runtime: ${runtime.label}`, `progress: ${adapters.join(', ') || 'none (no progress adapter for this runner; serial files and heartbeats only)'}`, `ran: ${r.command.length > 200 ? `${r.command.slice(0, 200)}…` : r.command}`, `log: ${r.log}`, ...r.tail.map(l => `  ${l}`)];
