@@ -3,7 +3,8 @@ import { expect, test } from 'bun:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { classifyTrainHead } from '../lib/version-gate-train';
+import { CHECK_IDS } from '../lib/pregate/index';
+import { classifyTrainHead } from '../crew/lib/version-gate-train';
 import { BASE_POLICY, cleanup, makeFixtureRepo, makePr, restamp, runBin } from './helpers/restamp-fixture';
 import { ghQueueShim } from './helpers/ship-queue-fixture';
 import { shippedBody } from './helpers/ship-queue-train-fixture';
@@ -22,7 +23,7 @@ test('without train, post-merge READY, queue stamp, restamp and version-gate lea
     expect(mode.out.trim()).toBe('post-merge');
     expect(classifyTrainHead({ repoRoot: repo.work, baseRef: 'main', head })).toEqual({ kind: 'off' });
     const pregate = path.join(repo.root, 'pregate.json');
-    fs.writeFileSync(pregate, JSON.stringify({ schema_version: 1, tree: runBin(repo, 'gstack-wtree', []).out.trim(), head, verdict: 'pass', checks: [{ id: 'unit', status: 'pass' }] }));
+    fs.writeFileSync(pregate, JSON.stringify({ schema_version: 1, tree: runBin(repo, 'gstack-wtree', []).out.trim(), head, verdict: 'pass', checks: CHECK_IDS.map(id => ({ id, status: 'pass' })) }));
     const gh = ghQueueShim(repo, { prs: { '1': { headRefOid: head, body: shippedBody('1', head), headRefName: 'fragment' } }, checks: { [head]: { check_runs: [{ status: 'completed', conclusion: 'success' }] } } });
     const ready = runBin(repo, 'gstack-ship-queue', ['ready', '--pr', '1', '--base', 'main', '--pregate', pregate], gh);
     expect([ready.status, ready.err]).toEqual([0, '']);

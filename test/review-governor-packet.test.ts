@@ -107,6 +107,7 @@ describe('review packet', () => {
       expect(text).toStartWith(workspaceStep(realpathSync(d)));
       expect(text).toContain('You are the codex-structured reviewer');
       expect(text).toContain('## Findings contract');
+      expect(text).toContain('`VERDICT: CLEAN` or `VERDICT: FINDINGS` as the last line.');
       expect(text).toContain('## Branch diff');
       const ledger = join(state, 'projects', 'packet-test', 'packets', 'packet-run', 'review-ledger.jsonl');
       const carrier = readLedger(ledger).find(e => e.event === 'rendered')!;
