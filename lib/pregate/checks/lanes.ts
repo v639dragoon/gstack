@@ -37,8 +37,9 @@ import { checkScratch } from '../run-scratch';
 import { starterPolicy } from '../starter';
 import { isDeviceDart, listRepoFiles, readRepoFile } from '../import-graph';
 import { docsOnlyLane } from '../docs-only-lane';
-import { selectLanes, type Selection } from '../lane-selection';
+import { ALWAYS_RUN_PATH, alwaysRunTests, selectLanes, type Selection } from '../lane-selection';
 import { launchRuntime } from '../runtime';
+import { matchPriorRunners, priorReuse } from '../prior-reuse';
 import { cargoModel, type CargoModel } from '../rust';
 import { adapterFor, readRange, STALL_IDLE, supervise, type Counter, type Supervised } from '../supervise';
 import { ranFiles, verifyFromRun, type RunProfile } from '../../run-evidence';
@@ -569,12 +570,17 @@ async function runSelected(ctx: PregateContext, sel: Selection, base: CheckResul
   plan = await selectPlaywrightConfigs(ctx, runtime.env, plan);
   const gap = plan.unclaimed.length ? planGap(ctx, plan, sel.localTests.length) : null;
   if (!plan.groups.length) return { ...base, status: 'incomplete', ...gap, ...(gap?.environment ? { lines: [...lines, environmentLine(gap.environment)] } : {}) };
-  const { groups } = plan;
+  const decision = priorForPlan(ctx, sel, runtime.label);
+  const reuse = matchPriorRunners(ctx.prior, decision, plan.groups, sel.localTests.length, !!gap);
+  ctx.progress(reuse.line);
+  const reusedBase: CheckResult = { ...base, lines: [...lines, reuse.line], ...(decision.ok && reuse.reused.length ? { from_prior: { tree: ctx.prior!.tree, files: reuse.reused, delta: decision.delta } } : {}) };
+  const { groups } = reuse;
+  if (!groups.length && !gap) return { ...reusedBase, inputs: { ...inputs, runtime: runtime.label }, status: sel.remote.length ? 'requires-remote' : 'pass', detail: `${reuse.reused.length} local test file(s) reused from prior tree ${ctx.prior!.tree.slice(0, 12)}; no runner needed`, passed_by_runner: reuse.passedByRunner };
   const total = groups.reduce((n, g) => n + g.files.length, 0);
   const r = await runLocal(ctx, runtime.env, groups);
   const adapters = [...new Set(groups.map(g => adapterFor(g.runner)).filter(Boolean))];
-  const runLines = [...lines, ...(dropped ? [`not run: ${dropped}`] : []), `runtime: ${runtime.label}`, `progress: ${adapters.join(', ') || 'none (no progress adapter for this runner; serial files and heartbeats only)'}`, `ran: ${r.command.length > 200 ? `${r.command.slice(0, 200)}…` : r.command}`, `log: ${r.log}`, ...r.tail.map(l => `  ${l}`)];
-  const withRun = { ...base, lines: runLines, inputs: { ...inputs, command: sha256(r.command), runtime: runtime.label } };
+  const runLines = [...reusedBase.lines!, ...(dropped ? [`not run: ${dropped}`] : []), `runtime: ${runtime.label}`, `progress: ${adapters.join(', ') || 'none (no progress adapter for this runner; serial files and heartbeats only)'}`, `ran: ${r.command.length > 200 ? `${r.command.slice(0, 200)}…` : r.command}`, `log: ${r.log}`, ...r.tail.map(l => `  ${l}`)];
+  const withRun = { ...reusedBase, lines: runLines, inputs: { ...inputs, command: sha256(r.command), runtime: runtime.label } };
   if (r.exit === null) {
     const why = unfinished(ctx, r, total);
     return why.environment ? environmentResult(withRun, why.environment, why.detail!) : { ...withRun, status: 'incomplete', ...why };
@@ -593,7 +599,7 @@ async function runSelected(ctx: PregateContext, sel: Selection, base: CheckResul
   if (r.ran === 0) return { ...withRun, status: 'fail', cause: 'diff', code: 'PREGATE_LANE_FAILED', detail: `ZERO-RUN: the runner reported 0 tests${r.zero ? ` in ${r.zero}` : ''} (${total} selected file(s))`, fix: 'a bad selector, a missing file or a skipped describe; exit 0 is not a pass' };
   const detail = `${r.ran ?? 'count unavailable'} tests ran in ${total} file(s)${r.serial ? ` (${r.serial} serial)` : ''}, exit 0${dropped ? `; ${dropped}` : ''}${sel.remote.length ? `; ${sel.remote.length} requires-remote obligation(s)` : ''}`;
   if (gap) return { ...withRun, status: 'incomplete', ...gap, detail: `${detail}; ${gap.detail}`, ...(gap.environment ? { lines: [...runLines, environmentLine(gap.environment)] } : {}) };
-  return { ...withRun, status: sel.remote.length ? 'requires-remote' : 'pass', detail };
+  return { ...withRun, status: sel.remote.length ? 'requires-remote' : 'pass', detail, passed_by_runner: reuse.passedByRunner };
 }
 
 /**
@@ -646,10 +652,28 @@ async function run(ctx: PregateContext): Promise<CheckResult> {
   if (reuse) ctx.progress(reuse.line);
   const rest = reuse?.passed.length ? { ...sel, localTests: sel.localTests.filter(t => !reuse.passed.includes(t)), gateTests: sel.gateTests.filter(t => !reuse.passed.includes(t)) } : sel;
   const ran = await runSelected(ctx, rest, base);
-  const reused = !reuse ? ran : { ...ran, lines: [reuse.line, ...(ran.lines ?? [])], ...(reuse.receipt ? { from_run: { receipt: reuse.receipt, files: reuse.passed }, detail: `${reuse.passed.length} of ${sel.localTests.length} local test file(s) passed in the --from-run run; ${ran.detail ?? ran.status}` } : {}) };
+  const reused: CheckResult = !reuse ? ran : { ...ran, lines: [reuse.line, ...(ran.lines ?? [])], ...(reuse.receipt ? { from_run: { receipt: reuse.receipt, files: reuse.passed }, detail: `${reuse.passed.length} of ${sel.localTests.length} local test file(s) passed in the --from-run run; ${ran.detail ?? ran.status}` } : {}) };
   const result = withRemoved(reused);
   if (!sel.noLane.length) return result;
   return mode === 'no-policy' ? withStarter(ctx, sel, result) : withNoLaneWarning(ctx, sel, result);
+}
+
+/** Resolve the delta with the same selector; all process I/O stays in these injected readers. */
+function priorForPlan(ctx: PregateContext, sel: Selection, runtime: string) {
+  const git = (args: string[]): string | null => {
+    const r = spawnSync('git', args, { cwd: ctx.repoRoot, env: ctx.env, encoding: 'utf8', timeout: 30_000, maxBuffer: 16 * 1024 * 1024 });
+    return r.status === 0 ? r.stdout : null;
+  };
+  return priorReuse({ prior: ctx.prior, enabled: ctx.priorReuse, policy: ctx.configLabel, policyDigest: ctx.configDigest, base: ctx.base, tree: ctx.wtree, runtime, localTests: sel.localTests }, {
+    git, select: touched => selectLanes({ ...ctx, touched, explain: [] }),
+    always: () => {
+      const entry = git(['ls-tree', ctx.mergeBase, '--', ALWAYS_RUN_PATH]);
+      if (entry === null) throw new Error('unreadable base always-run entry');
+      const text = entry ? git(['show', `${ctx.mergeBase}:${ALWAYS_RUN_PATH}`]) : null;
+      if (entry && (text === null || !/^100(?:644|755) blob /.test(entry))) throw new Error('unreadable base always-run file');
+      return alwaysRunTests(ctx.repoRoot, sel.localTests, text).tests;
+    },
+  });
 }
 
 /** The base profiles a run may verify under here: this machine's OS, and a workflow that holds a lane this machine runs. */

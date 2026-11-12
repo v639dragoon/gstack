@@ -80,6 +80,9 @@ export interface PregateCheck {
   proven?: string[];
   /** `lanes` under `--from-run`: the run receipt and the selected local test files that run already passed on this tree (not run again here). */
   from_run?: { receipt: string; files: string[] };
+  /** Runner template and cwd to local files proved by a complete local pass; excludes --from-run files. */
+  passed_by_runner?: Record<string, string[]>;
+  from_prior?: { tree: string; files: string[]; delta: string[] };
 }
 /** A remote_gate receipt accepted from a stamp-only predecessor tree (lib/pregate/remote-receipt.ts): the gated tree, the tree it was accepted for, the policy, and every differing path with its stamp rule. */
 export interface PregateReceiptSubstitution { gated_tree: string; accepted_for: string; policy: string; files: Array<{ path: string; rule: string }> }
@@ -250,7 +253,7 @@ export const ARTIFACT_SCHEMAS = {
     type: 'object', required: ['schema_version', 'tree', 'checks'],
     properties: {
       schema_version: { const: 1 }, run: str, tree: str, stage1_ms: num, stage2_ms: num,
-      checks: { type: 'array', items: { type: 'object', required: ['id', 'status'], properties: { id: str, status: { enum: ['pass', 'fail', 'warn', 'incomplete', 'requires-remote', 'not_installed'] }, ms: num, detail: str, stage: { enum: ['preflight', 'tests'] }, inputs: { type: 'object' }, fix: str, code: str, lines: strList, cause: { enum: ['diff', 'environment'] }, environment: { type: 'object', required: ['kind', 'evidence'], properties: { kind: str, evidence: str } }, proven: strList, from_run: { type: 'object', required: ['receipt', 'files'], properties: { receipt: str, files: strList } } } } },
+      checks: { type: 'array', items: { type: 'object', required: ['id', 'status'], properties: { id: str, status: { enum: ['pass', 'fail', 'warn', 'incomplete', 'requires-remote', 'not_installed'] }, ms: num, detail: str, stage: { enum: ['preflight', 'tests'] }, inputs: { type: 'object' }, fix: str, code: str, lines: strList, cause: { enum: ['diff', 'environment'] }, environment: { type: 'object', required: ['kind', 'evidence'], properties: { kind: str, evidence: str } }, proven: strList, passed_by_runner: { type: 'object', description: 'runner key (<cwd>\t<runner template>) -> repo-relative test files that passed under it' }, from_prior: { type: 'object', required: ['tree', 'files', 'delta'], properties: { tree: str, files: strList, delta: strList } }, from_run: { type: 'object', required: ['receipt', 'files'], properties: { receipt: str, files: strList } } } } },
       head: str, base: str, generated_at: str, policy: str, policy_digest: str, policy_user_path: str, registry: str, verdict: str, scratch: str,
       requires_remote: { type: 'array', items: { type: 'object', required: ['lane', 'platform', 'tests', 'receipt'], properties: { lane: str, platform: str, workflow: str, job: str, tests: strList, receipt: nullableStr, cleared_by: str, command: str,
         substitution: { type: 'object', required: ['gated_tree', 'accepted_for', 'policy', 'files'], properties: { gated_tree: str, accepted_for: str, policy: str, files: { type: 'array', items: { type: 'object', required: ['path', 'rule'], properties: { path: str, rule: str } } } } } } } },

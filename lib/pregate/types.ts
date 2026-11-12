@@ -2,7 +2,7 @@
  * pregate/types — the shapes every pre-gate check shares (plan C8). One check
  * per file under lib/pregate/checks/, registered in lib/pregate/index.ts.
  */
-import type { PregateCheck } from '../headless-artifacts';
+import type { PregateCheck, PregateFile } from '../headless-artifacts';
 import type { Registry } from '../regen';
 import type { RunSource } from '../run-evidence';
 import type { PregateConfig } from './config';
@@ -68,6 +68,10 @@ export interface PregateContext {
   fromRun?: { ref: string; check: RunSource | { error: string } };
   /** `--no-ci-carry`: false skips the tests stage's automatic --from-run (lib/ci-carry.ts findCarry at HEAD's clean tree). */
   ciCarry?: boolean;
+  /** Previous validated record from this run's output path, loaded before any check runs. */
+  prior?: PregateFile | null;
+  /** --no-prior-reuse disables local per-file reuse. */
+  priorReuse?: boolean;
   /** `--remote`: run the declared remote gate now, under this spend cap. */
   remote: { spendCapUsd: number } | null;
   env: NodeJS.ProcessEnv;

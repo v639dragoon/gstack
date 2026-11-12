@@ -193,7 +193,7 @@ The list lives in its own file, not in `pregate.json`, because older pregate rea
 
 ```
 gstack-pregate [--stage preflight|tests|guards|all] [--only <check,..>] [--allow-repo-commands] [--policy-from base|head]
-               [--timeout <s>] [--stall-timeout <s>] [--remote --spend-cap <usd>] [--run <id>] [--from-run <id|url>] [--no-ci-carry] [--explain] [--json]
+               [--timeout <s>] [--stall-timeout <s>] [--remote --spend-cap <usd>] [--run <id>] [--from-run <id|url>] [--no-ci-carry] [--no-prior-reuse] [--explain] [--json]
 gstack-pregate verify | clear --remote <workflow.yml/job> --run-url <url> | lanes | validate | init
 ```
 
@@ -1049,6 +1049,25 @@ stamp-only substitution). Then:
 as a usage error. It changes nothing in the preflight stage: with `--stage all`
 the preflight checks, the secrets scan included, run as before, and
 `--stage tests` runs no preflight check in that invocation, with or without it.
+
+<a id="prior-pass"></a>
+### Reusing the previous local pass
+
+The tests stage reads the previous record at `--out` (default `.gstack/tmp/pregate.json`)
+before replacing it. After `--from-run`, it reuses prior `passed_by_runner` files that the delta
+between the recorded and current trees does not select, using the same lane selector.
+Both trees must exist in Git, with the same policy, digest, base branch and runtime.
+A base policy whose label names another base commit is the same policy when its file is
+the same blob at both commits (worktrees share `origin/<base>`, which other sessions fetch).
+Deletions, execution identity changes (lockfiles, manifests, runner configs, runtime
+pins, workflows or `.gstack/`), unknown lanes and unreadable inputs refuse reuse.
+Always-run tests rerun for a non-empty delta. `REUSE:` reports the decision;
+`from_prior` records the source tree, reused files and delta. A complete local pass
+records `passed_by_runner`, keyed by `<cwd>\t<runner template>`, including reused files.
+A file reuses evidence only under the same planned runner key, after Playwright config
+selection; a changed key reruns that file, and a plan gap prevents all reuse.
+`--from-run` files have no planned key and are excluded from this local record.
+Old records without that field run everything. Use `--no-prior-reuse` to opt out.
 
 <a id="ci-carry"></a>
 ### CI carry: pregate and /ship use CI's run instead of running again (GSTA-258)

@@ -46,7 +46,7 @@ export const PREPUSH_CHECK_IDS = ['regen', 'guards'] as const;
 export const PREGATE_TIER2 = ['ratchets', 'lint', 'links', 'hermetic', 'patches', 'integrator'] as const;
 
 /** `guards` selects PREPUSH_CHECK_IDS (preflight checks): the pre-push run, docs/pregate.md#prepush. */
-export interface RunOptions { stage: Stage | 'guards' | 'all'; only?: string[]; run?: string }
+export interface RunOptions { stage: Stage | 'guards' | 'all'; only?: string[]; run?: string; out?: string }
 
 /** Apply the repo's `warn` downgrades: never `secrets`. `lanes` applies its own (a touched file with no lane, after the selected tests ran), so nothing it fails is downgraded here. */
 export function applyDowngrades(ctx: PregateContext, result: CheckResult, def: CheckDef): CheckResult {
@@ -89,6 +89,7 @@ const git = (cwd: string, args: string[]): string | null => {
 };
 
 export async function runPregate(ctx: PregateContext, o: RunOptions): Promise<PregateFile> {
+  ctx.prior = readPregateFile(path.resolve(ctx.repoRoot, o.out ?? PREGATE_OUT_REL)).file;
   const selected = o.stage === 'guards' ? CHECKS.filter(c => (PREPUSH_CHECK_IDS as readonly string[]).includes(c.id)) : CHECKS.filter(c => (o.stage === 'all' || c.stage === o.stage) && (!o.only || o.only.includes(c.id)));
   if (selected.some(c => c.id === 'lanes')) { const line = autoCarry(ctx); if (line) ctx.progress(line); }
   const checks: CheckResult[] = [];
@@ -96,6 +97,8 @@ export async function runPregate(ctx: PregateContext, o: RunOptions): Promise<Pr
   for (const def of selected) {
     const started = Date.now();
     const result = applyDowngrades(ctx, await withFingerprint(ctx, def.id, def.stage, () => def.run(ctx)), def);
+    // withFingerprint can invalidate a completed local run after lanes returns. Uncertified evidence must never seed reuse.
+    if (result.status === 'fail' || result.status === 'incomplete' || result.status === 'not_installed' || result.cause === 'environment') delete result.passed_by_runner;
     clocks[def.stage] += Date.now() - started;
     checks.push({ ...result, stage: def.stage });
   }
