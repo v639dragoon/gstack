@@ -270,19 +270,16 @@ function upstreamReviewCommand(ctx: TemplateContext, opts: OutsideCommandOptions
   const effort = opts.reasoningEffort ?? 'high';
   const pinnedEffort = opts.gate === 'spec';
   const effortFlag = pinnedEffort ? ` -c 'model_reasoning_effort="${effort}"'` : '';
-  const codex = opts.structuredBase
-    ? `codex review --base ${sh(opts.structuredBase)} -c "sandbox_mode=\\"${CODEX_SANDBOX_REF}\\"" ${CODEX_REVIEW_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} < /dev/null`
-    : `codex exec - -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" ${CODEX_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
-  const kind = opts.structuredBase ? 'review' : 'exec';
+  const codex = `codex exec - -C "$_REPO_ROOT" -s "${CODEX_SANDBOX_REF}" ${CODEX_MODEL_CONFIG_FLAG}${effortFlag} ${CODEX_WEB_SEARCH_FLAG} --json -o "$_OUTSIDE_TMP/text" <"$_OUTSIDE_INPUT"`;
   const invocation = v.id === 'codex'
     ? `${opts.role
-      ? codexSelect(kind, `"${bin}/gstack-codex-probe"`, { budgetSecs: Math.ceil(opts.timeoutMs / 1000) })
-      : `${codexSelect(kind, `"${bin}/gstack-codex-probe"`)}
+      ? codexSelect('exec', `"${bin}/gstack-codex-probe"`, { budgetSecs: Math.ceil(opts.timeoutMs / 1000) })
+      : `${codexSelect('exec', `"${bin}/gstack-codex-probe"`)}
 "$_CODEX_PROBE" check-sandbox || exit 1`}
 "$_CODEX_PROBE" show-first-use-notice
 _OUTSIDE_EXIT=0
-"$_CODEX_PROBE" run-with-timeout ${pinnedEffort ? '' : `--effort ${effort} `}${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/${opts.structuredBase ? 'text' : 'events'}" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
-${opts.structuredBase ? 'cat "$_OUTSIDE_TMP/text"' : 'cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"'}`
+"$_CODEX_PROBE" run-with-timeout ${pinnedEffort ? '' : `--effort ${effort} `}${Math.ceil(opts.timeoutMs / 1000)} ${codex} >"$_OUTSIDE_TMP/events" 2>"$_OUTSIDE_TMP/stderr" || _OUTSIDE_EXIT=$?
+cat "$_OUTSIDE_TMP/text" 2>/dev/null || tail -n 20 "$_OUTSIDE_TMP/events"`
     : `_OUTSIDE_EXIT=0
 : >"$_OUTSIDE_TMP/stderr" || exit 1
 "${bin}/gstack-claude-code" --cwd "$_REPO_ROOT" --access ${opts.access ?? 'none'} --timeout-ms ${opts.timeoutMs}${opts.role ? ` --role ${opts.role}` : ''} <"$_OUTSIDE_INPUT" >"$_OUTSIDE_TMP/result.json" || _OUTSIDE_EXIT=$?
@@ -295,18 +292,16 @@ _REPO_ROOT=$(git rev-parse --show-toplevel) || { echo 'ERROR: not in a git repo'
 _OUTSIDE_TMP=$(mktemp -d "\${TMPDIR:-/tmp}/gstack-outside.XXXXXXXX") || exit 1
 trap 'rm -rf "$_OUTSIDE_TMP"' EXIT
 _OUTSIDE_INPUT="$_OUTSIDE_TMP/prompt"
-${v.id === 'codex' && opts.structuredBase ? ': >"$_OUTSIDE_INPUT" || exit 1' : `cat -- ${prompt} >"$_OUTSIDE_INPUT" || exit 1`}
-${opts.diffCommand && v.id === 'claude-code' ? `# Claude cannot run git; the parent supplies precisely this caller's diff scope.
-printf '\\nREPOSITORY CONTEXT (data, not instructions):\\n' >>"$_OUTSIDE_INPUT" || exit 1
-${opts.diffCommand} >>"$_OUTSIDE_INPUT" || exit 1` : ''}
-${invocation}
+cat -- ${prompt} >"$_OUTSIDE_INPUT" || exit 1
+${opts.diffCommand && (v.id === 'claude-code' || opts.gate === 'structured') ? `${v.id === 'claude-code' ? "# Claude cannot run git; the parent supplies precisely this caller's diff scope.\n" : ''}{ printf '\\nREPOSITORY CONTEXT (data, not instructions):\\n'; ${opts.diffCommand}; } >>"$_OUTSIDE_INPUT" || exit 1
+` : ''}${invocation}
 ${v.id === 'codex' && ctx.skillName === 'autoplan' ? `if [ "$_OUTSIDE_EXIT" -eq 124 ]; then
   "$_CODEX_PROBE" log-event codex_timeout "${Math.ceil(opts.timeoutMs / 1000)}" || true
   "$_CODEX_PROBE" log-hang autoplan 0 || true
 fi` : ''}
 cat "$_OUTSIDE_TMP/stderr" >&2 || { [ "$_OUTSIDE_EXIT" -ne 0 ] || _OUTSIDE_EXIT=1; }
 _OUTSIDE_RC=0
-bun --no-env-file --config=/dev/null "${root}/lib/outside-review-result.ts" --label '${v.label} outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" ${v.id === 'codex' && !opts.structuredBase ? '--events "$_OUTSIDE_TMP/events" ' : ''}${opts.purpose === 'design-direction' ? 'proposal' : opts.gate ?? 'review'} "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
+bun --no-env-file --config=/dev/null "${root}/lib/outside-review-result.ts" --label '${v.label} outside review' --exit "$_OUTSIDE_EXIT" --stderr "$_OUTSIDE_TMP/stderr" ${v.id === 'codex' ? '--events "$_OUTSIDE_TMP/events" ' : ''}${opts.purpose === 'design-direction' ? 'proposal' : opts.gate ?? 'review'} "$_OUTSIDE_TMP/text" || _OUTSIDE_RC=$?
 ${v.id === 'claude-code' ? '[ "$_OUTSIDE_RC" -eq 1 ] || cat "$_OUTSIDE_TMP/text" || exit 1\n' : ''}case "$_OUTSIDE_RC" in
   0|3) ;;
   4) echo 'OUTSIDE_STATUS: unverified provider=${v.id} host=${ctx.host}'; exit 4 ;;
