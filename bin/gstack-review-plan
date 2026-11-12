@@ -242,7 +242,7 @@ function main(): number {
     else {
       const commit = collectCommit(root, resolved, own);
       const range = classifyDiff({ ...commit, registry, scope: scopeOf([resolved, '--head', own]), gateTagged: gateTagsOf(['--commit', own]), ...riskPaths, ...(active ? { excluded: active.excluded } : {}) });
-      fixRange = range.errors.length ? unread([...range.errors.slice(0, 5).map(e => `${e.code} ${e.input}`), ...(range.errors.length > 5 ? [`+${range.errors.length - 5} more`] : [])].join('; '))
+      fixRange = range.errors.length ? { ...unread([...range.errors.slice(0, 5).map(e => `${e.code} ${e.input}`), ...(range.errors.length > 5 ? [`+${range.errors.length - 5} more`] : [])].join('; ')), risky_surface: riskyReviewPaths(commit.paths, governorPolicy) }
         : !commit.paths.length ? unread('the fix range is empty: commit the fix after the range base (a base merge alone is not the PR\'s own change)')
         : { base: rangeBase, runtime_lines: range.runtimeLines, ...(range.class === 'gate' ? { touched_gate: true as const } : {}), risky_surface: riskyReviewPaths(commit.paths, governorPolicy) };
     }
