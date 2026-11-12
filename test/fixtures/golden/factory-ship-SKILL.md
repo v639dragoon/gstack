@@ -698,6 +698,8 @@ stage 1 and complete all five stages before Step 17. Content-preserving commits 
 **One call for stages 1–4:** `$GSTACK_ROOT/bin/gstack-ship-release finish --base <base> --reviewed-tree <tree> --reviewed-base <mb> --docs-post <audit-id>-post.json --lane <label>=<Step 5 command>... [--build <cmd>]... --trailer '<trailer>' [--plan "<Plan line>"]`
 also makes Step 15's item-3 commit and runs the pregate (`--docs-rechecked`,
 `--no-lanes-approved` record stage 2.2 and Step 5's approval).
+Start `finish` and `accept` in the background where the host can (Claude Code: `run_in_background: true`) and wait
+for the notice; a call killed at the tool limit reruns every lane.
 
 ### 1. Finish writers and prepare outputs
 

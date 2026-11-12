@@ -16,6 +16,9 @@ timeout-only fix and three other routine stops go through `gstack-no-stop record
 `refused` stops. `requires-remote` (other platforms; the remote gate under 8 cores) needs
 `gstack-pregate clear` or, under a user cap, `--remote --spend-cap <usd>`. Rerun
 after the final stamp (`gstack-ship-release finish` does); Step 18 refuses a stale one.
+**Run lanes in the background.** Where the host has background commands (Claude Code: `run_in_background: true`),
+start this call that way and wait for its completion notice: lanes outlast the foreground tool limit (10 minutes in
+Claude Code), and a killed call reruns every lane.
 
 Read TESTING.md's `Local lanes` and `Full lanes`. Before selecting lanes, run `gstack-diff-manifest <base>` and `gstack-review-budget plan "$MANIFEST_PATH" --cycle 0 --host {{HOST_ID}}` from the installed bin; retain RUN_ID and all printed literals. Run Local lanes always. When `FULL_LANES_REQUIRED=false`, skip Full lanes (full suite/build) and record `build: DEFERRED to CI check {CI_BACKSTOP}`; never a silent pass. When true, run Full lanes too. Repos without policy lanes retain every applicable suite below.
 
