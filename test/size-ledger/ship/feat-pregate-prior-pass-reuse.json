@@ -1,4 +1,4 @@
 {
   "bytes": 463,
-  "why": "ship runs lane calls (Step 5, finish, accept) in the background so the host's 10-minute foreground tool limit never kills a lane run"
+  "why": "v1.99.2 rebase: upstream 353508 + ours 47655 = 401163 union bytes; per-file prior reuse layered on upstream same-tree clears"
 }
