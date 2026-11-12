@@ -1,0 +1,4 @@
+{
+  "bytes": 463,
+  "why": "ship runs lane calls (Step 5, finish, accept) in the background so the host's 10-minute foreground tool limit never kills a lane run"
+}
