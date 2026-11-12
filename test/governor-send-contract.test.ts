@@ -50,7 +50,7 @@ const args=process.argv.slice(2); if(args[0]==='--version'){console.log('codex-c
 if(args[0]==='sandbox')process.exit(0);
 const probe=args.includes('reply OK'); appendFileSync(process.env.CALLS!,JSON.stringify({args,probe,deadline:process.env._CODEX_DEADLINE})+'\\n');
 if(probe){console.log('OK');process.exit(0)}
-await Bun.stdin.text();const text=process.env.GSTACK_CODEX_VOICE==='spec'?'SCORE: 8\\nAMBIGUITIES: NONE\\n':'NO FINDINGS\\nRecommendation: proceed because no exploitable finding was found.\\n';
+await Bun.stdin.text();const text=process.env.GSTACK_CODEX_VOICE==='spec'?'SCORE: 8\\nAMBIGUITIES: NONE\\n':'NO FINDINGS\\nRecommendation: proceed because no exploitable finding was found.\\nVERDICT: CLEAN\\n';
 if(args[0]==='review')console.log(text);else writeFileSync(args[args.indexOf('-o')+1],text);`);
     fs.writeFileSync(path.join(fake, 'codex'), `#!/usr/bin/env bash\nexec '${process.execPath}' '${fakeCode}' "$@"\n`, { mode: 0o755 });
     const prompt = path.join(repo, '.gstack/tmp/prompt.txt');
@@ -59,7 +59,7 @@ if(args[0]==='review')console.log(text);else writeFileSync(args[args.indexOf('-o
     if (arm === 'voice' || arm === 'structured-voice' || arm === 'spec') {
       script = outsideVoiceCommand({ ...ctx, skillName: arm === 'spec' ? 'spec' : 'plan-eng-review' }, {
         promptFile: prompt, timeoutMs: 120000, voice: arm === 'spec' ? 'spec' : 'plan-review',
-        ...(arm === 'structured-voice' ? { structuredBase: 'main', gate: 'structured' } : { role: 'plan-review' }),
+        ...(arm === 'structured-voice' ? { gate: 'structured', diffCommand: 'DIFF_BASE=$(git merge-base main HEAD) && git diff "$DIFF_BASE"' } : { role: 'plan-review' }),
         ...(arm === 'spec' ? { gate: 'spec', reasoningEffort: 'medium' } : {}) });
     } else {
       const fences = governorCodexFences(options.actualHost);
@@ -166,13 +166,14 @@ test('spec records its fixed medium effort even when the policy is low and the e
 // Fork routing guards migrated from upstream-owned fixture files. Exercise
 // the actual registered selection/send callbacks, never a private router stub.
 for (const shell of ['bash', ...(Bun.which('zsh') ? ['zsh' as const] : [])] as const) {
-  test(`${shell}: routed exec/review settings stay distinct argv through the upstream carrier`, () => {
+  test(`${shell}: routed ordinary/structured exec settings stay distinct argv through the upstream carrier`, () => {
     for (const arm of ['voice', 'structured-voice'] as const) {
       const result = invoke(arm, { shell });
       expect(result.status, result.stderr + result.stdout).toBe(0);
       const dispatch = result.rows.find(row => !row.probe);
       expect(dispatch.args).toContain('model="gpt-routed"');
-      if (arm === 'structured-voice') expect(dispatch.args).toContain('review_model="gpt-routed"');
+      expect(dispatch.args[0]).toBe('exec');
+      expect(dispatch.args).not.toContain('review_model="gpt-routed"');
       expect(dispatch.args).toContain('model_reasoning_effort="low"');
       expect(dispatch.args).toContain('skills.include_instructions=false');
       expect(result.gateRows.find(row => row.gate === 'outside-voice:plan-review')).toMatchObject({ effort: 'low', effort_source: 'routed' });

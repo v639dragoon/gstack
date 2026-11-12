@@ -128,8 +128,8 @@ that resolved model as its explicit request. The read-only form reads its
 private prompt on stdin through \`codex exec -\`; never put free text in a shell
 command. Read stderr before cleanup; keep the printed
 \`CODEX_ELAPSED_S\` for the gate row. Check for
-execution success and valid severity tags or an explicit NO FINDINGS conclusion
-first. The shared classifier's exit 0 is completed clean; 3 is completed
+execution success and a final \`VERDICT: CLEAN\` or \`VERDICT: FINDINGS\` line
+before interpreting severity tags or NO FINDINGS. The shared classifier's exit 0 is completed clean; 3 is completed
 findings; 4 is unverified; other nonzero is unavailable. Only completed 0/3
 may satisfy the slot. P0/P1 findings block. Failure, refusal, empty output or missing markers → missing coverage and
 error/timeout, never clean/PASS. For a completed response, \`[P0]\`/\`[P1]\` markers:

@@ -1,4 +1,4 @@
 {
-  "bytes": 463,
-  "why": "v1.99.2 rebase: upstream 353508 + ours 47655 = 401163 union bytes; per-file prior reuse layered on upstream same-tree clears"
+  "bytes": 609,
+  "why": "v1.99.2 rebase: upstream current structure plus fork prior reuse/background lanes and mandatory strict-packet VERDICT (D4)"
 }
