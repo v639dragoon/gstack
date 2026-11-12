@@ -287,7 +287,7 @@ describe('STOP anchors', () => {
 
 describe('shape', () => {
   test('driver stays within its measured upstream plus governor budget, names no harness vocabulary, and every bin exists', () => {
-    expect(Buffer.byteLength(doc)).toBeLessThanOrEqual(12891) // upstream 12,251 + governor/version-mode prose 640 = 12891 bytes (v1.97.0 rebase);
+    expect(Buffer.byteLength(doc)).toBeLessThanOrEqual(12922) // v1.99.2 rebase: upstream 12,282 + ours 640 = 12,922 bytes (measured; prior cap 12,891).
     for (const term of ['AskUserQuestion', 'Agent tool', 'PreToolUse', 'SessionStart', '~/.claude', 'run_in_background']) expect(doc).not.toContain(term);
     const named = [...new Set([...doc.matchAll(/\bgstack-[a-z0-9-]+/g)].map(m => m[0]))];
     expect(named.filter(n => !fs.existsSync(path.join(ROOT, 'bin', n)))).toEqual([]);
