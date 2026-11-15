@@ -172,7 +172,33 @@ if (typeof rec.model === 'string' && /astra/i.test(rec.model) && !routedReviewSl
     && !(typeof rec.model_reason === 'string' && rec.model_reason.trim().length > 0)) {
   fail('model \"' + rec.model + '\" outside the routed codex-structured slot requires a non-empty model_reason');
 }
-for (const k of ['commit_full', 'tree', 'wtree', 'dirty', 'outcome_id', 'outcome_slice', 'risk_tier']) delete rec[k];
+// Normalize legacy spellings only in the gates that emitted them.
+if (rec.gate === 'codex-structured' && ['pass', 'clean=pass', 'fail'].includes(rec.verdict)) {
+  rec.verdict_raw = rec.verdict;
+  rec.verdict = rec.verdict === 'fail' ? 'issues_found' : 'clean';
+}
+if (rec.gate === 'plan-completion' && typeof rec.status === 'string'
+    && rec.status !== 'not-run-no-plan'
+    && (rec.status === 'skipped-no-plan' || rec.status.startsWith('not-run'))) {
+  rec.status_raw = rec.status;
+  rec.status = 'not-run-no-plan';
+}
+// Telemetry vocabulary and clock anomalies warn; they never refuse a row.
+const warnings = [];
+const reviewGate = ['codex-structured', 'codex-adversarial', 'adversarial-claude',
+  'red-team', 'coverage-audit', 'plan-completion', 'doc-release'].includes(rec.gate)
+  || rec.gate.startsWith('specialist:') || rec.gate.startsWith('upstream-specialist:');
+if (reviewGate && Object.hasOwn(rec, 'verdict')
+    && !['clean', 'issues_found', 'error', 'timeout'].includes(rec.verdict)) {
+  warnings.push('verdict');
+  console.error('gstack-gate-log: vocabulary warning: verdict outside clean|issues_found|error|timeout');
+}
+try {
+  const started = Date.parse(rec.started_at), ended = Date.parse(rec.ended_at);
+  if (Number.isFinite(started) && Number.isFinite(ended) && ended < started) warnings.push('time_order');
+} catch {}
+if (warnings.length) rec.vocab_warning = [...new Set([...(Array.isArray(rec.vocab_warning) ? rec.vocab_warning : []), ...warnings])];
+for (const k of ['commit_full', 'tree', 'wtree', 'dirty', 'outcome_id', 'outcome_slice', 'risk_tier', 'tier_rule']) delete rec[k];
 const env = process.env;
 if (env.GSTACK_STAMP_COMMIT_FULL) rec.commit_full = env.GSTACK_STAMP_COMMIT_FULL;
 if (env.GSTACK_STAMP_TREE) rec.tree = env.GSTACK_STAMP_TREE;
@@ -185,9 +211,14 @@ let outcome = { present: false };
 try { outcome = (await import(env.GSTACK_OUTCOME_MODULE)).readOutcome(env.GSTACK_OUTCOME_BRANCH); } catch {}
 rec.outcome_id = outcome.present ? outcome.outcome_id : null;
 rec.outcome_slice = outcome.present ? outcome.slice_number : null;
-let riskTier = '';
-try { riskTier = (await Bun.file(env.GSTACK_STAMP_MANIFEST_FILE).json()).routing?.risk_tier || ''; } catch {}
+let riskTier = '', tierRule = null;
+try {
+  const routing = (await Bun.file(env.GSTACK_STAMP_MANIFEST_FILE).json()).routing;
+  riskTier = routing?.risk_tier || '';
+  tierRule = routing?.tier_rule;
+} catch {}
 rec.risk_tier = typeof riskTier === 'string' && /^[ABCD]$/.test(riskTier) ? riskTier : null;
+rec.tier_rule = typeof tierRule === 'string' && tierRule.length >= 1 && tierRule.length <= 200 ? tierRule : null;
 if (env.GSTACK_GATE_CONTEXT_OUT) {
   // Exclusive creation beside the already-exclusive private effort receipt.
   // This is internal context, never an extra field in a telemetry record.

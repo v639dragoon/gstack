@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { execSync, ExecSyncOptionsWithStringEncoding } from 'child_process';
+import { execSync, spawnSync, ExecSyncOptionsWithStringEncoding } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -283,5 +283,130 @@ describe('gstack-gate-log', () => {
 
     const reviewRead = execSync(`${BIN}/gstack-review-read`, { ...execOpts, timeout: 30_000 });
     expect(reviewRead).not.toContain('"record_type":"gate"');
+  });
+});
+
+
+describe('gate telemetry vocabulary and tier rule', () => {
+  function capture(record: Record<string, unknown>, env: Record<string, string> = {}) {
+    return spawnSync(path.join(BIN, 'gstack-gate-log'), [JSON.stringify({
+      record_type: 'gate', run_id: 'vocab-test', ...record,
+    })], {
+      cwd: repoDir,
+      env: { ...process.env, GSTACK_HOME: tmpDir, ...env },
+      encoding: 'utf8', timeout: 30_000,
+    });
+  }
+
+  test.each([
+    ['pass', 'clean'], ['clean=pass', 'clean'], ['fail', 'issues_found'],
+  ])('codex-structured normalizes %s to %s and preserves the original', (verdict, normalized) => {
+    const result = capture({ gate: 'codex-structured', verdict, findings: { p1: 2 } });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toBe('');
+    const rec = readNewestRecord();
+    expect(rec.verdict).toBe(normalized);
+    expect(rec.verdict_raw).toBe(verdict);
+    expect(rec.findings).toEqual({ p1: 2 });
+    expect(rec).not.toHaveProperty('vocab_warning');
+  });
+
+  test.each(['clean', 'issues_found', 'error', 'timeout'])('canonical verdict %s stays unchanged without raw or warning fields', (verdict) => {
+    expect(capture({ gate: 'codex-structured', verdict }).status).toBe(0);
+    const rec = readNewestRecord();
+    expect(rec.verdict).toBe(verdict);
+    expect(rec).not.toHaveProperty('verdict_raw');
+    expect(rec).not.toHaveProperty('vocab_warning');
+  });
+
+  test.each([
+    'codex-structured', 'codex-adversarial', 'adversarial-claude', 'red-team',
+    'coverage-audit', 'plan-completion', 'doc-release', 'specialist:security',
+    'upstream-specialist:security',
+  ])('%s warns on an unknown verdict but still appends one row', (gate) => {
+    const verdict = gate === 'codex-structured' ? 'unknown' : 'pass';
+    const result = capture({ gate, verdict });
+    expect(result.status).toBe(0);
+    expect(result.stderr.trim().split('\n')).toHaveLength(1);
+    expect(result.stderr).toContain('gstack-gate-log: vocabulary warning: verdict');
+    const rec = readNewestRecord();
+    expect(rec.verdict).toBe(verdict);
+    expect(rec).not.toHaveProperty('verdict_raw');
+    expect(rec.vocab_warning).toEqual(['verdict']);
+    expect(fs.readFileSync(gatesFiles()[0], 'utf8').trim().split('\n')).toHaveLength(1);
+  });
+
+  test('absent verdict and gates outside the vocabulary policy produce no warning', () => {
+    for (const record of [{ gate: 'red-team' }, { gate: 'other', verdict: 'pass' }]) {
+      const result = capture(record);
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe('');
+      expect(readNewestRecord()).not.toHaveProperty('vocab_warning');
+    }
+  });
+
+  test.each(['skipped-no-plan', 'not-run', 'not-run: no plan bound to this branch'])('plan-completion normalizes status %s', (status) => {
+    expect(capture({ gate: 'plan-completion', status }).status).toBe(0);
+    const rec = readNewestRecord();
+    expect(rec.status).toBe('not-run-no-plan');
+    expect(rec.status_raw).toBe(status);
+    expect(rec).not.toHaveProperty('vocab_warning');
+  });
+
+  test('canonical plan statuses and other gates keep status unchanged without status_raw', () => {
+    for (const record of [
+      ...['not-run-no-plan', 'completed', 'unavailable'].map(status => ({ gate: 'plan-completion', status })),
+      { gate: 'other', status: 'skipped-no-plan' },
+    ]) {
+      expect(capture(record).status).toBe(0);
+      const rec = readNewestRecord();
+      expect(rec.status).toBe(record.status);
+      expect(rec).not.toHaveProperty('status_raw');
+    }
+  });
+
+  test('reversed timestamps warn without refusing, and combine with a verdict warning', () => {
+    for (const verdict of ['clean', 'pass']) {
+      const result = capture({ gate: 'specialist:security', verdict,
+        started_at: '2026-11-14T12:00:01Z', ended_at: '2026-11-14T12:00:00Z' });
+      expect(result.status).toBe(0);
+      expect(readNewestRecord().vocab_warning).toEqual(verdict === 'clean' ? ['time_order'] : ['verdict', 'time_order']);
+    }
+  });
+
+  test('ordered, equal, missing and unparseable timestamps do not warn', () => {
+    for (const times of [
+      { started_at: '2026-11-14T12:00:00Z', ended_at: '2026-11-14T12:00:01Z' },
+      { started_at: '2026-11-14T12:00:00Z', ended_at: '2026-11-14T12:00:00Z' },
+      { started_at: '2026-11-14T12:00:00Z' },
+      { started_at: 'unavailable', ended_at: '2026-11-14T12:00:00Z' },
+    ]) {
+      expect(capture({ gate: 'red-team', verdict: 'clean', ...times }).status).toBe(0);
+      expect(readNewestRecord()).not.toHaveProperty('vocab_warning');
+    }
+  });
+
+  test('tier_rule is authoritative, bounded, and stamped alongside risk_tier', () => {
+    const manifestDir = path.join(tmpDir, 'projects', 'vocab-test', 'manifests');
+    fs.mkdirSync(manifestDir, { recursive: true });
+    for (const tierRule of ['scope:backend', 'x', 'x'.repeat(200), '', 'x'.repeat(201), 42, null]) {
+      fs.writeFileSync(path.join(manifestDir, 'abc123.json'), JSON.stringify({ routing: { risk_tier: 'C', tier_rule: tierRule } }));
+      expect(capture({ gate: 'red-team', manifest_wtree: 'abc123', tier_rule: 'forged' },
+        { GSTACK_PROJECT_SLUG: 'vocab-test' }).status).toBe(0);
+      const rec = readNewestRecord();
+      expect(rec.risk_tier).toBe('C');
+      expect(rec.tier_rule).toBe(typeof tierRule === 'string' && tierRule.length >= 1 && tierRule.length <= 200 ? tierRule : null);
+    }
+  });
+
+  test('missing manifest or missing tier rule stamps null and drops caller tier_rule', () => {
+    const manifestDir = path.join(tmpDir, 'projects', 'vocab-test', 'manifests');
+    fs.mkdirSync(manifestDir, { recursive: true });
+    fs.writeFileSync(path.join(manifestDir, 'abc123.json'), JSON.stringify({ routing: { risk_tier: 'D' } }));
+    for (const manifest of [{}, { manifest_wtree: 'missing' }, { manifest_wtree: 'abc123' }]) {
+      expect(capture({ gate: 'red-team', tier_rule: 'forged', ...manifest },
+        { GSTACK_PROJECT_SLUG: 'vocab-test' }).status).toBe(0);
+      expect(readNewestRecord().tier_rule).toBeNull();
+    }
   });
 });
