@@ -1,0 +1,4 @@
+{
+  "bytes": 6,
+  "why": "codex-structured row template names the verdict vocabulary (clean|issues_found|timeout|error), from the dev-improvements lane, folded into the v1.99.5 rebase"
+}
