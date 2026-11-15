@@ -97,7 +97,9 @@ describe('Capy pass program (fake host, real bins)', () => {
   // R95 (2026-11-13): a cyber_policy refusal of the outside voice is retried once on GPT-6 Astra with the read-only brief, then on Gemini 4 Carbon with the original brief; when every attempt fails the second-family read is missing, disclosed, and Step 11 goes on.
   const CYBER = fs.readFileSync(path.join(ROOT, 'test/fixtures/cyber-policy/capy-latest-error.txt'), 'utf8').trim();
   const voiceReply = (t: string) => (t.includes('outside-voice') ? 'Recommendation: ship as-is because no finding survived' : cleanReply(t));
-  async function refusedVoices(pass: string, error: (title: string) => string | undefined, lane: Record<string, unknown> = {}) {
+  // The fork defaults to Astra. Start these fixtures on Sol to exercise the same R95 sequence.
+  const SOL_LANE = { models: { 'outside-voice': { model_id: 'openai/gpt-6.1-sol', reasoning_mode: 'medium' } } };
+  async function refusedVoices(pass: string, error: (title: string) => string | undefined, lane: Record<string, unknown> = SOL_LANE) {
     const { dir, env } = repo();
     const out = path.join(dir, '.state/run/p1');
     const h = host(dir, env, { error, output: voiceReply, epoch: Date.now() });
@@ -206,7 +208,7 @@ describe('Capy pass program (fake host, real bins)', () => {
     const { dir, env } = repo();
     const out = path.join(dir, '.state/run/p1');
     const h = host(dir, env, { error: t => (t.endsWith(' outside-voice') ? CYBER : undefined), keepSummary: true, output: t => (t.endsWith('outside-voice') ? '1. **A guard fails open** - `src/a.ts:1` accepts any input. Severity: Medium. Blocks: no.\n\nRecommendation: fix the guard because it fails open' : cleanReply(t)), epoch: Date.now() });
-    const base = { base: 'main', out, pass: 'x44p1', planFlags: ['--depth-floor', 'full'] };
+    const base = { base: 'main', out, pass: 'x44p1', planFlags: ['--depth-floor', 'full'], ...SOL_LANE };
     expect(await runPass(h, base)).toContain('NEXT: judge (Phase 4)');
     let res = '', all = '';
     for (let i = 0; i < 6; i++) {

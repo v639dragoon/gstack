@@ -37,7 +37,7 @@ describe('the REVIEW_VERDICT line', () => {
     expect(w.split('\n\n')[0]).toContain(VERDICT_ASK);
     expect(w.endsWith('gstack checks that count against your findings, so do not repeat it.')).toBe(true);
     expect(withWorkspace('BODY', '/work/repo')).not.toContain('REVIEW_VERDICT');
-    expect(BRIEF_ROLES.length).toBe(7);
+    expect(BRIEF_ROLES.length).toBe(8); // dohma fork: + codex-structured, the structured Codex reader (a blocking role, so it takes the verdict ask)
   });
 });
 
