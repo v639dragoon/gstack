@@ -70,7 +70,8 @@ test('named QA risks need explicit acceptance through AskUserQuestion', () => {
 test('coverage generation has one bounded allowance and an audit-only child prompt', () => {
   const allowance = compact(between(coverageTemplate, /^/, '````text'));
   expectTokens(allowance, ['2 generation passes', '30-path/5-tests-per-pass/2-minute'], 'coverage allowance');
-  const prompt = coverageTemplate.split('````text\n')[1]?.split('\n````')[0] ?? '';
+  const dispatch = coverageTemplate.split('````text\n')[1]?.split('\n````')[0] ?? '';
+  const prompt = dispatch + '\n' + readTemplate('ship/sections/test-coverage-audit.md.tmpl');
   expectTokens(prompt, ['Generation: <allowed|audit-only>; passes used: <N> of 2.', '"coverage_pct":N,"gaps":N', '"tests_added":["path",...]'], 'coverage child prompt');
   expectOrdered(prompt, [/audit-only/, '{{TEST_COVERAGE_AUDIT_SHIP}}'], 'coverage child prompt');
   expectMentions(prompt, [['not', 'commit'], ['not', 'push']], 'coverage child prompt');
@@ -241,5 +242,17 @@ test('Step 9.4 applies the cap before any edit, names its scratch files under .g
     expectTokens(army, ['--review-fanout auto|serial|parallel', /Fan-out: N specialists in\s+M batches of K/], `${host.name} ship review army fan-out`);
     const review = generateReviewArmy({ host: host.name, skillName: 'review', tmplPath: '', paths: HOST_PATHS[host.name] });
     expectAbsent(review, ['RANGE_BASE', '--review-fanout'], `${host.name} /review army`);
+  }
+});
+
+// Value: protects=the ship lead dispatches audits without loading worker methodology; fails_when=a dispatch loses its installed audit path or worker headings leak back into the lead; why_new=the audit payloads now live in separate sections; seam=none; no_claim=agent execution of the dispatch
+test('coverage and plan audit dispatches name worker files and keep methodology in the worker', () => {
+  for (const [name, heading] of [['test-coverage', '### Test Framework Detection'], ['plan-completion', '### Actionable Item Extraction']]) {
+    const lead = readTemplate(`ship/sections/${name}.md`);
+    const dispatch = between(lead, '````text', '````\n\n**Parent processing:**');
+    expect(dispatch).toContain(`~/.claude/skills/gstack/ship/sections/${name}-audit.md`);
+    expect(dispatch).toContain('in full and execute it');
+    expect(lead).not.toContain(heading);
+    expect(readTemplate(`ship/sections/${name}-audit.md`)).toContain(heading);
   }
 });

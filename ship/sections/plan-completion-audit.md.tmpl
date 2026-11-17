@@ -1,0 +1,7 @@
+# Read by the Step 8 audit subagent, not by the ship lead.
+
+{{PLAN_COMPLETION_AUDIT_SHIP}}
+
+After your analysis, output a single JSON object with exactly these seven fields on the LAST LINE of your response (no other text after it):
+{"total_items":N,"done":N,"changed":N,"partial":N,"not_done":N,"unverifiable":N,"summary":"<markdown checklist for PR body>"}
+Counts map one-to-one to the classifications above and sum to total_items. No plan or no actionable items means all counts are zero with the skip reason in summary. Do not classify work as deferred; only the parent can record a user-approved deferral.

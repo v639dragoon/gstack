@@ -19,7 +19,7 @@ describe('authored ship-only plan verification handoff', () => {
     expect(extraction).toMatch(/outside implementation counts/i);
     expect(extraction).toMatch(/never DONE from static inspection/);
     expectMentions(extraction, [['do not', 'checks', 'waive']], 'extraction');
-    expect(fs.readFileSync(path.join(SHIP_DIR, 'sections/plan-completion.md.tmpl'), 'utf8')).toContain('exactly these seven fields');
+    expect(fs.readFileSync(path.join(SHIP_DIR, 'sections/plan-completion-audit.md.tmpl'), 'utf8')).toContain('exactly these seven fields');
     const gate = generatePlanCompletionGateShip(ctx);
     expect(gate).toContain('Any NOT DONE items');
     expect(gate).toMatch(/per-item confirmation/i);
@@ -60,7 +60,7 @@ describe('authored ship-only plan verification handoff', () => {
     expectMentions(parent, [['stop', 'confirm', 'stopped']], 'parent');
     expect(parent).toMatch(/never race a late result/i);
     expectMentions(parent, [['stop', 'recommended/default', 'audit']], 'parent');
-    const contract = audit.split('\n').find(line => line.startsWith('{"total_items":N,'))!;
+    const contract = fs.readFileSync(path.join(SHIP_DIR, 'sections/plan-completion-audit.md.tmpl'), 'utf8').split('\n').find(line => line.startsWith('{"total_items":N,'))!;
     expect(Object.keys(JSON.parse(contract.replace(/:N([,}])/g, ':0$1'))).sort())
       .toEqual(['total_items', 'done', 'changed', 'partial', 'not_done', 'unverifiable', 'summary'].sort());
     expect(generatePlanCompletionGateShip(ctx)).toContain('Only PARTIAL items (no NOT DONE, no UNVERIFIABLE)');
@@ -119,7 +119,7 @@ describe('ship/SKILL.md — Plan Completion gate invariants', () => {
   });
 
   test('successful plan audits use the declared seven-field contract without an error field', () => {
-    const audit = fs.readFileSync(path.join(SHIP_DIR, 'sections/plan-completion.md'), 'utf8');
+    const audit = fs.readFileSync(path.join(SHIP_DIR, 'sections/plan-completion-audit.md'), 'utf8');
     const line = audit.split('\n').find(line => line.startsWith('{"total_items":N,'));
     expect(line).toBeDefined();
     const contract = JSON.parse(line!.replace(/:N([,}])/g, ':0$1'));
@@ -347,7 +347,7 @@ describe('F1: plan binding, docs/designs candidates, exact not-run line', () => 
   test('ship binds the plan in the parent before dispatch; the child never searches', () => {
     const md = fs.readFileSync(sections.ship, 'utf8');
     expect(md.indexOf('### Plan File Discovery')).toBeLessThan(md.indexOf('````text'));
-    const child = md.slice(md.indexOf('````text'), md.lastIndexOf('````'));
+    const child = fs.readFileSync(path.join(SHIP_DIR, 'sections/plan-completion-audit.md'), 'utf8');
     expect(child).not.toContain('### Plan File Discovery');
     expectMentions(child, [['do not', 'another', 'search']], 'child');
     expect(md).toMatch(/not-run line, skip dispatch/);
@@ -378,8 +378,8 @@ describe('ACCEPTANCE_EDITED: parent-computed acceptance-text drift', () => {
     const parent = between(rendered, '**Parent processing:**', '**Audit-failure fallback:**');
     expectOrdered(parent, ['1. Check the task', `\`${ACCEPTANCE_EDITED}\` beside the child's classes`, 'Apply Gate Logic below', '### Acceptance edits (parent-computed)'], 'parent processing');
     expect(rendered.indexOf('### Acceptance edits (parent-computed)')).toBeLessThan(rendered.indexOf('### Gate Logic'));
-    expectAbsent(between(rendered, '````text', '````\n\n**Parent processing:**'), [ACCEPTANCE_EDITED], 'child prompt');
-    const contract = rendered.split('\n').find(line => line.startsWith('{"total_items":N,'))!;
+    expectAbsent(fs.readFileSync(path.join(SHIP_DIR, 'sections', 'plan-completion-audit.md'), 'utf8'), [ACCEPTANCE_EDITED], 'child prompt');
+    const contract = fs.readFileSync(path.join(SHIP_DIR, 'sections', 'plan-completion-audit.md'), 'utf8').split('\n').find(line => line.startsWith('{"total_items":N,'))!;
     expect(Object.keys(JSON.parse(contract.replace(/:N([,}])/g, ':0$1')))).toHaveLength(7);
   });
 

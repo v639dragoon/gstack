@@ -28,13 +28,13 @@ or complete text, including user-approved scope changes. When discovery printed 
 not-run line, skip dispatch. The child does not inherit the parent's conversation.
 
 ````text
+Read `~/.claude/skills/gstack/ship/sections/plan-completion-audit.md` in full and execute it with these per-run inputs:
+
+Base branch: `<base>`. Wherever that file says `<base>`, use this value.
+
+Bound plan absolute path or complete text: <plan>. User-approved scope changes: <scope changes>.
+
 You are running a ship-workflow plan completion audit. The base branch is `<base>`. Use `git diff origin/<base>` and inspect untracked files from `git status` to see the full proposed change. Do not commit or push. Report only: classify every item, but do not execute Gate Logic, ask the user, or advance the workflow. The parent applies those gates to your report.
-
-{{PLAN_COMPLETION_AUDIT_SHIP}}
-
-After your analysis, output a single JSON object with exactly these seven fields on the LAST LINE of your response (no other text after it):
-{"total_items":N,"done":N,"changed":N,"partial":N,"not_done":N,"unverifiable":N,"summary":"<markdown checklist for PR body>"}
-Counts map one-to-one to the classifications above and sum to total_items. No plan or no actionable items means all counts are zero with the skip reason in summary. Do not classify work as deferred; only the parent can record a user-approved deferral.
 ````
 
 **Parent processing:**

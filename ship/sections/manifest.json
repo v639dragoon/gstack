@@ -41,10 +41,24 @@
       "trigger": "auditing test coverage of the diff (Step 7)"
     },
     {
+      "id": "test-coverage-audit",
+      "file": "test-coverage-audit.md",
+      "title": "Step 7 audit subagent instructions",
+      "trigger": "read only by the Step 7 audit subagent",
+      "runner_only": true
+    },
+    {
       "id": "plan-completion",
       "file": "plan-completion.md",
       "title": "Plan completion + verification audit (subagent)",
       "trigger": "auditing plan completion, verification, and scope drift (Step 8)"
+    },
+    {
+      "id": "plan-completion-audit",
+      "file": "plan-completion-audit.md",
+      "title": "Step 8 audit subagent instructions",
+      "trigger": "read only by the Step 8 audit subagent",
+      "runner_only": true
     },
     {
       "id": "review-army",

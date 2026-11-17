@@ -135,7 +135,7 @@ describe('selectTests', () => {
     const consumers = [
       ['plan-eng-review/sections/review-sections.md', 'TEST_COVERAGE_AUDIT_PLAN'],
       ['ship/sections/tests.md', 'TEST_BOOTSTRAP'],
-      ['ship/sections/test-coverage.md', 'TEST_COVERAGE_AUDIT_SHIP'],
+      ['ship/sections/test-coverage-audit.md', 'TEST_COVERAGE_AUDIT_SHIP'],
       ['design-review/sections/test-bootstrap.md', 'TEST_BOOTSTRAP'],
     ];
     for (const [output, token] of consumers) {
