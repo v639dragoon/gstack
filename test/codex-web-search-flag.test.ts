@@ -138,7 +138,7 @@ describe('codex frontier model flag is present', () => {
       }
     }
     for (const file of ['review/sections/governor.md', 'ship/sections/governor.md']) {
-      const rendered = fs.readFileSync(path.join(ROOT, file), 'utf8').split('### Governor codex-structured slot')[1]!;
+      const rendered = (fs.readFileSync(path.join(ROOT, file), 'utf8') + (file.startsWith('ship/') ? '\n' + fs.readFileSync(path.join(ROOT, 'ship/sections/governor-structured-slot.md'), 'utf8') : '')).split('### Governor codex-structured slot')[1]!;
       const calls = rendered.split('\n').filter(line => line.includes('codex exec -') && line.includes('2>'));
       expect(calls).toHaveLength(1);
       // D4: the routed request is now bound by role-ready, so its flags carry

@@ -213,7 +213,7 @@ describe('test-failure issues through the real generated triage text', () => {
   const postBlock = fence(text, 'case "<platform>" in');
 
   test('the generated ship section carries the same text, with no literal \\n or nested triple backticks', () => {
-    const section = fs.readFileSync(path.join(ROOT, 'ship/sections/tests.md'), 'utf8');
+    const section = fs.readFileSync(path.join(ROOT, 'ship/sections/test-failure-triage.md'), 'utf8');
     expect(section).toContain(postBlock);
     expect(text).not.toContain('\\n\\n**Error:**');
     expect(postBlock).not.toContain('```');

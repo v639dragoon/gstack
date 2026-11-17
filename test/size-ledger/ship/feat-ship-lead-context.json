@@ -1,4 +1,4 @@
 {
-  "bytes": 1122,
-  "why": "dohma ship lead context (2026-11-17): move Step 7/8 audit bodies to worker-only sections; add dispatch inputs, the base-branch input line and headers without changing audit instructions"
+  "bytes": 3454,
+  "why": "dohma ship lead context (2026-11-17): Step 7/8 audit bodies to worker-only sections; conditional test bootstrap, failure triage, eval run and governor structured slot to trigger-read sections; no instruction text changed"
 }

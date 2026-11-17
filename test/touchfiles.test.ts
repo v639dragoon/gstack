@@ -134,7 +134,7 @@ describe('selectTests', () => {
   test('testing resolver source selects the same E2E consumers as its generated content', () => {
     const consumers = [
       ['plan-eng-review/sections/review-sections.md', 'TEST_COVERAGE_AUDIT_PLAN'],
-      ['ship/sections/tests.md', 'TEST_BOOTSTRAP'],
+      ['ship/sections/tests.md', 'SHIP_BOOTSTRAP_LEAD'],
       ['ship/sections/test-coverage-audit.md', 'TEST_COVERAGE_AUDIT_SHIP'],
       ['design-review/sections/test-bootstrap.md', 'TEST_BOOTSTRAP'],
     ];

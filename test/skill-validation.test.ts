@@ -2062,7 +2062,7 @@ describe('Bug reports: the router has no bug-fix route, other surfaces keep thei
   });
 
   test('/ship fixes a pre-existing failure through the same bounded triage', () => {
-    const tests = fs.readFileSync(path.join(ROOT, 'ship', 'sections', 'tests.md'), 'utf-8');
+    const tests = fs.readFileSync(path.join(ROOT, 'ship', 'sections', 'test-failure-triage.md'), 'utf-8');
     const fixNow = tests.slice(tests.indexOf('**If "Investigate and fix now":**'), tests.indexOf('**If "Add as P0 TODO":**'));
     expect(fixNow).toContain('- One read-only root-cause pass. If the cause is still unclear, reproduce it with a focused failing test and trace it to the root cause before the fix.');
     expect(fixNow).not.toContain('/investigate');

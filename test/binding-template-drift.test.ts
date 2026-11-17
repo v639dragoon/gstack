@@ -37,7 +37,7 @@ describe('content-binding template drift', () => {
     expect(native).toBeGreaterThan(-1);
     expect(rails).toBeGreaterThan(native);
     expect(text).not.toContain('**If no matches:**');
-    expect(text).toContain('If any eval fails');
+    expect(rendered('ship/sections/eval-suites-run.md')).toContain('If any eval fails');
   });
 
   test('ship historical readiness does not replace the current pre-landing gate', () => {

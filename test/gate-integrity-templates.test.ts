@@ -79,7 +79,7 @@ test('/ship gate findings take the four gate options in order and persist the re
 
 test('/ship passes a lane on its runner summary with three never-merged tests_ran states', () => {
   const step5 = between(read('ship/sections/tests.md.tmpl'), '## Step 5: Run tests', '## Step 6:');
-  expectOrdered(step5, ['`tests_ran: N`', '`tests_ran: 0`', 'ZERO-RUN', '`tests_ran: unknown`', '`count unavailable`', '{{TEST_FAILURE_TRIAGE}}'], 'Step 5 count states');
+  expectOrdered(step5, ['`tests_ran: N`', '`tests_ran: 0`', 'ZERO-RUN', '`tests_ran: unknown`', '`count unavailable`', '{{SECTION:test-failure-triage}}'], 'Step 5 count states');
   expectMentions(compact(step5), [['runner summary', 'not', 'exit 0 alone'], ['zero-run', 'failed lane'], ['never', 'merge']], 'Step 5 count states');
   const stage4 = compact(between(read('ship/SKILL.md.tmpl'), '### 4. Verify the frozen candidate', '### 5. Report, then push'));
   expect(stage4).toMatch(/\| ZERO-RUN[^|]*\|[^|]*STALE-equivalent[^|]*never FRESH/);

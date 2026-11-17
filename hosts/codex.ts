@@ -60,6 +60,11 @@ const codex = defineHost({
   toolRewrites: {
     '**Foreground required:** pass `run_in_background: false` when available on the Agent call — subagents run in the background by default since Claude Code v2.1.198, so omitting an available flag gives a background run. A launch receipt means it went background: await its completion notice. Dispatch through the Agent tool only:': `**Wait for the result:** start the subagent with ${CODEX_SUBAGENT_DISPATCH}. Dispatch through \`spawn_agent\` only:`,
     'use the Agent tool with `run_in_background: false`.\nOmitting the flag runs the subagent in the background. The explicit flag waits\nfor a result while keeping a fresh context.': `start each subagent with ${CODEX_SUBAGENT_DISPATCH}.`,
+    'Agent with `subagent_type: "general-purpose"`, `model: "sonnet"` and\n`run_in_background: false`': "Codex's `spawn_agent`, then `wait_agent`",
+    'using Agent, `subagent_type: "general-purpose"`, `model: "sonnet"`\nand `run_in_background: false`': "using Codex's `spawn_agent`, then `wait_agent`",
+    'one read-only Agent (`subagent_type: "general-purpose"`, `model: "sonnet"`,\n   `run_in_background: false`)': "one read-only subagent (Codex's `spawn_agent`, then `wait_agent`)",
+    'with the Agent tool (never Skill),\n`subagent_type: "general-purpose"`, `model: "sonnet"`, `run_in_background: false`.': "with Codex's `spawn_agent` (never Skill).",
+    '`subagent_type: "general-purpose"`, `model: "sonnet"`, and\n`run_in_background: false`': '`spawn_agent` (`fork_turns: "none"`), then `wait_agent`',
     'Agent with `subagent_type: "general-purpose"` and\n`run_in_background: false`': "Codex's `spawn_agent`, then `wait_agent`",
     'using Agent, `subagent_type: "general-purpose"`\nand `run_in_background: false`': "using Codex's `spawn_agent`, then `wait_agent`",
     'one read-only Agent (`subagent_type: "general-purpose"`,\n   `run_in_background: false`)': "one read-only subagent (Codex's `spawn_agent`, then `wait_agent`)",

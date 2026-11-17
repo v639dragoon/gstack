@@ -119,6 +119,30 @@
       "file": "budget-handoff.md",
       "title": "Token budget and fresh-context handoff",
       "trigger": "a token cap is set or verdict=delegate printed (Step 1 on)"
+    },
+    {
+      "id": "test-bootstrap-body",
+      "file": "test-bootstrap-body.md",
+      "title": "Framework bootstrap B2-B8",
+      "trigger": "bootstrapping a test framework (B2-B8), only when the Step 4 detection requires it"
+    },
+    {
+      "id": "test-failure-triage",
+      "file": "test-failure-triage.md",
+      "title": "Test failure ownership triage",
+      "trigger": "triaging test failures, only when a Step 5 test run has failures"
+    },
+    {
+      "id": "eval-suites-run",
+      "file": "eval-suites-run.md",
+      "title": "Run selected eval suites",
+      "trigger": "running eval suites, only when the Step 6 selection requires evals"
+    },
+    {
+      "id": "governor-structured-slot",
+      "file": "governor-structured-slot.md",
+      "title": "Governor structured slot execution",
+      "trigger": "running the codex-structured slot, only when it is planned, not in REUSED and not satisfied by a NON_CODE_DELTA carry-forward"
     }
   ]
 }

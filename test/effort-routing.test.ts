@@ -48,7 +48,7 @@ describe('effort routing (Phase 0)', () => {
   const ADVERSARIAL_SITES = ['ship/sections/governor.md', 'review/sections/governor.md', '.factory/skills/gstack-ship/sections/governor.md'];
   for (const site of ADVERSARIAL_SITES) {
     test(`${site}: upstream passes coexist with the plan-routed slot`, () => {
-      const content = read(site);
+      const content = read(site) + (site.includes('gstack-ship/') || site.startsWith('ship/') ? '\n' + read(site.replace('governor.md', 'governor-structured-slot.md')) : '');
       const upstream = read(site.replace('sections/governor.md', 'sections/adversarial.md'));
       expect(upstream).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
       expect(upstream).toContain('adversarial challenge');
@@ -60,7 +60,7 @@ describe('effort routing (Phase 0)', () => {
     });
 
     test(`${site}: the adversarial-review row records its effort`, () => {
-      const content = read(site);
+      const content = read(site) + (site.includes('gstack-ship/') || site.startsWith('ship/') ? '\n' + read(site.replace('governor.md', 'governor-structured-slot.md')) : '');
       expect(content).toContain('"skill":"adversarial-review"');
       const row = content.split('\n').find(l => l.includes('gstack-review-log') && l.includes('{EFFECTIVE_EFFORT}'))!;
       expect(row).toBeDefined();
@@ -76,7 +76,7 @@ describe('effort routing (Phase 0)', () => {
   ];
   for (const site of PLAN_VOICE_SITES) {
     test(`${site}: the plan outside voice uses upstream role binding and records its effective effort`, () => {
-      const content = read(site);
+      const content = read(site) + (site.includes('gstack-ship/') || site.startsWith('ship/') ? '\n' + read(site.replace('governor.md', 'governor-structured-slot.md')) : '');
       // D4 v1.91.92: upstream's high default and one role selection replace
       // the fork's second resolve/select. Explicit policy routing rides that
       // same selection and supplies only the gate default; env/config win.

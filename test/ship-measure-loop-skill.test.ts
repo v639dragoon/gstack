@@ -18,7 +18,7 @@ describe('the generated ship skill runs the loop (A6 acceptance)', () => {
 
   test('a red eval no longer stops /ship: Step 6 reads the loop instead of rerunning the gate', () => {
     expect(tests).not.toContain('Show failures and available costs, then **STOP**.');
-    const step6 = tests.slice(tests.indexOf('## Step 6: Eval Suites'));
+    const step6 = fs.readFileSync(path.join(ROOT, 'ship/sections/eval-suites-run.md'), 'utf8');
     expect(step6).toMatch(/If any eval fails:\*\* Do not rerun the full gate\./);
     expect(step6).toContain('Read `~/.claude/skills/gstack/ship/sections/measure.md`');
     expect(step6).toContain('classify, measure alone, fix at the cause, re-measure,\n  then gate once');

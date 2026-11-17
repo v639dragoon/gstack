@@ -12,6 +12,7 @@
 
 import { describe, test, expect } from 'bun:test';
 import * as path from 'path';
+import * as fs from 'fs';
 import { CARVE_GUARDS } from './helpers/carve-guards';
 import { checkOrdering } from './helpers/carve-guard-checks';
 
@@ -23,5 +24,24 @@ describe('carve static ordering (gate, free)', () => {
       const failures = checkOrdering(ROOT, guard);
       expect({ skill: guard.skill, failures }).toEqual({ skill: guard.skill, failures: [] });
     });
+  }
+});
+
+
+test('ship conditional blocks retain lead triggers and read pointers while moving execution bodies', () => {
+  const read = (file: string) => fs.readFileSync(path.join(ROOT, 'ship/sections', file), 'utf8');
+  const cases = [
+    ['tests.md', '**If an ecosystem matched but there is no existing-test evidence at all — bootstrap:**', 'test-bootstrap-body.md', '### B2. Research best practices'],
+    ['tests.md', '**If any test fails:** Do NOT immediately stop.', 'test-failure-triage.md', '### Step T1: Classify each failure'],
+    ['tests.md', 'Evals are mandatory when prompt-related files change. Select from the full diff,\nincluding uncommitted changes, before deciding whether to skip.', 'eval-suites-run.md', '**2. Run the selected command and preserve its exit status.**'],
+    ['governor.md', 'Run this additional slot only when codex-structured is planned and not in REUSED.', 'governor-structured-slot.md', 'In /ship, use the GOVERNOR_STRUCTURED handoff'],
+  ];
+  for (const [lead, trigger, file, inner] of cases) {
+    const text = read(lead!);
+    expect(text, lead).toContain(trigger!);
+    expect(text, lead).toContain(file!);
+    expect(text, lead).toContain('in full. Do not work from memory');
+    expect(text, lead).not.toContain(inner!);
+    expect(read(file!), file).toContain(inner!);
   }
 });

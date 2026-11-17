@@ -276,6 +276,10 @@ sections. Read a section in full before doing its step; do not work from memory.
 | Step 19 printed CAPY_PR: on (a Capy session, GSTACK_CAPY=1) — read before composing the PR body | `sections/capy-pr.md` |
 | handing the branch to a coordinator instead of opening a PR (--no-pr or an automation lane; Step 18) | `sections/handoff.md` |
 | a token cap is set or verdict=delegate printed (Step 1 on) | `sections/budget-handoff.md` |
+| bootstrapping a test framework (B2-B8), only when the Step 4 detection requires it | `sections/test-bootstrap-body.md` |
+| triaging test failures, only when a Step 5 test run has failures | `sections/test-failure-triage.md` |
+| running eval suites, only when the Step 6 selection requires evals | `sections/eval-suites-run.md` |
+| running the codex-structured slot, only when it is planned, not in REUSED and not satisfied by a NON_CODE_DELTA carry-forward | `sections/governor-structured-slot.md` |
 
 > **STOP.** Before before review planning; apply at matching upstream headings, Read `~/.claude/skills/gstack/ship/sections/governor.md` and execute it
 > in full. Do not work from memory — that section is the source of truth for this step.

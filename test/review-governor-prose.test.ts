@@ -62,7 +62,7 @@ describe('review governor rendered prose', () => {
 
   test('codex-structured always uses one strict packet exec before telemetry', () => {
     for (const root of ['ship', 'review']) {
-      const rendered = read(`${root}/sections/governor.md`);
+      const rendered = read(`${root}/sections/governor.md`) + (root === 'ship' ? '\n' + read('ship/sections/governor-structured-slot.md') : '');
       const start = rendered.indexOf('### Governor codex-structured slot');
       expect(start).toBeGreaterThan(-1);
       const telemetry = rendered.indexOf('Persist both logs.', start);
@@ -103,7 +103,7 @@ describe('review governor rendered prose', () => {
   });
 
   test('deterministic gates remain present', () => {
-    const ship = read('ship/SKILL.md') + read('ship/sections/tests.md') + read('ship/sections/pr-body.md');
+    const ship = read('ship/SKILL.md') + read('ship/sections/tests.md') + read('ship/sections/test-failure-triage.md') + read('ship/sections/pr-body.md');
     expect(ship).toMatch(/tests fail[\s\S]{0,120}STOP|STOP[\s\S]{0,120}tests fail/i);
     expect(ship).toContain('gitleaks');
     expect(ship).toContain('gstack-post pr-create'); // D4: upstream moved scan-at-sink into the consent-aware posting binary.

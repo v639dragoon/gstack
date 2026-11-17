@@ -541,7 +541,7 @@ describe('rendered routed step carries the model', () => {
   const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
   for (const site of SITES) {
     test(`${site}: resolves the model once, pins it on packet exec, records it, never re-runs on another model`, () => {
-      const union = read(site);
+      const union = read(site) + (site.includes('gstack-ship/') || site.startsWith('ship/') ? '\n' + read(site.replace('governor.md', 'governor-structured-slot.md')) : '');
       const parent = site.endsWith('/governor-structured.md') ? read(site.replace('governor-structured.md', 'SKILL.md')) : read(site.replace('sections/governor.md', 'sections/adversarial.md'));
       expect(parent).toContain(site.includes('ship') ? 'DISPATCH: adversarial-native' : 'adversarial subagent (always runs)');
       if (site.endsWith('/governor-structured.md')) {

@@ -50,7 +50,7 @@ describe('section TemplateContext parity (skillName pinned to parent)', () => {
   });
 
   test('tests section rendered TEST_BOOTSTRAP + TEST_FAILURE_TRIAGE', () => {
-    const content = readSection('tests.md');
+    const content = readSection('test-failure-triage.md');
     expect(content).toContain('Test Failure Ownership Triage');
   });
 

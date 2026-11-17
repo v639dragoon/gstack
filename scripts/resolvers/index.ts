@@ -19,6 +19,8 @@ import { getHostConfig } from '../../hosts/index';
 import { MODEL_FAMILIES } from '../../lib/model-families';
 import { outsideVoiceFor, outsideVoiceGuard, outsideVoiceInvocation, outsideVoicePreflight, outsideVoiceProvenance, generateOutsideVoiceRouting } from './outside-voice';
 
+import { shipBootstrapLead, shipBootstrapBody, shipGovernorLead, shipGovernorStructuredBody } from './ship-conditional';
+
 // Domain modules
 import { generateSkillPreamble } from './preamble-hoist';
 import { generateTestFailureTriage } from './preamble';
@@ -133,6 +135,10 @@ export const RESOLVERS: Record<string, ResolverFn> = {
   PLAN_REVIEW_APPROVAL_CHECK: generatePlanReviewApprovalCheck,
   ANTI_SHORTCUT_CLAUSE: generateAntiShortcutClause,
   TEST_BOOTSTRAP: generateTestBootstrap,
+  SHIP_BOOTSTRAP_LEAD: shipBootstrapLead,
+  SHIP_BOOTSTRAP_BODY: shipBootstrapBody,
+  SHIP_GOVERNOR_LEAD: shipGovernorLead,
+  SHIP_GOVERNOR_STRUCTURED_BODY: shipGovernorStructuredBody,
   TEST_COVERAGE_AUDIT_PLAN: generateTestCoverageAuditPlan,
   TEST_COVERAGE_AUDIT_SHIP: generateTestCoverageAuditShip,
   TEST_COVERAGE_GATE_SHIP: generateTestCoverageGateShip,

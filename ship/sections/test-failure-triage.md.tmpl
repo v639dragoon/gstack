@@ -1,0 +1,22 @@
+{{TEST_FAILURE_TRIAGE}}
+
+**Red base (before T3).** When T1 calls every failure likely pre-existing,
+prove it before asking: write `.gstack/tmp/base-red.json` with your file-write tool
+(`{"lane":"<label>","total":<failures the lane reported>,"failures":[{"id":"<test
+name>","file":"<test file>","signature":"<first error line>"}]}`), then run
+
+```bash
+~/.claude/skills/gstack/bin/gstack-base-red classify --failures .gstack/tmp/base-red.json --base <base> --pause
+```
+
+It reads `base_red` from the base branch's ship policy and reruns those files at
+the base head and at HEAD in scratch worktrees. Exit 0 with `BASE_RED_VERDICT:
+base-red` and `PAUSE: <file>`: skip T3, record the pause file and its cases in
+the invocation record, and continue to Step 6; Step 16 treats exactly these cases
+as this run's waived failures (any other failure is new), and the receipt write
+adds `--base-red <pause file>`, so Step 22 ends `SHIP_PAUSED` with
+`status=incomplete` instead of READY. Exit 1 (`IN_BRANCH:` lines,
+`BASE_RED_UNCONFIGURED`, `BASE_RED_UNNAMED`, `BASE_RED_REPRO_ERROR`): continue T3
+as written.
+
+**After triage:** If any in-branch failures remain unfixed, **STOP**. Do not proceed. If all failures were pre-existing and handled (fixed, TODOed, assigned, skipped, or base-red and paused), continue to Step 6.

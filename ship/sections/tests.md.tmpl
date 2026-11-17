@@ -1,6 +1,6 @@
 ## Step 4: Test Framework Bootstrap
 
-{{TEST_BOOTSTRAP}}
+{{SHIP_BOOTSTRAP_LEAD}}
 
 ---
 
@@ -79,26 +79,7 @@ first Read `~/.claude/skills/gstack/ship/sections/measure.md` and rerun that
 shard's file list as it says (diagnostic, not a verdict). Then apply the Test
 Failure Ownership Triage:
 
-{{TEST_FAILURE_TRIAGE}}
-
-**Red base (before T3).** When T1 calls every failure likely pre-existing,
-prove it before asking: write `.gstack/tmp/base-red.json` with your file-write tool
-(`{"lane":"<label>","total":<failures the lane reported>,"failures":[{"id":"<test
-name>","file":"<test file>","signature":"<first error line>"}]}`), then run
-
-```bash
-~/.claude/skills/gstack/bin/gstack-base-red classify --failures .gstack/tmp/base-red.json --base <base> --pause
-```
-
-It reads `base_red` from the base branch's ship policy and reruns those files at
-the base head and at HEAD in scratch worktrees. Exit 0 with `BASE_RED_VERDICT:
-base-red` and `PAUSE: <file>`: skip T3, record the pause file and its cases in
-the invocation record, and continue to Step 6; Step 16 treats exactly these cases
-as this run's waived failures (any other failure is new), and the receipt write
-adds `--base-red <pause file>`, so Step 22 ends `SHIP_PAUSED` with
-`status=incomplete` instead of READY. Exit 1 (`IN_BRANCH:` lines,
-`BASE_RED_UNCONFIGURED`, `BASE_RED_UNNAMED`, `BASE_RED_REPRO_ERROR`): continue T3
-as written.
+{{SECTION:test-failure-triage}}
 
 **Resume a red-base pause.** A parent waits with `gstack-base-red wait --pause
 <file>` (a background operation; `BASE_GREEN:` once a new base head passes the
@@ -106,8 +87,6 @@ cases), then runs `/gstack-ship --resume <record>`: if HEAD is still the paused 
 rerun this Step 5 on HEAD merged with the new base in a scratch worktree (never a
 pushed base merge); all green rewrites the receipt without `--base-red` and runs
 Step 22. Any failure is triaged here as new; a moved HEAD starts /gstack-ship fresh.
-
-**After triage:** If any in-branch failures remain unfixed, **STOP**. Do not proceed. If all failures were pre-existing and handled (fixed, TODOed, assigned, skipped, or base-red and paused), continue to Step 6.
 
 **If all pass:** Report each lane's pass count (or `count unavailable`) in one line and continue to Step 6.
 
@@ -142,40 +121,9 @@ for another stack.
   Do not substitute a cheaper development tier. If selection remains uncertain,
   include every plausibly affected suite.
 
-**2. Run the selected command and preserve its exit status.**
+When the selection above requires evals, read the execution section only then:
 
-For the Rails example:
-
-```bash
-set -o pipefail
-EVAL_JUDGE_TIER=full EVAL_VERBOSE=1 bin/test-lane --eval test/evals/<suite>_eval_test.rb 2>&1 | tee /tmp/ship_evals.txt
-```
-
-Use the native command for other stacks. Respect the project's concurrency and
-retry policy. Rails suites sharing a test lane run sequentially; stop on the
-first failure before starting another paid suite.
-
-**Long eval suites (30+ min): launch detached so a turn boundary can't kill them.**
-Use the detached runner and eval lock; set its outer timeout to cover the
-project's declared suite duration and retries. Do not change individual eval
-limits. For a suite whose full bound fits 5400 seconds:
-
-```bash
-~/.claude/skills/gstack/bin/gstack-detach --label ship-evals --lock gstack-evals --timeout 5400 -- <project eval command>
-```
-
-Poll the printed log for `### gstack-detach EXIT=<code> ###`. Silence is not
-success. Retain every configured attempt; skipped or unstarted cases do not
-satisfy coverage.
-
-**3. Check results and save evidence for Step 19.**
-
-- **If any eval fails:** Do not rerun the full gate. Show failures and available
-  costs, then Read `~/.claude/skills/gstack/ship/sections/measure.md` and run its
-  loop for each red case: classify, measure alone, fix at the cause, re-measure,
-  then gate once. **STOP** only at its named-red stop.
-- **If all selected evals pass:** Record actual counts, any reused evidence and
-  its source, and available costs. Continue to Step 7.
+{{SECTION:eval-suites-run}}
 
 ---
 

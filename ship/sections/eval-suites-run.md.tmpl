@@ -1,0 +1,34 @@
+**2. Run the selected command and preserve its exit status.**
+
+For the Rails example:
+
+```bash
+set -o pipefail
+EVAL_JUDGE_TIER=full EVAL_VERBOSE=1 bin/test-lane --eval test/evals/<suite>_eval_test.rb 2>&1 | tee /tmp/ship_evals.txt
+```
+
+Use the native command for other stacks. Respect the project's concurrency and
+retry policy. Rails suites sharing a test lane run sequentially; stop on the
+first failure before starting another paid suite.
+
+**Long eval suites (30+ min): launch detached so a turn boundary can't kill them.**
+Use the detached runner and eval lock; set its outer timeout to cover the
+project's declared suite duration and retries. Do not change individual eval
+limits. For a suite whose full bound fits 5400 seconds:
+
+```bash
+~/.claude/skills/gstack/bin/gstack-detach --label ship-evals --lock gstack-evals --timeout 5400 -- <project eval command>
+```
+
+Poll the printed log for `### gstack-detach EXIT=<code> ###`. Silence is not
+success. Retain every configured attempt; skipped or unstarted cases do not
+satisfy coverage.
+
+**3. Check results and save evidence for Step 19.**
+
+- **If any eval fails:** Do not rerun the full gate. Show failures and available
+  costs, then Read `~/.claude/skills/gstack/ship/sections/measure.md` and run its
+  loop for each red case: classify, measure alone, fix at the cause, re-measure,
+  then gate once. **STOP** only at its named-red stop.
+- **If all selected evals pass:** Record actual counts, any reused evidence and
+  its source, and available costs. Continue to Step 7.

@@ -126,3 +126,13 @@ describe('the handoff brief names only the segment\'s sections', () => {
     expect(refused.err).toContain('lacks headings: Next steps');
   });
 });
+
+
+test('handoff permits triggered section reads beyond the initial ranges', () => {
+  for (const [from, to] of [['4', '6'], ['9', '11.5']]) {
+    const text = readSection(briefFor(from!, to!));
+    expect(text).toContain('Follow the mandatory conditional Read directives in those sections');
+    expect(text).toContain('their target files are permitted even when not listed in the initial READ: ranges');
+    expect(text).toContain('in one parallel call for the initial read.');
+  }
+});
