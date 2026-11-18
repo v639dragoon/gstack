@@ -188,8 +188,8 @@ export function healthDimensions(root: string, env: NodeJS.ProcessEnv = process.
 }
 
 /** Every command a run could execute, read without executing any: the checks, the pregate runner and each selection manifest command. */
-export function commandSet(root: string, checks: readonly Check[], config: Pick<PregateConfig, 'runner' | 'selection'>): string {
-  return sha256(JSON.stringify({ checks: checks.map(c => [c.name, c.command, c.body ?? '']), scripts: packageScripts(root), runner: config.runner ?? detectedRunnerInputs(root), selection: Object.entries(config.selection ?? {}).sort(([a], [b]) => a.localeCompare(b)) }));
+export function commandSet(root: string, checks: readonly Check[], config: Pick<PregateConfig, 'runner' | 'selection' | 'detected_runners'>): string {
+  return sha256(JSON.stringify({ checks: checks.map(c => [c.name, c.command, c.body ?? '']), scripts: packageScripts(root), runner: config.runner ?? detectedRunnerInputs(root), selection: Object.entries(config.selection ?? {}).sort(([a], [b]) => a.localeCompare(b)), ...(config.detected_runners === undefined ? {} : { detected_runners: Object.entries(config.detected_runners).sort(([a], [b]) => a.localeCompare(b)) }) }));
 }
 
 /** Every package.json script: a check or script can call any of them (npm run a && npm run b, yarn a, nested runs), so trust covers the whole map. */
@@ -233,7 +233,7 @@ export function isTrusted(root: string, set: string, env: NodeJS.ProcessEnv = pr
 }
 
 /** Record root -> command-set hash (0600, atomic, one row per repo) and log the grant beside the verify-gate grants. */
-export function recordTrust(root: string, set: string, checks: readonly Check[], config: Pick<PregateConfig, 'runner' | 'selection'>, env: NodeJS.ProcessEnv = process.env): void {
+export function recordTrust(root: string, set: string, checks: readonly Check[], config: Pick<PregateConfig, 'runner' | 'selection' | 'detected_runners'>, env: NodeJS.ProcessEnv = process.env): void {
   const store = trustStore(env);
   const keys = trustKeys(root);
   const key = keys[0];
@@ -244,7 +244,7 @@ export function recordTrust(root: string, set: string, checks: readonly Check[],
   fs.renameSync(tmp, store);
   const sec = path.join(resolveStateRoot(env), 'security');
   fs.mkdirSync(sec, { recursive: true });
-  const grant = { ts: new Date().toISOString(), root: key, set_sha256: set, checks: checks.map(c => c.command), runner: config.runner ?? 'detected', selection: config.selection ?? {}, tty: !!process.stdin.isTTY };
+  const grant = { ts: new Date().toISOString(), root: key, set_sha256: set, checks: checks.map(c => c.command), runner: config.runner ?? 'detected', detected_runners: config.detected_runners, selection: config.selection ?? {}, tty: !!process.stdin.isTTY };
   fs.appendFileSync(path.join(sec, 'checks-trust-grants.jsonl'), JSON.stringify(grant) + '\n', { mode: 0o600 });
 }
 

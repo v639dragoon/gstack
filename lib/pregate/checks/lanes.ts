@@ -60,13 +60,13 @@ export function detectRunner(ctx: Pick<PregateContext, 'config' | 'repoRoot'>, f
   try { pkg = JSON.parse(fs.readFileSync(path.join(ctx.repoRoot, 'package.json'), 'utf8')); } catch { /* no package.json */ }
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
   const jsts = files.every(f => /\.[cm]?[jt]sx?$/.test(f));
-  if (jsts && (has('bunfig.toml') || has('bun.lock') || has('bun.lockb'))) return 'bun test {files}';
+  if (jsts && (has('bunfig.toml') || has('bun.lock') || has('bun.lockb'))) return ctx.config.detected_runners?.bun ?? 'bun test {files}';
   if (files.length && files.every(f => /\.[cm]?js$/.test(f) && importsNodeTest(readRepoFile(ctx.repoRoot, f) ?? ''))) return 'node --test {files}';
-  if (jsts && deps.vitest) return 'npx vitest run {files}';
-  if (jsts && deps.jest) return 'npx jest {files}';
+  if (jsts && deps.vitest) return ctx.config.detected_runners?.vitest ?? 'npx vitest run {files}';
+  if (jsts && deps.jest) return ctx.config.detected_runners?.jest ?? 'npx jest {files}';
   if (files.every(f => /\.py$/.test(f)) && files.length) return PYTEST;
   if (files.every(f => /\.[cm]?js$/.test(f)) && files.length) return 'node --test {files}';
-  if (files.every(f => /\.[cm]?[jt]sx?$/.test(f)) && files.length && Bun.which('bun')) return 'bun test {files}';
+  if (files.every(f => /\.[cm]?[jt]sx?$/.test(f)) && files.length && Bun.which('bun')) return ctx.config.detected_runners?.bun ?? 'bun test {files}';
   return null;
 }
 

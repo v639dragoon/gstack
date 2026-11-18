@@ -95,6 +95,7 @@ export const DEFAULT_SERIAL_PATTERNS = ['**/*.serial.test.*'];
 export interface PregateConfig {
   $schema?: string;
   runner: string | null;
+  detected_runners?: Partial<Record<'bun' | 'vitest' | 'jest', string>>;
   dependencies: Record<string, string[]>;
   /** Extra docs/no-tests globs. Built-in Markdown always qualifies when no test depends on it. */
   empty_lanes: string[];
@@ -120,7 +121,7 @@ export interface ConfigError { code: ResultCodeName; path: string; message: stri
 
 export const MAX_LIST = 256;
 const MAX_COMMAND = 512;
-const KEYS = ['runner', 'dependencies', 'empty_lanes', 'selection', 'warn', 'strays', 'local', 'guards', 'serial_patterns', 'price_file', 'sealed', 'stall_timeout_s', 'timeout_s', 'remote_gate', 'allowlist', 'run_profiles', 'remote_gate_runs', 'ship_lanes_from'];
+const KEYS = ['runner', 'detected_runners', 'dependencies', 'empty_lanes', 'selection', 'warn', 'strays', 'local', 'guards', 'serial_patterns', 'price_file', 'sealed', 'stall_timeout_s', 'timeout_s', 'remote_gate', 'allowlist', 'run_profiles', 'remote_gate_runs', 'ship_lanes_from'];
 const LANE_ID = /^[A-Za-z0-9_.-]+\.ya?ml\/[A-Za-z0-9_-]+$/;
 const MAX_GUARDS = 32;
 const GUARD_KEYS = ['id', 'when', 'command', 'fix', 'timeout_s'];
@@ -196,6 +197,20 @@ export function validateConfig(raw: unknown, knownChecks: readonly string[] = []
     const why = commandError(obj.runner);
     if (why) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: 'runner', message: why });
     else if (!(obj.runner as string).includes('{files}')) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: 'runner', message: 'must contain the {files} placeholder' });
+  }
+  if ('detected_runners' in obj) {
+    if (obj.runner !== undefined && obj.runner !== null) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: 'detected_runners', message: 'cannot be combined with runner' });
+    const overrides = obj.detected_runners;
+    if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: 'detected_runners', message: 'must be an object mapping bun, vitest or jest to commands' });
+    else for (const [tool, command] of Object.entries(overrides)) {
+      const at = `detected_runners.${tool}`;
+      if (!['bun', 'vitest', 'jest'].includes(tool)) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: at, message: 'unknown key; valid keys: bun, vitest, jest' });
+      else {
+        const why = commandError(command);
+        if (why) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: at, message: why });
+        else if (!(command as string).includes('{files}')) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: at, message: 'must contain the {files} placeholder' });
+      }
+    }
   }
   if ('price_file' in obj && obj.price_file !== null) {
     const why = typeof obj.price_file === 'string' ? containedRelative(obj.price_file) : 'must be a repo-relative path or null';
@@ -285,7 +300,7 @@ export function parseConfig(text: string, knownChecks: readonly string[] = []): 
   const errors = validateConfig(raw, knownChecks);
   if (errors.length) return { config: DEFAULT_CONFIG, errors, declaresLanes: false };
   const o = raw as Partial<PregateConfig>;
-  return { declaresLanes: LANE_KEYS.some(k => k in o), config: { $schema: o.$schema, runner: o.runner ?? null, dependencies: o.dependencies ?? {}, empty_lanes: o.empty_lanes ?? [], selection: o.selection ?? {}, warn: o.warn ?? [], strays: { allow: o.strays?.allow ?? [] }, local: o.local ?? [], guards: o.guards ?? [], serial_patterns: o.serial_patterns ?? DEFAULT_SERIAL_PATTERNS, price_file: o.price_file ?? null, stall_timeout_s: o.stall_timeout_s ?? null, timeout_s: o.timeout_s ?? null, remote_gate: o.remote_gate ?? null, allowlist: o.allowlist ?? [], run_profiles: o.run_profiles ?? {}, remote_gate_runs: o.remote_gate_runs ?? null, ship_lanes_from: o.ship_lanes_from ?? {} }, errors: [] };
+  return { declaresLanes: LANE_KEYS.some(k => k in o), config: { $schema: o.$schema, runner: o.runner ?? null, ...('detected_runners' in o ? { detected_runners: o.detected_runners } : {}), dependencies: o.dependencies ?? {}, empty_lanes: o.empty_lanes ?? [], selection: o.selection ?? {}, warn: o.warn ?? [], strays: { allow: o.strays?.allow ?? [] }, local: o.local ?? [], guards: o.guards ?? [], serial_patterns: o.serial_patterns ?? DEFAULT_SERIAL_PATTERNS, price_file: o.price_file ?? null, stall_timeout_s: o.stall_timeout_s ?? null, timeout_s: o.timeout_s ?? null, remote_gate: o.remote_gate ?? null, allowlist: o.allowlist ?? [], run_profiles: o.run_profiles ?? {}, remote_gate_runs: o.remote_gate_runs ?? null, ship_lanes_from: o.ship_lanes_from ?? {} }, errors: [] };
 }
 
 export type ConfigLoad = { config: PregateConfig; errors: ConfigError[]; present: boolean; label: string; kind: 'base' | 'head' | 'user' | 'none'; /** sha256 of the user file's bytes (kind 'user' only). */ digest?: string; /** The policy has a LANE_KEYS key; absent under kind 'none'. */ declaresLanes?: boolean } | { unavailable: true; base: string; detail: string };
