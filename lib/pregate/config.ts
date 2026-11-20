@@ -96,6 +96,7 @@ export interface PregateConfig {
   $schema?: string;
   runner: string | null;
   detected_runners?: Partial<Record<'bun' | 'vitest' | 'jest', string>>;
+  overlap_runners?: Array<'bun' | 'vitest' | 'jest'>;
   dependencies: Record<string, string[]>;
   /** Extra docs/no-tests globs. Built-in Markdown always qualifies when no test depends on it. */
   empty_lanes: string[];
@@ -121,7 +122,7 @@ export interface ConfigError { code: ResultCodeName; path: string; message: stri
 
 export const MAX_LIST = 256;
 const MAX_COMMAND = 512;
-const KEYS = ['runner', 'detected_runners', 'dependencies', 'empty_lanes', 'selection', 'warn', 'strays', 'local', 'guards', 'serial_patterns', 'price_file', 'sealed', 'stall_timeout_s', 'timeout_s', 'remote_gate', 'allowlist', 'run_profiles', 'remote_gate_runs', 'ship_lanes_from'];
+const KEYS = ['runner', 'detected_runners', 'overlap_runners', 'dependencies', 'empty_lanes', 'selection', 'warn', 'strays', 'local', 'guards', 'serial_patterns', 'price_file', 'sealed', 'stall_timeout_s', 'timeout_s', 'remote_gate', 'allowlist', 'run_profiles', 'remote_gate_runs', 'ship_lanes_from'];
 const LANE_ID = /^[A-Za-z0-9_.-]+\.ya?ml\/[A-Za-z0-9_-]+$/;
 const MAX_GUARDS = 32;
 const GUARD_KEYS = ['id', 'when', 'command', 'fix', 'timeout_s'];
@@ -209,6 +210,22 @@ export function validateConfig(raw: unknown, knownChecks: readonly string[] = []
         const why = commandError(command);
         if (why) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: at, message: why });
         else if (!(command as string).includes('{files}')) errors.push({ code: 'PREGATE_CONFIG_INVALID', path: at, message: 'must contain the {files} placeholder' });
+      }
+    }
+  }
+  if ('overlap_runners' in obj) {
+    const overlap = obj.overlap_runners;
+    const invalid = (message: string) => errors.push({ code: 'PREGATE_CONFIG_INVALID', path: 'overlap_runners', message });
+    if (!Array.isArray(overlap)) invalid('must be an array of bun, vitest or jest');
+    else {
+      const seen = new Set<string>();
+      for (const tool of overlap) {
+        if (typeof tool !== 'string' || !['bun', 'vitest', 'jest'].includes(tool)) invalid(`unknown value ${JSON.stringify(tool)}; valid values: bun, vitest, jest`);
+        else if (seen.has(tool)) invalid(`duplicate value: ${tool}`);
+        else {
+          seen.add(tool);
+          if (!obj.detected_runners || !Object.hasOwn(obj.detected_runners, tool)) invalid(`${tool} requires a detected_runners entry`);
+        }
       }
     }
   }
@@ -300,7 +317,7 @@ export function parseConfig(text: string, knownChecks: readonly string[] = []): 
   const errors = validateConfig(raw, knownChecks);
   if (errors.length) return { config: DEFAULT_CONFIG, errors, declaresLanes: false };
   const o = raw as Partial<PregateConfig>;
-  return { declaresLanes: LANE_KEYS.some(k => k in o), config: { $schema: o.$schema, runner: o.runner ?? null, ...('detected_runners' in o ? { detected_runners: o.detected_runners } : {}), dependencies: o.dependencies ?? {}, empty_lanes: o.empty_lanes ?? [], selection: o.selection ?? {}, warn: o.warn ?? [], strays: { allow: o.strays?.allow ?? [] }, local: o.local ?? [], guards: o.guards ?? [], serial_patterns: o.serial_patterns ?? DEFAULT_SERIAL_PATTERNS, price_file: o.price_file ?? null, stall_timeout_s: o.stall_timeout_s ?? null, timeout_s: o.timeout_s ?? null, remote_gate: o.remote_gate ?? null, allowlist: o.allowlist ?? [], run_profiles: o.run_profiles ?? {}, remote_gate_runs: o.remote_gate_runs ?? null, ship_lanes_from: o.ship_lanes_from ?? {} }, errors: [] };
+  return { declaresLanes: LANE_KEYS.some(k => k in o), config: { $schema: o.$schema, runner: o.runner ?? null, ...('detected_runners' in o ? { detected_runners: o.detected_runners } : {}), ...(o.overlap_runners?.length ? { overlap_runners: o.overlap_runners } : {}), dependencies: o.dependencies ?? {}, empty_lanes: o.empty_lanes ?? [], selection: o.selection ?? {}, warn: o.warn ?? [], strays: { allow: o.strays?.allow ?? [] }, local: o.local ?? [], guards: o.guards ?? [], serial_patterns: o.serial_patterns ?? DEFAULT_SERIAL_PATTERNS, price_file: o.price_file ?? null, stall_timeout_s: o.stall_timeout_s ?? null, timeout_s: o.timeout_s ?? null, remote_gate: o.remote_gate ?? null, allowlist: o.allowlist ?? [], run_profiles: o.run_profiles ?? {}, remote_gate_runs: o.remote_gate_runs ?? null, ship_lanes_from: o.ship_lanes_from ?? {} }, errors: [] };
 }
 
 export type ConfigLoad = { config: PregateConfig; errors: ConfigError[]; present: boolean; label: string; kind: 'base' | 'head' | 'user' | 'none'; /** sha256 of the user file's bytes (kind 'user' only). */ digest?: string; /** The policy has a LANE_KEYS key; absent under kind 'none'. */ declaresLanes?: boolean } | { unavailable: true; base: string; detail: string };

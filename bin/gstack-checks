@@ -94,7 +94,7 @@ async function main(argv: string[]): Promise<number> {
     for (const c of l.checks) process.stdout.write(`CHECK ${c.name} ${c.command}${c.body ? ` (runs: ${c.body})` : ''}  (${c.source})\n`);
     if (!l.checks.length) process.stdout.write('CHECKS: tests only (no gstack:verify: line, Health Stack section or manifest check)\n');
     const selection = Object.values(l.ctx.config.selection ?? {});
-    process.stdout.write(`TESTS pregate selection against ${l.ctx.baseRef} (policy ${l.ctx.configLabel}; runner ${l.ctx.config.runner ?? 'detected per file'}${Object.entries(l.ctx.config.detected_runners ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([tool, command]) => `; ${tool} via ${command}`).join('')}${selection.length ? `; selection commands: ${selection.join(' | ')}` : ''})\n`);
+    process.stdout.write(`TESTS pregate selection against ${l.ctx.baseRef} (policy ${l.ctx.configLabel}; runner ${l.ctx.config.runner ?? 'detected per file'}${Object.entries(l.ctx.config.detected_runners ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([tool, command]) => `; ${tool} via ${command}`).join('')}${l.ctx.config.overlap_runners?.length ? `; overlap_runners: ${l.ctx.config.overlap_runners.join(', ')}` : ''}${selection.length ? `; selection commands: ${selection.join(' | ')}` : ''})\n`);
     process.stdout.write(`TRUST ${trusted ? 'trusted' : 'untrusted (run gstack-checks trust after the user agrees, or pass --allow-repo-commands)'}\n`);
     return 0;
   }
@@ -111,7 +111,7 @@ async function main(argv: string[]): Promise<number> {
   if (!trusted && !args.includes('--allow-repo-commands')) {
     process.stderr.write(`gstack-checks: these commands are not trusted for ${root}; nothing was run (CHECKS_CONSENT_REQUIRED)\n`);
     for (const c of l.checks) process.stderr.write(`  ${c.name}: ${c.command}\n`);
-    process.stderr.write(`  tests: ${l.ctx.config.runner ?? 'the runner pregate detects'}${Object.entries(l.ctx.config.detected_runners ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([tool, command]) => `; ${tool} via ${command}`).join('')} on the files pregate selects${Object.keys(l.ctx.config.selection ?? {}).length ? ' (and its selection manifest commands)' : ''}\n`);
+    process.stderr.write(`  tests: ${l.ctx.config.runner ?? 'the runner pregate detects'}${Object.entries(l.ctx.config.detected_runners ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([tool, command]) => `; ${tool} via ${command}`).join('')}${l.ctx.config.overlap_runners?.length ? `; overlap_runners: ${l.ctx.config.overlap_runners.join(', ')}` : ''} on the files pregate selects${Object.keys(l.ctx.config.selection ?? {}).length ? ' (and its selection manifest commands)' : ''}\n`);
     process.stderr.write('fix: ask the user, then gstack-checks trust; or pass --allow-repo-commands when the session was launched to run them\n');
     return 3;
   }

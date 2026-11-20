@@ -71,7 +71,7 @@ export function detectRunner(ctx: Pick<PregateContext, 'config' | 'repoRoot'>, f
 }
 
 /** One runner invocation: `files` relative to `cwd` (repo-relative, `''` for the root). */
-export interface RunGroup { runner: string; cwd: string; files: string[] }
+export interface RunGroup { runner: string; cwd: string; files: string[]; overlap?: true }
 
 /** The nearest directory at or above `file` holding `marker`, repo-relative; null when none does. `seen` memoises per directory (one map per marker). */
 function nearestRoot(repoRoot: string, file: string, marker: string, seen: Map<string, string | null>): string | null {
@@ -339,6 +339,9 @@ export function planRuns(ctx: PregateContext, files: readonly string[]): RunPlan
     if (onPath(bin, ctx.env)) groups.push({ runner: `${PM_EXEC[pm]} playwright test --reporter=list {files}`, cwd: root, files: list });
     else { missing.add(bin); unclaimed.push(...list.map(f => (root ? `${root}/${f}` : f))); }
   }
+  for (const g of groups) {
+    if (g.cwd === '' && ctx.config.overlap_runners?.some(k => ctx.config.detected_runners?.[k] === g.runner)) g.overlap = true;
+  }
   return { groups, unclaimed: [...unclaimed, ...noPubspec], missing: [...missing].sort(), noPubspec };
 }
 
@@ -404,7 +407,7 @@ export function parseSummary(raw: string, runner = ''): RunnerSummary {
   return (dartRun ? null : parseDart(output)) ?? parseBats(output) ?? { ran: null, failed: null };
 }
 
-interface LocalRun { exit: number | null; outcome: Supervised['outcome']; signal: string | null; observedStart: boolean; ran: number | null; failed: number | null; tail: string[]; runner: string; command: string; files: string[]; lastFile: string | null; ms: number; error?: string; noBrowsers?: string }
+interface LocalRun { log: string; header: number; end: number; exit: number | null; outcome: Supervised['outcome']; signal: string | null; observedStart: boolean; ran: number | null; failed: number | null; tail: string[]; runner: string; command: string; files: string[]; lastFile: string | null; ms: number; error?: string; noBrowsers?: string }
 
 const quote = shellQuote;
 
@@ -446,17 +449,18 @@ async function runOnce(ctx: PregateContext, env: NodeJS.ProcessEnv, g: RunGroup,
     const joined = chunk.map(quote).join(' ');
     const run = g.runner.replace('{files}', () => joined);
     const shown = g.cwd ? part.map(f => `${g.cwd}/${f}`) : part;
+    const header = fs.existsSync(log) ? fs.statSync(log).size : 0;
     const r = await supervise({ command: run, cwd: path.join(ctx.repoRoot, g.cwd), env: runEnv, log, deadline, stallMs: ctx.stallTimeoutMs, label: `lanes (${shown.length === 1 ? shown[0] : `${shown.length} files`})`, files: part, adapter: adapterFor(g.runner), counter, progress: ctx.progress });
     const output = readRange(log, r.start, r.end);
     const summary = parseSummary(output, g.runner);
     const noBrowsers = /(?<![\w-])playwright\s+test(?![\w-])/.test(g.runner) ? PLAYWRIGHT_NO_BROWSERS.exec(output)?.[0].trim().slice(0, 200) : undefined;
-    parts.push({ ...(noBrowsers ? { noBrowsers } : {}), exit: r.exit, outcome: r.outcome, signal: r.signal, observedStart: r.observedStart, ...summary, tail: output.trim().split('\n').slice(-25), runner: g.runner, command: g.cwd ? `(cd ${quote(g.cwd)} && ${run})` : run, files: shown, lastFile: r.lastFile && g.cwd ? `${g.cwd}/${r.lastFile}` : r.lastFile, ms: r.ms, ...(r.error ? { error: r.error } : {}) });
+    parts.push({ log, header, end: r.end, ...(noBrowsers ? { noBrowsers } : {}), exit: r.exit, outcome: r.outcome, signal: r.signal, observedStart: r.observedStart, ...summary, tail: output.trim().split('\n').slice(-25), runner: g.runner, command: g.cwd ? `(cd ${quote(g.cwd)} && ${run})` : run, files: shown, lastFile: r.lastFile && g.cwd ? `${g.cwd}/${r.lastFile}` : r.lastFile, ms: r.ms, ...(r.error ? { error: r.error } : {}) });
     if (r.exit === null) break;
   }
   if (parts.length === 1) return parts[0]!;
   const bad = parts.find(p => p.exit === null) ?? parts.find(p => p.exit !== 0) ?? parts.find(p => p.ran === 0) ?? parts.at(-1)!;
   const sum = (k: 'ran' | 'failed') => (k === 'ran' && parts.some(p => p.ran === 0) ? 0 : parts.some(p => p[k] === null) ? null : parts.reduce((n, p) => n + (p[k] as number), 0));
-  return { ...(parts.every(p => p.noBrowsers) ? { noBrowsers: parts[0]!.noBrowsers } : {}), exit: bad.exit, outcome: bad.outcome, signal: bad.signal, observedStart: parts.some(p => p.observedStart), ran: sum('ran'), failed: sum('failed'), tail: bad.tail, runner: g.runner, command: parts.map(p => p.command).join(' && '), files: parts.flatMap(p => p.files), lastFile: bad.lastFile, ms: parts.reduce((n, p) => n + p.ms, 0), ...(bad.error ? { error: bad.error } : {}) };
+  return { log, header: parts[0]!.header, end: parts.at(-1)!.end, ...(parts.every(p => p.noBrowsers) ? { noBrowsers: parts[0]!.noBrowsers } : {}), exit: bad.exit, outcome: bad.outcome, signal: bad.signal, observedStart: parts.some(p => p.observedStart), ran: sum('ran'), failed: sum('failed'), tail: bad.tail, runner: g.runner, command: parts.map(p => p.command).join(' && '), files: parts.flatMap(p => p.files), lastFile: bad.lastFile, ms: parts.reduce((n, p) => n + p.ms, 0), ...(bad.error ? { error: bad.error } : {}) };
 }
 
 /**
@@ -476,17 +480,55 @@ async function runLocal(ctx: PregateContext, env: NodeJS.ProcessEnv, groups: Run
   fs.writeFileSync(log, '');
   const counter: Counter = { done: 0, total: groups.reduce((n, g) => n + g.files.length, 0) };
   const runs: LocalRun[] = [];
+  const jobs: Array<{ group: RunGroup; files: string[] }> = [];
   let serialCount = 0;
   for (const g of groups) {
     const serial = g.files.filter(f => matchesAny(ctx.config.serial_patterns, g.cwd ? `${g.cwd}/${f}` : f));
     const unit = g.files.filter(f => !serial.includes(f));
     serialCount += serial.length;
-    for (const files of [...(unit.length ? [unit] : []), ...serial.map(f => [f])]) runs.push(await runOnce(ctx, env, g, files, log, counter));
+    for (const files of [...(unit.length ? [unit] : []), ...serial.map(f => [f])]) jobs.push({ group: g, files });
+  }
+  const overlap = groups.some(g => g.overlap) && groups.some(g => !g.overlap);
+  const overlapLines: string[] = [];
+  if (!overlap) {
+    for (const { group, files } of jobs) runs.push(await runOnce(ctx, env, group, files, log, counter));
+  } else {
+    const deferred = new Map<number, LocalRun>();
+    const track = async (concurrent: boolean) => {
+      for (const [i, { group, files }] of jobs.entries()) {
+        if (!!group.overlap !== concurrent) continue;
+        const target = concurrent ? path.join(dir, `lanes-overlap-${i + 1}.log`) : log;
+        if (concurrent) fs.writeFileSync(target, '');
+        runs[i] = await runOnce(ctx, concurrent ? { ...env, GSTACK_PREGATE_OVERLAP: '1' } : env, group, files, target, counter);
+      }
+    };
+    // Calling the overlap track first starts its first process before the serial track.
+    // Even an unexpected track error must wait for the other track to settle.
+    const tracks = await Promise.allSettled([track(true), track(false)]);
+    for (const result of tracks) if (result.status === 'rejected') throw result.reason;
+    for (const [i, { group, files }] of jobs.entries()) {
+      if (!group.overlap) continue;
+      if (runs[i]!.exit === 75) {
+        deferred.set(i, runs[i]!);
+        const retryEnv = { ...env };
+        delete retryEnv.GSTACK_PREGATE_OVERLAP;
+        runs[i] = await runOnce(ctx, retryEnv, group, files, log, counter);
+      }
+    }
+    for (const group of groups.filter(g => g.overlap)) {
+      const retried = jobs.some((j, i) => j.group === group && deferred.has(i));
+      overlapLines.push(`overlap: ${group.runner} ${retried ? 'exited 75 (nothing ran) and re-ran after the other groups' : 'ran beside the other groups'}`);
+    }
+    // Read all ranges before replacing lanes.log: serial and retry ranges share it.
+    // The header offset includes supervise's $ line, unlike its output-only start.
+    const segments = runs.flatMap((run, i) => deferred.has(i) ? [deferred.get(i)!, run] : [run])
+      .map(run => readRange(run.log, run.header, run.end, run.end - run.header));
+    fs.writeFileSync(log, segments.join(''));
   }
   const bad = runs.find(r => r.exit === null) ?? runs.find(r => r.exit !== 0);
   const sum = (k: 'ran' | 'failed') => (runs.some(r => r[k] === null) ? null : runs.reduce((n, r) => n + (r[k] as number), 0));
   const zero = runs.find(r => r.ran === 0);
-  return { runs, bad, exit: bad ? bad.exit : 0, ran: zero ? 0 : sum('ran'), zero: zero?.command, failed: sum('failed'), log, tail: (bad ?? runs[runs.length - 1]!).tail, command: runs.map(r => r.command).join(' && '), serial: serialCount };
+  return { runs, overlapLines, bad, exit: bad ? bad.exit : 0, ran: zero ? 0 : sum('ran'), zero: zero?.command, failed: sum('failed'), log, tail: (bad ?? runs[runs.length - 1]!).tail, command: runs.map(r => r.command).join(' && '), serial: serialCount };
 }
 
 /** Why the local lane did not finish: a stall, a runner process past --timeout or a launch failure, with the last file started. */
@@ -685,7 +727,7 @@ async function runSelected(ctx: PregateContext, sel: Selection, base: CheckResul
   const total = groups.reduce((n, g) => n + g.files.length, 0);
   const r = await runLocal(ctx, runtime.env, groups);
   const adapters = [...new Set(groups.map(g => adapterFor(g.runner)).filter(Boolean))];
-  const runLines = [...reusedBase.lines!, ...(dropped ? [`not run: ${dropped}`] : []), `runtime: ${runtime.label}`, `progress: ${adapters.join(', ') || 'none (no progress adapter for this runner; serial files and heartbeats only)'}`, `ran: ${r.command.length > 200 ? `${r.command.slice(0, 200)}…` : r.command}`, `log: ${r.log}`, ...r.tail.map(l => `  ${l}`)];
+  const runLines = [...reusedBase.lines!, ...r.overlapLines, ...(dropped ? [`not run: ${dropped}`] : []), `runtime: ${runtime.label}`, `progress: ${adapters.join(', ') || 'none (no progress adapter for this runner; serial files and heartbeats only)'}`, `ran: ${r.command.length > 200 ? `${r.command.slice(0, 200)}…` : r.command}`, `log: ${r.log}`, ...r.tail.map(l => `  ${l}`)];
   const withRun = { ...reusedBase, lines: runLines, inputs: { ...inputs, command: sha256(r.command), runtime: runtime.label } };
   if (r.exit === null) {
     const why = unfinished(ctx, r, total);
