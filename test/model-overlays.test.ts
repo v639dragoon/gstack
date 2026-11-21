@@ -102,6 +102,20 @@ describe('GPT-5.6 Sol model profile', () => {
     expect(resolveModel('gpt-5.7')).toBe('gpt');
   });
 
+  test('GPT-6.2 Sol uses the shared Sol overlay and completeness guidance only for the exact ID', () => {
+    const model = resolveModel('gpt-6.2-sol');
+    expect(model).toBe('gpt-6.2-sol');
+    expect(isSolProfileModel(model!)).toBe(true);
+    expect(generateModelOverlay(ctx(model!))).toBe(
+      generateModelOverlay(ctx('gpt-5.6-sol')).replaceAll('gpt-5.6-sol', 'gpt-6.2-sol'),
+    );
+    expect(generateCompletenessSection(ctx(model!))).toBe(generateCompletenessSection(ctx('gpt-5.6-sol')));
+    const snapshot = resolveModel('gpt-6.2-sol-2026-11-20');
+    expect(snapshot).toBe('gpt');
+    expect(isSolProfileModel('gpt-6.2-sol-2026-11-20')).toBe(false);
+    expect(generateModelOverlay(ctx(snapshot!))).toBe(generateModelOverlay(ctx('gpt')));
+  });
+
   test('standalone overlay does not inherit generic GPT completion bias', () => {
     const raw = readOverlay('gpt-5.6-sol');
     expect(raw).toContain('The explicit task is the lake');
@@ -219,6 +233,12 @@ describe('GPT-6 Astra model profile', () => {
   test('exact and suffixed Astra IDs select the Astra profile', () => {
     expect(resolveModel('gpt-6-astra')).toBe('gpt-6-astra');
     expect(resolveModel('gpt-6-astra-2026-09-01')).toBe('gpt-6-astra');
+  });
+
+  test.each(['gpt-6.2-astra', 'gpt-6.2-astra-2026-11-20'])('%s uses the shared Astra overlay', (id) => {
+    const model = resolveModel(id);
+    expect(model).toBe('gpt-6-astra');
+    expect(generateModelOverlay(ctx(model!))).toBe(generateModelOverlay(ctx('gpt-6-astra')));
   });
 
   test('overlay inherits generic GPT guidance', () => {

@@ -450,6 +450,15 @@ describe('gstack-gate-log model rules', () => {
     expect(gateLog(JSON.stringify({ ...base, model: 'gpt-6-astra', model_routed: true, effort: 'xhigh', effort_source: 'env' })).status).toBe(1);
   });
 
+  test.each(['gpt-6.2-astra', 'openai/gpt-6.2-astra', 'openai/gpt-6-astra'])('%s requires model_reason outside the routed review slot', (model) => {
+    const worker = { ...base, gate: 'worker:implement', model, effort: 'medium', effort_source: 'lead-assigned' };
+    const refused = gateLog(JSON.stringify(worker));
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain('requires a non-empty model_reason');
+    expect(gateLog(JSON.stringify({ ...worker, model_reason: 'interacting contracts' })).status).toBe(0);
+    expect(gateLog(JSON.stringify({ ...base, model, effort: 'medium', effort_source: 'routed' })).status).toBe(0);
+  });
+
   test('a Lead-assigned Astra worker or reviewer is refused without model_reason and accepted with one', () => {
     const worker = { ...base, gate: 'worker:implement', model: 'gpt-6-astra', effort: 'medium', effort_source: 'lead-assigned' };
     const refused = gateLog(JSON.stringify(worker));

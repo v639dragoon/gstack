@@ -29,7 +29,7 @@ test('estimateCostUsd computes correctly for known Claude model', () => {
   expect(cost).toBeCloseTo(17.50, 2);
 });
 
-// Opus 5.5 costs $4/MTok input and $20/MTok output; Fable 5.1 (the judge) and Astra $10 and $50.
+// Opus 5.5 costs $4/MTok input and $20/MTok output; Fable 5.2 (the judge) and GPT-6.2 Astra cost $8 and $40.
 for (const [model, usd] of [[CLAUDE_CAPTURE_EVAL_MODEL, 0.008], [CLAUDE_JUDGE_EVAL_MODEL, 0.016], [CODEX_FRONTIER_MODEL, 0.016]] as const) {
   test(`estimateCostUsd prices the current ${model} default at its standard rate`, () => {
     expect(estimateCostUsd({ input: 1000, output: 200 }, model)).toBe(usd);

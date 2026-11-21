@@ -24,7 +24,7 @@
  *     whose prompt is its message. Codex 0.170 answers a started agent with
  *     {"agent_id": ...} from its multi_agent_v1 namespace, or {"task_name":
  *     "/root/<name>"} from its collaboration namespace (multi_agents_v2, as for
- *     gpt-6.1-sol); a call with no namespace may carry either. One whose output
+ *     gpt-6.1-sol and gpt-6.2-sol); a call with no namespace may carry either. One whose output
  *     names no id for its namespace (it failed, or it has no output), or a
  *     same-named tool in any other namespace, stays a plain spawn_agent call,
  *     so it is not a dispatch. The dispatch also carries the started agent's

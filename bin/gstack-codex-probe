@@ -723,7 +723,7 @@ _gstack_codex_lock_release() {
 _gstack_codex_model_available() {
   _gstack_codex_consent 0 || return 3
   # A review plan may route a Codex slot to a NAMED model (`--model <slug>`,
-  # e.g. gpt-6-astra on dohma's C/D tiers) that differs from the client
+  # e.g. gpt-6.2-astra on dohma's C/D tiers) that differs from the client
   # default. Availability is a property of the installed CLI AND the account:
   # a too-old CLI answers HTTP 400 "requires a newer version of Codex", an
   # unentitled account answers 400 "not supported". This is the ONE minimal

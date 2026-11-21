@@ -3,7 +3,8 @@
  * wrapped in a subordinate behavioral-patch section.
  *
  * Precedence:
- *   1. Exact match: ctx.model === 'gpt-5.4' → reads model-overlays/gpt-5.4.md
+ *   1. Shared profiles read their canonical file (Sol: gpt-5.6-sol, Astra: gpt-6-astra).
+ *      Other models read their exact file, for example model-overlays/gpt-5.4.md.
  *   2. INHERIT directive: if the file's first non-whitespace line is
  *      `{{INHERIT:claude}}`, the resolver reads model-overlays/claude.md first
  *      and concatenates it ahead of the rest of this file's content.
@@ -48,10 +49,12 @@ export function readOverlay(model: string, seen: Set<string> = new Set(), exclud
 export function generateModelOverlay(ctx: TemplateContext): string {
   if (!ctx.model) return '';
 
-  const content = readOverlay(isSolProfileModel(ctx.model) ? 'gpt-5.6-sol' : ctx.model, new Set(), ctx.modules?.excluded);
+  const solProfile = isSolProfileModel(ctx.model);
+  const overlay = solProfile ? 'gpt-5.6-sol' : ctx.model;
+  const content = readOverlay(overlay, new Set(), ctx.modules?.excluded);
   if (!content) return '';
 
-  const precedence = isSolProfileModel(ctx.model)
+  const precedence = solProfile
     ? `The following instructions disambiguate scope for the ${ctx.model} model.
 They govern ambiguous completeness words such as \`complete\`, \`full\`, \`every\`,
 \`exhaustive\`, \`100%\`, and \`Boil the Ocean\`, and when to stop iterating on

@@ -143,6 +143,38 @@ model = "gpt-5.6-terra"
     expect(luna.warnings).toEqual([]);
   });
 
+  test('GPT-6.2 generation model selection keeps exact Sol and Astra snapshots distinct', () => {
+    const home = codexHome('model = "gpt-6.2-sol"\n');
+    expect(resolveCodexGenerationModel({ codexHome: home })).toEqual({
+      model: 'gpt-6.2-sol',
+      source: path.join(home, 'config.toml'),
+      warnings: [],
+    });
+    const nearMiss = resolveCodexGenerationModel({
+      codexHome: codexHome('model = "gpt-6.2-sol-2026-11-20"\n'),
+    });
+    expect(nearMiss.model).toBe('gpt');
+    expect(nearMiss.warnings).toHaveLength(1);
+    expect(nearMiss.warnings[0]).toContain("'gpt-6.2-sol'");
+    const astra = resolveCodexGenerationModel({
+      codexHome: codexHome('model = "gpt-6.2-astra-2026-11-20"\n'),
+    });
+    expect(astra.model).toBe('gpt-6-astra');
+    expect(astra.warnings).toEqual([]);
+  });
+
+  test('the generation CLI reports GPT-6.2 Astra as its default', () => {
+    const result = spawnSync('bun', ['run', 'scripts/resolve-codex-generation-model.ts'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      env: { ...process.env, CODEX_HOME: codexHome() },
+      timeout: 30_000,
+    });
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe('gpt-6-astra\tdefault (gpt-6.2-astra)\n');
+    expect(result.stderr).toBe('');
+  });
+
   test('warnings never carry control characters from config values', () => {
     // A TOML basic string parses \n and \t escapes — a hostile config value
     // must not inject fake lines into setup's terminal stderr.

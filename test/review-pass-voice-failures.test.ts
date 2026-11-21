@@ -94,7 +94,7 @@ describe('Capy pass program (fake host, real bins)', () => {
     expect(v.stdout).not.toContain('NOT_REVIEWED');
   }, 300_000);
 
-  // R95 (2026-11-13): a cyber_policy refusal of the outside voice is retried once on GPT-6 Astra with the read-only brief, then on Gemini 4 Carbon with the original brief; when every attempt fails the second-family read is missing, disclosed, and Step 11 goes on.
+  // R95 (2026-11-13): a cyber_policy refusal of the outside voice is retried once on GPT-6.2 Astra with the read-only brief, then on Gemini 4 Carbon with the original brief; when every attempt fails the second-family read is missing, disclosed, and Step 11 goes on.
   const CYBER = fs.readFileSync(path.join(ROOT, 'test/fixtures/cyber-policy/capy-latest-error.txt'), 'utf8').trim();
   const voiceReply = (t: string) => (t.includes('outside-voice') ? 'Recommendation: ship as-is because no finding survived' : cleanReply(t));
   // The fork defaults to Astra. Start these fixtures on Sol to exercise the same R95 sequence.

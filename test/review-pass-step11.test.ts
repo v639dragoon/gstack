@@ -84,7 +84,7 @@ describe('Capy pass program (fake host, real bins)', () => {
     expect(await runPass(h, base)).toContain('NEXT: judge (Phase 4)');
     expect(await runPass(h, { ...base, stage: 'voices', models: { 'outside-voice': { model_id: 'anthropic/claude-sonnet-5-5', reasoning_mode: 'medium' } } }))
       .toContain("STOP: the outside voice anthropic/claude-sonnet-5-5 is the anthropic family, the same as the lane model; Step 11 needs input.models['outside-voice'] from another family");
-    expect(await runPass(h, { ...base, stage: 'voices', models: { 'outside-voice': { model_id: 'openai/gpt-6.2-sol', reasoning_mode: 'medium' }, 'adversarial-native': { model_id: 'openai/gpt-6-astra', reasoning_mode: 'high' } } }))
+    expect(await runPass(h, { ...base, stage: 'voices', models: { 'outside-voice': { model_id: 'openai/gpt-6.2-sol', reasoning_mode: 'medium' }, 'adversarial-native': { model_id: 'openai/gpt-6.2-astra', reasoning_mode: 'high' } } }))
       .toContain('STOP: the outside voice openai/gpt-6.2-sol is the openai family, the same as the native voice');
     expect(h.creates.some(c => /^ship x14p1 (adversarial-native|outside-voice)$/.test(c.title))).toBe(false);
   }, 240_000);
@@ -115,8 +115,8 @@ describe('Capy pass program (fake host, real bins)', () => {
     expect(h2.starts.length).toBe(starts);
     fs.writeFileSync(recorded, kept);
     const resumed = await runPass(h2, { ...base2, stage: 'voices', models: same });
-    expect(resumed).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium as dispatched, started from the queue; outside the default configuration');
-    expect(h2.creates.find(c => c.title === 'ship x18p1 outside-voice')!.model).toEqual({ model_id: 'openai/gpt-6-astra', reasoning_mode: 'medium' });
+    expect(resumed).toContain('OUTSIDE_VOICE: openai/gpt-6.2-astra reasoning=medium as dispatched, started from the queue; outside the default configuration');
+    expect(h2.creates.find(c => c.title === 'ship x18p1 outside-voice')!.model).toEqual({ model_id: 'openai/gpt-6.2-astra', reasoning_mode: 'medium' });
   }, 300_000);
 
   // Value: protects=a queued outside voice resumes on the models recorded when the voices were dispatched, so changed rerun inputs cannot pair it with a native voice of its own family; fails_when=the rerun's input decides the queued voice's model and the native family (outside-voice finding on #3698: two OpenAI voices started);
@@ -126,7 +126,7 @@ describe('Capy pass program (fake host, real bins)', () => {
     const h = host(dir, env, { reject: t => t.endsWith('outside-voice') });
     const base = { base: 'main', out: path.join(dir, '.state/run/p1'), pass: 'x19p1', planFlags: ['--depth-floor', 'full'] };
     expect(await runPass(h, base)).toContain('NEXT: judge (Phase 4)');
-    const first = { 'adversarial-native': { model_id: 'openai/gpt-6-astra', reasoning_mode: 'high' }, 'outside-voice': { model_id: 'google/gemini-4-argon', reasoning_mode: 'medium' } };
+    const first = { 'adversarial-native': { model_id: 'openai/gpt-6.2-astra', reasoning_mode: 'high' }, 'outside-voice': { model_id: 'google/gemini-4-argon', reasoning_mode: 'medium' } };
     expect(await runPass(h, { ...base, stage: 'voices', models: first, budgetMs: 1 })).toMatch(/DISPATCHED: outside-voice path=\d+ queued/);
     const res = await runPass(h, { ...base, stage: 'voices' });
     expect(res).not.toContain('STOP:');
@@ -173,13 +173,13 @@ describe('Capy pass program (fake host, real bins)', () => {
   //   fails_when=upstream's certified model replaces the default or model selection changes another reader's brief; seam=none; no_claim=review quality
   test('an anthropic lane preserves the fork outside model, with every brief byte-identical to naming it', async () => {
     const { dir, env } = repo();
-    const forkOutside = { model_id: 'openai/gpt-6-astra', reasoning_mode: 'medium' };
+    const forkOutside = { model_id: 'openai/gpt-6.2-astra', reasoning_mode: 'medium' };
     const pinned = await voicesRun(dir, env, 'pin');
-    expect(pinned.res).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium default for an anthropic lane; outside the default configuration');
+    expect(pinned.res).toContain('OUTSIDE_VOICE: openai/gpt-6.2-astra reasoning=medium default for an anthropic lane; outside the default configuration');
     expect(pinned.res).toContain('NEXT: judge the voices');
     expect(pinned.models['ship x17p1 outside-voice']).toEqual(forkOutside);
     const named = await voicesRun(dir, env, 'named', { 'outside-voice': forkOutside });
-    expect(named.res).toContain('OUTSIDE_VOICE: openai/gpt-6-astra reasoning=medium given; outside the default configuration');
+    expect(named.res).toContain('OUTSIDE_VOICE: openai/gpt-6.2-astra reasoning=medium given; outside the default configuration');
     expect(named.shas).toEqual(pinned.shas);
     expect(named.models).toEqual(pinned.models);
   }, 300_000);

@@ -22,6 +22,15 @@ const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'gstack-eval
 afterEach(() => { while (dirs.length) fs.rmSync(dirs.pop()!, { recursive: true, force: true }); });
 
 describe('lib/pricing', () => {
+  test('GPT-6.2 Astra and Sol use standard-tier pricing', () => {
+    expect(pricingRow('openai/gpt-6.2-astra')).toEqual({
+      input_per_mtok: 8, output_per_mtok: 40, cached_input_per_mtok: 0.40, as_of: '2026-11',
+    });
+    expect(pricingRow('openai/gpt-6.2-sol')).toEqual({
+      input_per_mtok: 2, output_per_mtok: 10, cached_input_per_mtok: 0.10, as_of: '2026-11',
+    });
+  });
+
   test('the helper re-exports the lib table unchanged and documents the excluded billing categories', () => {
     expect(helperPricing.PRICING).toBe(PRICING);
     expect(helperPricing.estimateCostUsd).toBe(estimateCostUsd);
