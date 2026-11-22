@@ -46,6 +46,9 @@ function expectOutsideReviewControlFlow(text: string, promptHeading: string): vo
   expectMentions(fallback, [['not', 'availability/native', 'completion']], 'fallback');
 }
 
+const readShipSection = (file: string): string =>
+  readFileSync(join(import.meta.dir, '..', 'ship', 'sections', file), 'utf-8');
+
 describe('workflow judge excerpts', () => {
   test('expands ship sections in execution order, not alphabetical order', () => {
     const text = readWorkflowExcerpt('ship/SKILL.md', '# Ship:', '## Important Rules');
@@ -66,7 +69,10 @@ describe('workflow judge excerpts', () => {
     expect(text).not.toContain('GIT_SEQUENCE_EDITOR');
     expect(text).not.toContain("--exec 'true'");
     expect(text).not.toContain('-X ours');
-    expect(text).toContain('````text\nYou are running a ship-workflow');
+    // The Step 7/8 audit prompts moved to worker-read sections (fork 3d9a0023).
+    for (const file of ['test-coverage.md', 'plan-completion.md']) {
+      expect(readShipSection(file).match(/````text\n([\s\S]*?)\n````/)![1]).toContain('You are running a ship-workflow');
+    }
   });
 
   test('ship review shortcuts retain dedup and fixes repeat the whole review cycle', () => {
@@ -128,17 +134,17 @@ describe('workflow judge excerpts', () => {
   });
 
   test('ship approval gates stay outside the subagent prompts', () => {
-    const text = readWorkflowExcerpt('ship/SKILL.md', '# Ship:', '## Important Rules');
-    for (const [step, next, gate] of [[7, 8, '**7. Coverage gate:**'], [8, 9, '### Gate Logic']] as const) {
-      const section = text.slice(text.indexOf(`## Step ${step}:`), text.indexOf(`## Step ${next}:`));
+    // The Step 7/8 audit bodies are worker-read sections (fork 3d9a0023), not inline in SKILL.md.
+    for (const [file, gate] of [['test-coverage.md', '**7. Coverage gate:**'], ['plan-completion.md', '### Gate Logic']] as const) {
+      const section = readShipSection(file);
       const prompt = section.match(/````text\n([\s\S]*?)\n````/)![1];
       expect(prompt).not.toContain(gate);
       expect(prompt).not.toContain('Use AskUserQuestion:');
       expect(prompt).not.toContain('commit as');
       expect(section.indexOf(gate)).toBeGreaterThan(section.indexOf('\n````\n'));
     }
-    expect(text).toContain('"partial":N,"not_done":N');
-    expect(text).toContain('"intentionally dropped"');
+    expect(readShipSection('plan-completion-audit.md')).toContain('"partial":N,"not_done":N');
+    expect(readShipSection('plan-completion.md')).toContain('"intentionally dropped"');
   });
 
   test('expands a body before the end marker in the skeleton', () => {
