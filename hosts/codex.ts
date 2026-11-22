@@ -72,6 +72,8 @@ const codex = defineHost({
     'Claude Code: set Agent `run_in_background: false` if its schema exposes it.\n  A launch receipt means it went background: await its completion notice.\n  Other hosts: foreground; await completion when supported.': '`spawn_agent` (`fork_turns: "none"`) sends the prompt below; `wait_agent` until its final status.',
     '(via Agent tool):': '(via `spawn_agent`):',
     'verbatim as the Agent prompt:': 'verbatim as the prompt:',
+    '**Run lanes in the background.** Where the host has background commands (Claude Code: `run_in_background: true`),\nstart this call that way and wait for its completion notice: lanes outlast the foreground tool limit (10 minutes in\nClaude Code), and a killed call reruns every lane.': '**Run lanes in the background.** Keep the running shell session and wait for it to exit. A killed call reruns every lane.',
+    'in the background where the host can (Claude Code: `run_in_background: true`) and wait': 'in background shell sessions and wait',
     'not the Agent prompt.': 'not the prompt.',
     'through the Agent tool (a plain Read': "through Codex's `spawn_agent` (`fork_turns: \"none\"`) and `wait_agent` (a plain Read",
   },

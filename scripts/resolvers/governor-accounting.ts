@@ -47,6 +47,7 @@ If \`OUTCOME_MISSING=true\`, print exactly:
 }
 
 export function governorDispatchAccounting(ctx: TemplateContext): string {
+  const codex = ctx.host === 'codex';
   return `Union upstream-selected specialists with planned \`specialist:*\` slots, retaining
 source labels. The small-diff bypass skips upstream specialists only; execute any
 governor-planned checklists through the upstream batch on /ship, then the parent Exploratory QA handoff.
@@ -55,10 +56,9 @@ only when both dispatch records name the same frozen tree/SHA.
 Register upstream-only selected specialists with
 \`gstack-review-budget register-upstream "$RUN_ID" upstream-specialist:<name> --cycle <n>\`;
 then run \`gstack-review-budget dispatch "$RUN_ID" <gate> --cycle <n>\`
-before each Agent call. Every allowed Agent is accounted before launch. Every specialist
-Agent sets \`model: "sonnet"\`. Each prompt uses its rendered upstream brief and supplied diff file, with governor context. On /review, PACKET_PATHS names the rendered strict brief. CI_GREEN=true
+${codex ? 'before each subagent call. Account for every allowed subagent before launch.' : 'before each Agent call. Every allowed Agent is accounted before launch. Every specialist\nAgent sets `model: "sonnet"`.'} Each prompt uses its rendered upstream brief and supplied diff file, with governor context. On /review, PACKET_PATHS names the rendered strict brief. CI_GREEN=true
 means do not repeat builds/tests. Record each terminal verdict with \`gstack-review-budget verdict "$RUN_ID" <gate> <clean|issues_found|error|timeout> --cycle <n>\` and a best-effort
-\`gstack-gate-log\` row with model sonnet, effort agent-default, effort_source routed,
+\`gstack-gate-log\` row with model ${codex ? 'and effort as reported by the host,' : 'sonnet, effort agent-default, effort_source routed,'}
 fix_cycle, rerun_cause and manifest_wtree. Errors/timeouts retain upstream
 settlement and missing-coverage rules; the budget allows one corrected attempt.
 Routed codex-structured remains an additional Step ${ctx.skillName === 'ship' ? '11' : '4.8'} slot.
@@ -70,7 +70,7 @@ Routed codex-structured remains an additional Step ${ctx.skillName === 'ship' ? 
 export function governorRedTeamAccounting(ctx: TemplateContext): string {
   return `Register upstream activation as \`upstream-specialist:red-team\` unless red-team
 already occupies a planned slot. Dispatch the chosen gate through review-budget
-before the Sonnet Agent call; record its verdict and gate row afterward. A planned
+before the ${ctx.host === 'codex' ? 'native subagent' : 'Sonnet Agent'} call; record its verdict and gate row afterward. A planned
 red-team runs even without upstream activation. Upstream-required activation is
 accounted separately and does not consume the single routed escalation.
 
@@ -78,12 +78,13 @@ accounted separately and does not consume the single routed escalation.
 }
 
 export function governorSpecialistTelemetry(ctx: TemplateContext): string {
+  const codex = ctx.host === 'codex';
   return `**Persist per-gate telemetry:** for EACH dispatched specialist (and
 Red Team, either path), append one gate record, substituting {placeholder}s
 with carried literals:
 
 \`\`\`bash
-${ctx.paths.binDir}/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}","model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+${ctx.paths.binDir}/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"${ctx.skillName}","gate":"specialist:{name}","trigger":"{always-on|SCOPE_AUTH=true|DIFF_LINES={N}>200|user-flag:--{name}}","started_at":"{batch launch ts}","ended_at":"{completion or merge ts}",${codex ? '"model":"{observed model|codex-subagent}","effort":null,"tokens":{"total":null,"source":null}' : '"model":"claude-subagent","effort":null,"tokens":{"total":{N|null},"source":{"task-notification"|null}}'},"verdict":"{clean|issues_found|error}","findings":{"critical":{N},"informational":{N}},"fix_cycle":{N 0-based},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 \`\`\`
 
 Telemetry is best-effort: a failed gate-log call never blocks or changes the
@@ -99,7 +100,7 @@ manifest; if none this run, run \`gstack-diff-manifest <base>\` now).
 stderr (read before cleanup); omit \`tokens\` when unavailable.
 
 \`\`\`bash
-~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"claude-subagent","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
+~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"adversarial-claude","trigger":"always-on","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"${ctx.host === 'codex' ? '{observed model|codex-subagent}' : 'claude-subagent'}","effort":null,"verdict":"{clean|issues_found|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-adversarial","trigger":"CODEX_MODE=ready","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","fix_cycle":{N},"rerun_cause":{null|"fix-loop"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 ~/.claude/skills/gstack/bin/gstack-gate-log '{"record_type":"gate","run_id":"{RUN_ID}","skill":"{ship|review}","gate":"codex-structured","trigger":"DIFF_TOTAL={N}>=200","started_at":"{dispatch ts}","ended_at":"{completion ts}","model":"codex","effort":"{EFFECTIVE_EFFORT}","effort_source":"{EFFECTIVE_EFFORT_SOURCE}","effort_reason":"{EFFECTIVE_EFFORT_REASON}","tokens":{"total":{N},"source":"codex-stderr"},"verdict":"{clean|issues_found|timeout|error}","findings":{"p1":{N}},"fix_cycle":{N},"rerun_cause":{null|"fix-loop"|"p1-gate"},"manifest_wtree":"{MANIFEST_WTREE}"}' 2>/dev/null || true
 \`\`\`
@@ -111,12 +112,11 @@ Telemetry is best-effort: failures never block.
 }
 
 export function governorNativeRegistration(ctx: TemplateContext): string {
-  const isShip = ctx.skillName === 'ship';
-  return `Register and dispatch the required native attempt before its Agent call:
+  return `Register and dispatch the required native attempt before its ${ctx.host === 'codex' ? 'subagent' : 'Agent'} call:
 \`gstack-review-budget register-upstream "$RUN_ID" native-adversarial --cycle <n>\`,
 then \`gstack-review-budget dispatch "$RUN_ID" native-adversarial --cycle <n>\`.
 Registration records this upstream-required reviewer independently of routed slots.
-Every native call sets \`subagent_type: "general-purpose"\` and \`model: "sonnet"\`.
+${ctx.host === 'codex' ? 'Launch the native reviewer with the Codex subagent tools above.' : 'Every native call sets `subagent_type: "general-purpose"` and `model: "sonnet"`.'}
 
 `;
 }
@@ -124,8 +124,7 @@ Every native call sets \`subagent_type: "general-purpose"\` and \`model: "sonnet
 export function governorNativeVerdict(ctx: TemplateContext): string {
   const isShip = ctx.skillName === 'ship';
   return `Record \`gstack-review-budget verdict "$RUN_ID" native-adversarial <clean|issues_found|error|timeout> --cycle <n>\`
-and a best-effort \`gstack-gate-log\` row with gate native-adversarial, model sonnet,
-effort agent-default, effort_source routed, fix_cycle, rerun_cause and manifest_wtree.
+and a best-effort \`gstack-gate-log\` row with gate native-adversarial, ${ctx.host === 'codex' ? 'model and effort as reported by the host,' : 'model sonnet,\neffort agent-default, effort_source routed,'} fix_cycle, rerun_cause and manifest_wtree.
 Keep its original PASS_START review-log record; Step ${isShip ? '11.5' : '5.8'} binds that native receipt.
 The upstream one-corrected-attempt recovery applies; terminal failure never certifies completion.
 
