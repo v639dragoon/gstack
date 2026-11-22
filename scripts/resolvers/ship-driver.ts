@@ -14,7 +14,7 @@ export const SHIP_DRIVER_STOPS: Array<{ when: string; read: string }> = [
   { when: '`DISTRIBUTION: candidates=`', read: 'SKILL.md#step-2-distribution-pipeline-check' },
   { when: '`APPLE:` with a store ask', read: 'sections/apple-release.md#apple-app-store-release' },
   { when: '`pregate fail` or `incomplete`', read: 'sections/tests.md#step-5-run-tests-on-merged-code' },
-  { when: 'a failed or zero-run lane', read: 'sections/tests.md#test-failure-ownership-triage' },
+  { when: 'a failed or zero-run lane', read: 'sections/test-failure-triage.md#test-failure-ownership-triage' },
   { when: 'a red eval or a failed free-suite shard', read: 'sections/measure.md#measure-then-fix-loop-a-red-paid-eval-or-a-failed-free-suite-shard' },
   { when: 'Greptile found', read: 'sections/greptile-early.md#step-65-early-greptile-pr-after-the-free-tests-pass' },
   { when: 'Step 10 with a PR', read: 'sections/greptile.md#step-10-address-review-bot-comments-if-pr-exists' },

@@ -109,9 +109,13 @@ describe('ship/DRIVER.md covers the skeleton', () => {
     }
     expect(doc).toContain('read `sections/documentation.md` and run its audit as written');
     expect(doc).toContain('never shortens a reviewer\'s brief');
-    const prompts = ['review-army', 'adversarial', 'test-coverage', 'plan-completion', 'documentation']
-      .flatMap(sec => [...read(`ship/sections/${sec}.md`).matchAll(/````?text\n([\s\S]*?)\n````?/g)].flatMap(m => m[1]!.split('\n')))
-      .map(l => l.trim()).filter(l => l.length >= 40);
+    const inlinePrompts = ['review-army', 'adversarial', 'test-coverage', 'plan-completion', 'documentation']
+      .flatMap(sec => [...read(`ship/sections/${sec}.md`).matchAll(/````?text\n([\s\S]*?)\n````?/g)].flatMap(m => m[1]!.split('\n')));
+    // Step 7 and 8 now give workers prompt bodies in dedicated section files.
+    const workerPrompts = ['test-coverage-audit', 'plan-completion-audit']
+      .flatMap(sec => read(`ship/sections/${sec}.md`).split('\n'))
+      .filter(line => !line.startsWith('<!--'));
+    const prompts = [...inlinePrompts, ...workerPrompts].map(l => l.trim()).filter(l => l.length >= 40);
     expect(prompts.length).toBeGreaterThan(20);
     expect(prompts.filter(l => doc.includes(l))).toEqual([]);
   });
@@ -285,7 +289,7 @@ describe('STOP anchors', () => {
 
 describe('shape', () => {
   test('driver stays within its measured upstream plus governor budget, names no harness vocabulary, and every bin exists', () => {
-    expect(Buffer.byteLength(doc)).toBeLessThanOrEqual(12922) // v1.99.2 rebase: upstream 12,282 + ours 640 = 12,922 bytes (measured; prior cap 12,891).
+    expect(Buffer.byteLength(doc)).toBeLessThanOrEqual(12908); // v1.102.2 rebase: upstream 12,288 + ours 620 = 12,908 bytes (measured; prior cap 12,922).
     for (const term of ['AskUserQuestion', 'Agent tool', 'PreToolUse', 'SessionStart', '~/.claude', 'run_in_background']) expect(doc).not.toContain(term);
     const named = [...new Set([...doc.matchAll(/(?<!\/)\bgstack-[a-z0-9-]+/g)].map(m => m[0]))];
     expect(named.filter(n => !fs.existsSync(path.join(ROOT, 'bin', n)))).toEqual([]);

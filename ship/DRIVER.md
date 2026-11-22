@@ -1,6 +1,6 @@
 <!-- AUTO-GENERATED from ship/DRIVER.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
-Before the first driver phase, Read sections/governor.md. It owns governor planning, D3 filters and floor accounting at matching steps. Phase 3 passes its RUN_ID/CYCLE to review-dispatch pass; Phase 4 dispatches the strict codex-structured reader through its consent-enforcing Codex send, never as a general-purpose reader. Before final acceptance run review-budget complete --require-audits --final and stop on incomplete coverage.
+Before Phase 1, read sections/governor.md for planning, D3 filters and floor accounting at each step. Phase 3 passes its RUN_ID/CYCLE to review-dispatch pass; Phase 4 dispatches the strict codex-structured reader through its consent-enforcing Codex send, never as a general-purpose reader. Before final acceptance run review-budget complete --require-audits --final and stop on incomplete coverage.
 
 # /gstack-ship driver
 
@@ -130,7 +130,7 @@ repo gates run with CI. Unattended, push defers the pre-push offer; else its STO
 - `DISTRIBUTION: candidates=`: `SKILL.md#step-2-distribution-pipeline-check`
 - `APPLE:` with a store ask: `sections/apple-release.md#apple-app-store-release`
 - `pregate fail` or `incomplete`: `sections/tests.md#step-5-run-tests-on-merged-code`
-- a failed or zero-run lane: `sections/tests.md#test-failure-ownership-triage`
+- a failed or zero-run lane: `sections/test-failure-triage.md#test-failure-ownership-triage`
 - a red eval or a failed free-suite shard: `sections/measure.md#measure-then-fix-loop-a-red-paid-eval-or-a-failed-free-suite-shard`
 - Greptile found: `sections/greptile-early.md#step-65-early-greptile-pr-after-the-free-tests-pass`
 - Step 10 with a PR: `sections/greptile.md#step-10-address-review-bot-comments-if-pr-exists`
