@@ -44,9 +44,9 @@ import { cargoModel, type CargoModel } from '../rust';
 import { adapterFor, PIPEFAIL, readRange, STALL_IDLE, supervise, type Counter, type Supervised } from '../supervise';
 import { ranFiles, runChanged, runReceiptFields, verifyFromRun, type RunProfile } from '../../run-evidence';
 import { WINDOWS_BASH_ARG_MAX } from '../../script-invocation';
-import { matchesAny } from '../../ship-policy';
 import { testFileArgs } from '../../test-paths';
 import type { CheckDef, CheckResult, PregateContext, RemoteObligation } from '../types';
+import { runLaneJobs } from './lane-jobs';
 import { playwrightFileArgs, selectPlaywrightConfigs, shellQuote } from './playwright-config';
 
 /** The runner a `.py`-only selection gets; it needs the pytest module importable by python3 (`pytestMissing`). */
@@ -479,52 +479,8 @@ async function runLocal(ctx: PregateContext, env: NodeJS.ProcessEnv, groups: Run
   const log = path.join(dir, 'lanes.log');
   fs.writeFileSync(log, '');
   const counter: Counter = { done: 0, total: groups.reduce((n, g) => n + g.files.length, 0) };
-  const runs: LocalRun[] = [];
-  const jobs: Array<{ group: RunGroup; files: string[] }> = [];
-  let serialCount = 0;
-  for (const g of groups) {
-    const serial = g.files.filter(f => matchesAny(ctx.config.serial_patterns, g.cwd ? `${g.cwd}/${f}` : f));
-    const unit = g.files.filter(f => !serial.includes(f));
-    serialCount += serial.length;
-    for (const files of [...(unit.length ? [unit] : []), ...serial.map(f => [f])]) jobs.push({ group: g, files });
-  }
-  const overlap = groups.some(g => g.overlap) && groups.some(g => !g.overlap);
-  const overlapLines: string[] = [];
-  if (!overlap) {
-    for (const { group, files } of jobs) runs.push(await runOnce(ctx, env, group, files, log, counter));
-  } else {
-    const deferred = new Map<number, LocalRun>();
-    const track = async (concurrent: boolean) => {
-      for (const [i, { group, files }] of jobs.entries()) {
-        if (!!group.overlap !== concurrent) continue;
-        const target = concurrent ? path.join(dir, `lanes-overlap-${i + 1}.log`) : log;
-        if (concurrent) fs.writeFileSync(target, '');
-        runs[i] = await runOnce(ctx, concurrent ? { ...env, GSTACK_PREGATE_OVERLAP: '1' } : env, group, files, target, counter);
-      }
-    };
-    // Calling the overlap track first starts its first process before the serial track.
-    // Even an unexpected track error must wait for the other track to settle.
-    const tracks = await Promise.allSettled([track(true), track(false)]);
-    for (const result of tracks) if (result.status === 'rejected') throw result.reason;
-    for (const [i, { group, files }] of jobs.entries()) {
-      if (!group.overlap) continue;
-      if (runs[i]!.exit === 75) {
-        deferred.set(i, runs[i]!);
-        const retryEnv = { ...env };
-        delete retryEnv.GSTACK_PREGATE_OVERLAP;
-        runs[i] = await runOnce(ctx, retryEnv, group, files, log, counter);
-      }
-    }
-    for (const group of groups.filter(g => g.overlap)) {
-      const retried = jobs.some((j, i) => j.group === group && deferred.has(i));
-      overlapLines.push(`overlap: ${group.runner} ${retried ? 'exited 75 (nothing ran) and re-ran after the other groups' : 'ran beside the other groups'}`);
-    }
-    // Read all ranges before replacing lanes.log: serial and retry ranges share it.
-    // The header offset includes supervise's $ line, unlike its output-only start.
-    const segments = runs.flatMap((run, i) => deferred.has(i) ? [deferred.get(i)!, run] : [run])
-      .map(run => readRange(run.log, run.header, run.end, run.end - run.header));
-    fs.writeFileSync(log, segments.join(''));
-  }
+  const { runs, overlapLines, serialCount } = await runLaneJobs(groups, ctx.config.serial_patterns, log, env,
+    (group, files, target, jobEnv) => runOnce(ctx, jobEnv, group, files, target, counter));
   const bad = runs.find(r => r.exit === null) ?? runs.find(r => r.exit !== 0);
   const sum = (k: 'ran' | 'failed') => (runs.some(r => r[k] === null) ? null : runs.reduce((n, r) => n + (r[k] as number), 0));
   const zero = runs.find(r => r.ran === 0);
