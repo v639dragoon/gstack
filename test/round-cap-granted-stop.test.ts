@@ -216,6 +216,26 @@ describe('the CLI seams', () => {
     expect(r.run('gstack-ship-receipt', ['history', '--body', r.body, '--pr', '7', '--base', 'main', '--run', 'fc2']).stdout).toContain('PR_REVIEW_GRANT: not applied (grant ' + g + ' was claimed by run fc1');
   });
 
+  test('a scoped grant cannot cover the full-branch re-review required by an authorization fix', () => {
+    const r = stopRepo();
+    const s = r.head();
+    const g = grantId(r.run('gstack-approvals', ['round-grant', '--pr', '7', '--head', s, '--kind', 'fix-check', '--stop-run', 'ro', '--findings', 'p1/red-team#2', '--reason', 'fixable blocker', '--by', 'Captain GStack Minder']).stdout)!;
+    r.f.write({ 'lib/auth/access.ts': 'export const fixed = true;\n' });
+    r.f.commit('fix authorization');
+    const authFix = r.head();
+    r.f.write({ 'src/x.ts': 'export const x = 3;\n' });
+    r.f.commit('update the caller');
+    for (const range of [[], ['--range-base', authFix]]) {
+      const plan = r.run('gstack-review-plan', ['--base', 'main', '--gate-tagged', '0', '--prior-rounds', '3', '--prior-full', '3', '--pr', '7', '--round-grant', g, '--stop', s, '--json', ...range]);
+      expect(plan.status, plan.stderr).toBe(0);
+      expect(JSON.parse(plan.stdout)).toMatchObject({
+        risky_full_review: true,
+        next: { step: 'stop', reason: expect.stringContaining('full re-review required') },
+        dispatches: [],
+      });
+    }
+  });
+
   // Value: protects=FOUN-505, a granted stop whose fix is one string in a data .json (named by code or not) reads its fix range and plans
   //   the fix-check; fails_when=gstack-diff-scope calls the range unmatched, FIX_RANGE prints unread and the plan stops with no fix to
   //   read; seam=gstack-diff-scope, gstack-review-plan's fix range, classifyDiff's data rows

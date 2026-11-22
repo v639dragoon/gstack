@@ -172,9 +172,13 @@ function main(): number {
   if (has('--depth-floor') && floor !== 'standard' && floor !== 'full') { process.stderr.write('gstack-review-plan: --depth-floor must be standard or full (a floor only raises the depth)\n'); return EXIT.usage; }
   const grant = flag('--grant');
   if (has('--grant') && (!grant || grant.startsWith('-'))) { process.stderr.write('gstack-review-plan: --grant needs the approval id gstack-approvals add printed\n'); return EXIT.usage; }
-  const rangeBase = flag('--range-base') ?? flag('--stop');
-  if (has('--stop') && (!flag('--stop') || flag('--stop')!.startsWith('-') || !flag('--round-grant') || (has('--range-base') && flag('--range-base') !== flag('--stop') && git(['merge-base', '--is-ancestor', flag('--stop')!, flag('--range-base')!]) === null))) { process.stderr.write('gstack-review-plan: --stop <the stop record\'s head> comes with the --round-grant <fix-check grant id> that answers it (PR_REVIEW_FLAGS:), and is the fix range\'s base: a --range-base must be that head or a commit after it (the post-review or targeted re-plan after the granted fix-check)\n'); return EXIT.usage; }
-  if (has('--range-base') && (!rangeBase || rangeBase.startsWith('-'))) { process.stderr.write('gstack-review-plan: --range-base needs the fix range\'s base commit (this pass\'s PASS_HEAD; with --post-review --last fix-check, the last fix-check\'s commit)\n'); return EXIT.usage; }
+  const stopBase = flag('--stop');
+  const requestedRangeBase = flag('--range-base');
+  if (has('--range-base') && (!requestedRangeBase || requestedRangeBase.startsWith('-'))) { process.stderr.write('gstack-review-plan: --range-base needs the fix range\'s base commit (this pass\'s PASS_HEAD; with --post-review --last fix-check, the last fix-check\'s commit)\n'); return EXIT.usage; }
+  if (has('--stop') && (!stopBase || stopBase.startsWith('-') || !flag('--round-grant') || (requestedRangeBase && requestedRangeBase !== stopBase && git(['merge-base', '--is-ancestor', stopBase, requestedRangeBase]) === null))) { process.stderr.write('gstack-review-plan: --stop <the stop record\'s head> comes with the --round-grant <fix-check grant id> that answers it (PR_REVIEW_FLAGS:), and is the fix range\'s base: a --range-base must be that head or a commit after it (the post-review or targeted re-plan after the granted fix-check)\n'); return EXIT.usage; }
+  // An unspent fix-check grant covers the whole change since its stop. Later
+  // bases belong to upstream's re-plans after that fix-check has run.
+  let rangeBase = last === 'fix-check' ? requestedRangeBase ?? stopBase : stopBase ?? requestedRangeBase;
   if (grant && !rangeBase) { process.stderr.write('gstack-review-plan: --grant needs --range-base (round 2\'s PASS_HEAD; with --post-review --last fix-check, the last fix-check\'s commit), which binds the grant to the stop it answers\n'); return EXIT.usage; }
   if (list('--force').includes('targeted')) { process.stderr.write('gstack-review-plan: --force targeted: the targeted reader is no specialist; the plan dispatches it whenever the diff has a targeted class, and after a finished loop for a docs claim added since its read: pass --range-base <the commit it read> --targeted-ran <the targeted_patch_id it read> (docs/review-policy.md#targeted-only-read-after-the-loop)\n'); return EXIT.usage; }
   const declared = list('--declare-risk');
@@ -216,6 +220,7 @@ function main(): number {
     if (g?.kind === 'fix-check') grantedStop = g.approval;
     const logged = g?.kind === 'fix-check' && last === 'fix-check' ? runScriptSync(path.join(path.dirname(Bun.fileURLToPath(import.meta.url)), 'gstack-review-read'), [], { encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 }) : null;
     grantUnspent = !!logged && logged.status === 0 && !grantSpent((logged.stdout ?? '').split('\n---CONFIG---')[0]!.split('\n').flatMap(l => { try { const v = JSON.parse(l); return v && typeof v === 'object' ? [v] : []; } catch { return []; } }), g!, bindRow);
+    if (grantUnspent) rangeBase = stopBase;
     const atOrBefore = !!g && !!at && (g.head === at || git(['merge-base', '--is-ancestor', g.head, at]) !== null);
     if (!roundGrant || !g || !atOrBefore || (pr !== undefined && !grantForPr(g, Number(pr)))) { process.stderr.write(`gstack-review-plan: --round-grant ${roundGrant ?? ''}: no approved review_round_grant row ${roundGrant ?? ''} naming HEAD ${(at ?? 'unknown').slice(0, 12)} or a commit before it${pr ? ` and PR #${pr}` : ''} in this branch's approval record; record one with gstack-approvals round-grant (docs/troubleshooting.md#pr-round-cap)\n`); return EXIT.refused; }
   }
@@ -297,7 +302,8 @@ function main(): number {
   const brief = targetedBriefSha();
   // Upstream ignores --fixed-below after a completed fix-check: it describes the
   // fixes already checked, not a new risky repair requiring another full pass.
-  const riskyRepeat = !!fixRange?.risky_surface?.length && (has('--fixed-blocking') || (has('--fixed-below') && last !== 'fix-check') || (has('--post-review') && pass > 0));
+  const stoppedFixCheck = !!grantedStop && (last !== 'fix-check' || grantUnspent);
+  const riskyRepeat = !!fixRange?.risky_surface?.length && (stoppedFixCheck || has('--fixed-blocking') || (has('--fixed-below') && last !== 'fix-check') || (has('--post-review') && pass > 0));
   const ran = !['uncommitted', 'none'].includes(patch) && flag('--targeted-ran') === patch;
   const postReview = has('--post-review');
   const fixCheckAt = postReview && pass > 0 && last === 'fix-check' && fixRange?.runtime_lines != null ? git(['rev-parse', '--verify', '--quiet', `${rangeBase}^{commit}`])?.trim() : undefined;
@@ -337,7 +343,9 @@ function main(): number {
   }
   const targetedDeltaOut = delta?.state === 'dispatch' ? { range_base: delta.range_base, paths: delta.paths, classes: targeted.classes } : null;
   if (riskyRepeat) plan = { ...plan, risky_full_review: true };
-  if (riskyRepeat && plan.next.step !== 'full' && (pass >= FULL_PASS_CAP || last === 'fix-check')) plan = { ...plan, next: { step: 'stop', reason: 'risky-surface full re-review required but the upstream pass cap is exhausted' }, dispatches: [] };
+  if (riskyRepeat && stoppedFixCheck) {
+    plan = { ...plan, next: { step: 'stop', reason: 'risky-surface full re-review required; the recorded fix-check grant authorizes only a scoped review' }, dispatches: [] };
+  } else if (riskyRepeat && plan.next.step !== 'full' && (pass >= FULL_PASS_CAP || last === 'fix-check')) plan = { ...plan, next: { step: 'stop', reason: 'risky-surface full re-review required but the upstream pass cap is exhausted' }, dispatches: [] };
   if (has('--cycle') && !/^\d+$/.test(flag('--cycle') ?? '')) { process.stderr.write('gstack-review-plan: --cycle must be a non-negative integer\n'); return EXIT.usage; }
   let governor;
   try { if (flag('--run-id')) { const loaded = loadGovernorPlan(root, binDir, flag('--run-id')!, has('--cycle') ? Number(flag('--cycle')) : undefined); governor = { run_id: flag('--run-id')!, cycle: loaded.cycle, plan: loaded.plan, bug_class: loaded.bugClasses }; } }
