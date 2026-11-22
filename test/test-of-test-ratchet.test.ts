@@ -234,6 +234,7 @@ const BASELINE = [
   'test/ship-finish-fixed-links.test.ts', // GST-1973: runs bin/gstack-ship-release finish through test/helpers/ship-bin-fixture.ts's RELEASE path, like test/ship-release.test.ts
   'test/ship-release.test.ts', // GSTA-167 PR 4: runs bin/gstack-ship-release through test/helpers/ship-bin-fixture.ts's RELEASE path, so it names no bin/ literal itself
   'test/ship-section-fixture.test.ts',
+  'test/ship-triage-labels.test.ts', // Pins wording in the generated ship/sections/test-failure-triage.md trigger-read asset.
   'test/skill-budget-regression.test.ts',
   'test/skill-eval-checks.test.ts', // GST-377: runs the committed skill-eval check commands, which gstack ships as data for gstack-evals' graders; no gstack module executes them
   'test/skill-fixture.test.ts', // slices test/skill-routing-e2e.test.ts source (recorded 2026-10 when the ratchet learned paid-source slicing)
