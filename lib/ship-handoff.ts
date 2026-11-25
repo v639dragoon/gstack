@@ -58,8 +58,8 @@ export function recordSection(text: string, name: string): string[] | undefined 
 
 /** The ship sections each step reads (ship/sections/manifest.json); conditional ones (apple-release, measure, greptile, shared-code-reuse, handoff) load only when their trigger fires. */
 const STEP_SECTIONS: Record<string, string[]> = {
-  '4': ['tests'], '5': ['tests'], '6': ['tests'], '6.5': ['greptile-early'], '7': ['test-coverage'], '8': ['plan-completion'], '9': ['review-army'],
-  '11': ['adversarial'], '13': ['changelog'], '14.5': ['documentation'], '18': ['pr-body', 'capy-pr'], '19': ['pr-body', 'capy-pr'],
+  '1': ['governor'], '4': ['tests'], '5': ['tests'], '6': ['tests'], '6.5': ['greptile-early'], '7': ['test-coverage'], '8': ['plan-completion'], '9': ['governor', 'review-army'],
+  '11': ['adversarial'], '13': ['changelog'], '14.5': ['documentation'], '16': ['governor'], '18': ['pr-body', 'capy-pr'], '19': ['pr-body', 'capy-pr'],
 };
 
 /** The sections a child running Steps from..to reads (GSTA-167): its own steps' only. */

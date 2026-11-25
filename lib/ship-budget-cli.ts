@@ -158,7 +158,8 @@ export function decide(l: Ledger, step: string, next: Next, call: number | null,
   const boundary = (startThreshold ? next.step === '1' : next.step in SEGMENTS && next.step !== '1');
   const to = l.parent ? l.parent.to : SEGMENTS[next.step]!;
   const small = boundary && !startThreshold ? keepsSmallRun(loadCalibration(l.calibration), { runtimeLines, from: next.step, to, call }) : null;
-  const wants = boundary && !small && (above === null ? !startThreshold && !l.parent_metered : above >= threshold);
+  const configuredStepOneHandoff = startThreshold && l.meter.contract.meter === 'claude' && l.cap === 150_000_000;
+  const wants = boundary && !small && (configuredStepOneHandoff || (above === null ? !startThreshold && !l.parent_metered : above >= threshold));
   const depth = l.depth ?? (l.parent ? 1 : 0);
   const hold = !wants || !l.parent ? undefined
     : !l.steps_done?.length ? 'no step completed since verify-handoff'

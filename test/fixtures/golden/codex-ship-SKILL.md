@@ -202,7 +202,7 @@ its absolute path, with these headings so a paused run can resume:
 **Budget** (docs/ship-budget.md): `--token-cap <n|none>` (or GSTACK_SHIP_TOKEN_CAP); `--resume <record>`
 or `--continue <handoff>` re-attach. Step 1 runs `gstack-ship-budget start --record <record>`. With a cap,
 read `sections/budget-handoff.md` relative to the installed `gstack-ship` SKILL.md directory, `check` at each step boundary and dispatch
-batch, obey `verdict=`, `close` before Step 22.
+batch, obey `verdict=`, `close` before Step 22. A Step 1 handoff runs before preflight.
 
 A **receipt** is saved evidence of a check's command, result and consumed content.
 A review's **start token** is the opaque value returned by `gstack-review-log --start`

@@ -31,22 +31,22 @@ describe('the handoff brief names only the segment\'s sections', () => {
   test('Steps 9-11.5: the step list plus review-army and adversarial only', () => {
     const read = readSection(briefFor('9', '11.5'));
     expect(read).toContain("ship/SKILL.md's step list");
-    for (const s of ['review-army.md', 'adversarial.md', 'budget-handoff.md']) expect(read).toContain(s);
+    for (const s of ['governor.md', 'review-army.md', 'adversarial.md', 'budget-handoff.md']) expect(read).toContain(s);
     for (const s of ['test-coverage.md', 'plan-completion.md', 'changelog.md', 'documentation.md', 'pr-body.md', 'capy-pr.md', 'tests.md']) expect(read).not.toContain(s);
     expect(read).toMatch(/Never read ship\/sections\/preamble\.md in full or docs\/ship-budget\.md/);
   });
 
   test('Steps 12-22: the step list plus changelog, documentation, pr-body and capy-pr', () => {
     const read = readSection(briefFor('12', '22'));
-    for (const s of ['changelog.md', 'documentation.md', 'pr-body.md', 'capy-pr.md', 'budget-handoff.md']) expect(read).toContain(s);
+    for (const s of ['changelog.md', 'documentation.md', 'governor.md', 'pr-body.md', 'capy-pr.md', 'budget-handoff.md']) expect(read).toContain(s);
     for (const s of ['test-coverage.md', 'plan-completion.md', 'review-army.md', 'adversarial.md']) expect(read).not.toContain(s);
     expect(read).toMatch(/Never read ship\/sections\/preamble\.md in full or docs\/ship-budget\.md/);
   });
 
   test('a grandchild segment names only the sections of its own steps', () => {
-    expect(segmentSections('9', '11.5')).toEqual(['review-army', 'adversarial']);
+    expect(segmentSections('9', '11.5')).toEqual(['governor', 'review-army', 'adversarial']);
     expect(segmentSections('19', '22')).toEqual(['pr-body', 'capy-pr']);
-    expect(segmentSections('1', '22')).toEqual(['tests', 'greptile-early', 'test-coverage', 'plan-completion', 'review-army', 'adversarial', 'changelog', 'documentation', 'pr-body', 'capy-pr']);
+    expect(segmentSections('1', '22')).toEqual(['governor', 'tests', 'greptile-early', 'test-coverage', 'plan-completion', 'review-army', 'adversarial', 'changelog', 'documentation', 'pr-body', 'capy-pr']);
   });
 
   // Value: protects=a handoff child reads exact line ranges: never ship/SKILL.md's preamble, the section index or another segment's steps, and every review section whole, so its reviewer briefs are the section's own text; fails_when=the brief names files without ranges, a range starts at line 1 of SKILL.md, a review section is cut, or a gate heading falls outside the ranges;

@@ -177,6 +177,25 @@ describe('meters and exit codes', () => {
 });
 
 describe('delegation', () => {
+  // The long-lived-context test covers threshold delegation; this one covers the configured Step 1 handoff below it.
+  test('the configured Claude Code cap hands off Step 1 even in a small context', () => {
+    const h = fresh();
+    const session = '12345678-1234-1234-1234-123456789abc';
+    const project = path.join(h.env.CLAUDE_CONFIG_DIR!, 'projects', 'fixture');
+    fs.mkdirSync(project, { recursive: true });
+    fs.writeFileSync(path.join(project, session + '.jsonl'), JSON.stringify({
+      type: 'assistant', message: { id: 'small', usage: { input_tokens: 40, output_tokens: 10 } },
+    }) + '\n');
+    const start = h.sb(['start', '--record', h.record(), '--session', session], { GSTACK_SHIP_TOKEN_CAP: '150M' });
+    expect(start.code, start.err).toBe(0);
+    expect(h.field(start.out, 'BUDGET', 'call')).toBe('50');
+    expect(h.field(start.out, 'BUDGET', 'verdict')).toBe('delegate');
+    expect(h.field(start.out, 'BUDGET', 'admission_cap')).toBe('150000000');
+    expect(start.out).toContain('--from 1 --to 22');
+    const ordinary = h.sb(['start', '--record', h.record(), '--session', session], { GSTACK_SHIP_TOKEN_CAP: '149M' });
+    expect(ordinary.code, ordinary.err).toBe(0);
+    expect(h.field(ordinary.out, 'BUDGET', 'verdict')).toBe('continue');
+  });
   test('start from a long-lived context (100k or more above the host floor) delegates the whole /ship', () => {
     const h = fresh();
     const s = started(h, ['--token-cap', '60M', '--reading', '9000000', '--prior-reading', '8740000']);

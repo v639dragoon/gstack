@@ -17,9 +17,15 @@ export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run
   ]) : new Set<string>();
   const gateFor = (d: Dispatch) => d.name === 'codex-structured' ? 'codex-structured' : d.role === 'red-team' ? 'red-team'
     : d.role === 'specialist' ? `specialist:${d.name}` : d.role === 'adversarial-native' ? 'native-adversarial' : d.role === 'outside-voice' ? 'upstream-outside:challenge' : `upstream-specialist:${d.role}`;
+  const requiredFullReader = plan.next.keepReader
+    ? plan.dispatches.find(d => d.effort === 'full' && d.exclude.every(spec => spec.startsWith(':(top,exclude,glob)')))
+    : undefined;
+  const requiredByRound = (d: Dispatch) => d === requiredFullReader ||
+    (!!plan.next.rangeReaders && (d.role === 'red-team' || d.role === 'adversarial-native'));
+  const requiredRoundGates = new Set(plan.dispatches.filter(requiredByRound).map(gateFor));
   const skipped = [...plan.skipped];
   let dispatches: Dispatch[] = plan.dispatches.filter(d => {
-    if (floors.has(gateFor(d)) || d.role === 'fix-check' || d.role === 'targeted') return true;
+    if (floors.has(gateFor(d)) || requiredByRound(d) || d.role === 'fix-check' || d.role === 'targeted') return true;
     const enabled = d.role === 'specialist' ? flags.upstreamSpecialists
       : d.role === 'red-team' ? flags.redTeamLocTrigger || plan.class === 'gate' || plan.next.step === 'scoped' || requiredRedTeam
       : d.role === 'adversarial-native' ? flags.adversarialClaude : flags.codexChallenge;
@@ -47,7 +53,7 @@ export function governorPlan(plan: ReviewPlan, policy: unknown, governor?: { run
     if (d.role === 'specialist' && d.checklists?.includes('state-machines')) d.governor_gates = [...new Set([...(d.governor_gates ?? []), 'upstream-specialist:state-machines'])];
     d.governor = { ...metadata, specialist_reasons: [d.reason ?? (floors.has(gate) ? 'governor-tier-floor' : 'upstream-selection')] };
     d.governor_gate = d.name === 'batched' && d.governor_floor ? specialistFloors[0] : floors.has(gate) || gate === 'native-adversarial' || gate === 'upstream-outside:challenge' || gate === 'fix-check' ? gate : `upstream-specialist:${d.name}`;
-    d.governor_floor = !!d.governor_floor || floors.has(gate);
+    d.governor_floor = !!d.governor_floor || floors.has(gate) || requiredRoundGates.has(gate);
   }
   return { ...plan, dispatches, skipped, ...(metadata ? { governor: metadata } : {}) };
 }

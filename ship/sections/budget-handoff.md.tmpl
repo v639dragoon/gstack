@@ -52,7 +52,9 @@ end status=incomplete. Raising the cap is the owner's call: `/gstack-ship --resu
 `resume --run <id>` restores the ledger and record from the Drive checkpoint; a
 corrupt ledger takes `--rebuild-from-record`.
 
-**verdict=delegate.** The next segment (Steps 9–11.5, 12–22, or 1–22 at start) runs in a
+**verdict=delegate.** On Claude Code with a 150M cap, run the Step 1–22 handoff before starting
+preflight. Use the printed range, then launch the brief with the budget helper below.
+The next segment (Steps 9–11.5, 12–22, or 1–22 at start) runs in a
 fresh child; you wait and advance only after reconciling it. Steps 7–8 stay with the parent: the
 Steps 9–11.5 child reads review-army.md and adversarial.md and takes their results from the record.
 1. `gstack-ship-budget handoff --run <id> --from 9 --to 11.5 --base origin/<base> --reading <n>`

@@ -92,22 +92,30 @@ test('D3 switches cannot drop floor checklists, red-team or structured', () => {
 });
 
 
-test('ordinary blocking repair uses upstream scoped selection and below-floor repair uses fix-check', () => {
-  const f = fixture('B', {});
+test('blocking and below-floor runtime fixes keep the upstream full second-round reader with D3 trims', () => {
+  const f = fixture('B', { native_adversarial: false, upstream_specialists: false, codex_challenge: false, red_team_loc_trigger: false });
   try {
     const since = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: f.repo, encoding: 'utf8', timeout: 10_000 }).stdout.trim();
     fs.appendFileSync(path.join(f.repo, 'main.ts'), 'export const fixed = true;\n');
     f.git('add', '.'); f.git('commit', '-qm', 'fix');
     const repeat = ['--pass', '1', '--last', 'full', '--pass1-depth', 'standard', '--range-base', since];
-    const scoped = f.run('gstack-review-plan', [...f.flags, ...repeat, '--fixed-blocking', '--json']);
-    expect(JSON.parse(scoped.stdout).next.step).toBe('scoped');
-    const check = f.run('gstack-review-plan', [...f.flags, ...repeat, '--fixed-below', '--json']);
-    expect(JSON.parse(check.stdout).next.step).toBe('fix-check');
+    for (const change of ['--fixed-blocking', '--fixed-below']) {
+      const planned = f.run('gstack-review-plan', [...f.flags, ...repeat, change, '--json']);
+      expect(planned.status, planned.stderr).toBe(0);
+      const plan = JSON.parse(planned.stdout);
+      expect(plan.next.step).toBe('full');
+      expect(plan.dispatches).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'codex-structured', governor_floor: true }),
+      ]));
+      expect(plan.dispatches.some((d: { name: string; effort: string; governor_floor: boolean }) =>
+        d.name !== 'codex-structured' && d.effort === 'full' && d.governor_floor)).toBe(true);
+      expect(plan.dispatches.some((d: { role: string }) => d.role === 'fix-check')).toBe(false);
+    }
   } finally { f.cleanup(); }
 });
 
 for (const risky of ['lib/auth/access.ts', 'lib/oauth/token.ts', 'lib/session/token.ts', 'lib/jwt/token.ts', 'db/rls.sql', 'billing/entitlements.ts', 'db/migrations/a.sql', 'lib/secrets.ts'])
-  test(`risky fix ${risky} requires full whole-branch review despite D3; cap stops`, () => {
+  test(`risky fix ${risky} requires full whole-branch review despite D3, including the read-only final round`, () => {
     const f = fixture('B', { native_adversarial: false, upstream_specialists: false, codex_challenge: false, red_team_loc_trigger: false });
     try {
       const since = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: f.repo, encoding: 'utf8', timeout: 10_000 }).stdout.trim();
@@ -128,8 +136,15 @@ for (const risky of ['lib/auth/access.ts', 'lib/oauth/token.ts', 'lib/session/to
       expect(fs.readFileSync(rendered.payload.file, 'utf8')).toContain('+export const x79 = 79;');
       // flagReader uses the first occurrence; replace it explicitly for the cap probe.
       const capFlags = [...repeat]; capFlags[1] = '2';
+      const final = JSON.parse(f.run('gstack-review-plan', [...f.flags, ...capFlags, '--json']).stdout);
+      expect(final.next).toMatchObject({ step: 'full', readOnly: true });
+      expect(final.dispatches).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'codex-structured', governor_floor: true }),
+      ]));
+      capFlags[1] = '3';
       const cap = JSON.parse(f.run('gstack-review-plan', [...f.flags, ...capFlags, '--json']).stdout);
-      expect(cap.next.step).toBe('stop'); expect(cap.dispatches).toEqual([]);
+      expect(cap.next.step).toBe('stop');
+      expect(cap.dispatches).toEqual([]);
       if (risky === 'lib/auth/access.ts') {
         const approval = f.run('gstack-approvals', ['add', '--ask', `Owner grant: scoped fix-check (review_loop_grant ${since.slice(0, 12)})`, '--words', 'do it', '--by', 'GStack Minder', '--scope', 'this /ship invocation', '--json']);
         expect(approval.status, approval.stderr).toBe(0);
