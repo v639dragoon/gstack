@@ -38,7 +38,7 @@ describe('/ship review fix loop (#2391)', () => {
     const content = fs.readFileSync(path.join(ROOT, 'ship/SKILL.md'), 'utf-8').replace(/\s+/g, ' ');
     const review = fs.readFileSync(path.join(ROOT, 'ship/sections/review-army.md'), 'utf-8').replace(/\s+/g, ' ');
     expect(review).toContain('**Fixes applied below the cap:** Insert Step 5');
-    expect(content).toContain('Permitted repairs continue in this invocation without restarting /ship');
+    expect(content).toContain('Permitted repairs continue in this invocation without restarting /gstack-ship');
     expect(review).toContain('do not run a fourth fixing cycle');
     // The loop re-runs tests AND the review, and only a converged pass continues.
     expect(review).toContain('Step 5, affected Steps 6–8 and all of Step 9 before the pending Step 10');

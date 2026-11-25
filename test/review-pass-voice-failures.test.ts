@@ -18,7 +18,7 @@ describe('Capy pass program (fake host, real bins)', () => {
       const { dir, env } = repo();
       const out = path.join(dir, '.state/run/p1');
       const h = host(dir, env, { ...o, epoch: Date.now() });
-      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'], models: { 'outside-voice': { model_id: 'openai/gpt-6.1-sol', reasoning_mode: 'medium' } } };
+      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'], models: { 'outside-voice': { model_id: 'openai/gpt-6.2-sol', reasoning_mode: 'medium' } } };
       expect(await runPass(h, base)).toContain('NEXT: judge (Phase 4)');
       let res = '';
       for (let i = 0; i < 6; i++) {
@@ -57,7 +57,7 @@ describe('Capy pass program (fake host, real bins)', () => {
       const { dir, env } = repo();
       const out = path.join(dir, '.state/run/p1');
       const h = host(dir, env, { ...o, keepSummary: true, output: (t: string) => (t.endsWith('outside-voice') ? '1. **A guard fails open** - `src/a.ts:1` accepts any input. Severity: Medium. Blocks: no.\n\nRecommendation: fix the guard because it fails open' : cleanReply(t)), epoch: Date.now() });
-      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'], models: { 'outside-voice': { model_id: 'openai/gpt-6.1-sol', reasoning_mode: 'medium' } } };
+      const base = { base: 'main', out, pass, planFlags: ['--depth-floor', 'full'], models: { 'outside-voice': { model_id: 'openai/gpt-6.2-sol', reasoning_mode: 'medium' } } };
       expect(await runPass(h, base)).toContain('NEXT: judge (Phase 4)');
       let res = '';
       for (let i = 0; i < 6; i++) {
@@ -98,7 +98,7 @@ describe('Capy pass program (fake host, real bins)', () => {
   const CYBER = fs.readFileSync(path.join(ROOT, 'test/fixtures/cyber-policy/capy-latest-error.txt'), 'utf8').trim();
   const voiceReply = (t: string) => (t.includes('outside-voice') ? 'Recommendation: ship as-is because no finding survived' : cleanReply(t));
   // The fork defaults to Astra. Start these fixtures on Sol to exercise the same R95 sequence.
-  const SOL_LANE = { models: { 'outside-voice': { model_id: 'openai/gpt-6.1-sol', reasoning_mode: 'medium' } } };
+  const SOL_LANE = { models: { 'outside-voice': { model_id: 'openai/gpt-6.2-sol', reasoning_mode: 'medium' } } };
   async function refusedVoices(pass: string, error: (title: string) => string | undefined, lane: Record<string, unknown> = SOL_LANE) {
     const { dir, env } = repo();
     const out = path.join(dir, '.state/run/p1');
