@@ -66,15 +66,17 @@ describe('lib/pricing.ts generation marks', () => {
     const older: Record<string, string> = {
       'claude-opus-4-5': 'claude-opus-5-5', 'anthropic/claude-opus-4-6': 'claude-opus-5-5', 'claude-3-opus-20240229': 'claude-opus-5-5',
       'claude-sonnet-4-5-20250929': 'claude-sonnet-5-5', 'claude-3-5-sonnet-20241022': 'claude-sonnet-5-5', 'claude-3-5-haiku': 'claude-haiku-5-5',
-      'gpt-5.5': 'gpt-6.2-sol', 'openai/gpt-5.3-codex': 'gpt-6.2-sol', 'gpt-4.1': 'gpt-6.2-sol', 'gpt-4.1-mini': 'gpt-6-luna', 'gpt-5-nano': 'gpt-6-luna',
+      'gpt-5.2': 'gpt-6.2-sol', 'openai/gpt-5.3-codex': 'gpt-6.2-sol', 'gpt-4.1': 'gpt-6.2-sol', 'gpt-4.1-mini': 'gpt-6-luna', 'gpt-5-nano': 'gpt-6-luna',
       'o1': 'gpt-6.2-sol', 'o3-pro': 'gpt-6.2-sol', 'o3-mini': 'gpt-6-luna',
       'gemini-2.0-flash': 'gemini-3.8-flash', 'google/gemini-1.5-pro-002': 'gemini-4-argon', 'gemini-3-pro': 'gemini-4-argon',
     };
     for (const [model, replacement] of Object.entries(older)) expect(currentReplacement(model), model).toBe(replacement);
+    // dohma fork: gpt-5.5 and gpt-5.6-sol are priced production pins with no superseded_by (lib/pricing.ts), so eval-plan admits them.
+    for (const pin of ['gpt-5.5', 'gpt-5.6-sol']) expect(currentReplacement(pin), pin).toBeNull();
     for (const current of ['claude-fable-5-2', 'claude-opus-5', 'gpt-6-terra', 'gpt-7', 'gemini-4-neon', 'gemini-3.7-flash', 'claude-haiku-6-0', 'deepseek-v3', 'gemini-embedding-2']) expect(currentReplacement(current), current).toBeNull();
-    expect(checkModelGenerations({ arms: ['claude-opus-5-5', 'claude-opus-4-5#plain'], judge: 'gpt-5.5' }).refused).toEqual([
+    expect(checkModelGenerations({ arms: ['claude-opus-5-5', 'claude-opus-4-5#plain'], judge: 'gpt-5.2' }).refused).toEqual([
       { model: 'claude-opus-4-5', role: 'arm', replacement: 'claude-opus-5-5' },
-      { model: 'gpt-5.5', role: 'judge', replacement: 'gpt-6.2-sol' },
+      { model: 'gpt-5.2', role: 'judge', replacement: 'gpt-6.2-sol' },
     ]);
   });
 });
