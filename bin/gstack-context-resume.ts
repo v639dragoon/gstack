@@ -42,10 +42,23 @@ export function pick(dir: string, branch: string | null, source?: string, now = 
   }
   return clear ? null : path.join(dir, files[0]);
 }
-export function instruction(source: string | undefined, file: string): string {
+// The restore skill's installed command: `gstack-context-restore` under
+// `./setup --prefix`, `context-restore` otherwise. Read from the name: line of
+// the checkout's context-restore/SKILL.md, which setup patches in prefix mode,
+// so the cue never names a command the host did not register.
+export function restoreCommand(root: string): string {
+  try {
+    const m = /^name:\s*([A-Za-z0-9_-]+)\s*$/m.exec(fs.readFileSync(path.join(root, 'context-restore', 'SKILL.md'), 'utf8').slice(0, 2000));
+    if (m) return m[1];
+  } catch {
+    /* fall through to the plain name */
+  }
+  return 'context-restore';
+}
+export function instruction(source: string | undefined, file: string, command = 'context-restore'): string {
   if (source === 'clear')
-    return `CONTEXT RESUME (clear): the newest checkpoint for this branch is ${file}. Unless the user's first message clearly starts unrelated work, run /context-restore before anything else and continue from its Remaining Work and next action.`;
-  return `CONTEXT RESUME (${source ?? 'start'}): newest checkpoint ${file}. Continue from its Remaining Work and next action; run /context-restore for the full text.`;
+    return `CONTEXT RESUME (clear): the newest checkpoint for this branch is ${file}. Unless the user's first message clearly starts unrelated work, run /${command} before anything else and continue from its Remaining Work and next action.`;
+  return `CONTEXT RESUME (${source ?? 'start'}): newest checkpoint ${file}. Continue from its Remaining Work and next action; run /${command} for the full text.`;
 }
 async function main() {
   try {
@@ -72,7 +85,7 @@ async function main() {
       JSON.stringify({
         hookSpecificOutput: {
           hookEventName: 'SessionStart',
-          additionalContext: `${instruction(hook.source, file)}\n\n${body}`,
+          additionalContext: `${instruction(hook.source, file, restoreCommand(path.dirname(path.dirname(Bun.fileURLToPath(import.meta.url)))))}\n\n${body}`,
         },
       }),
     );

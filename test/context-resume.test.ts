@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-import { CLEAR_MAX_AGE_MS, instruction, pick } from '../bin/gstack-context-resume.ts';
+import { CLEAR_MAX_AGE_MS, instruction, pick, restoreCommand } from '../bin/gstack-context-resume.ts';
 const resume = join(import.meta.dir, '..', 'bin', 'gstack-context-resume'),
   dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((d) => rmSync(d, { recursive: true, force: true })));
@@ -38,6 +38,15 @@ describe('pick (pure)', () => {
     expect(pick(d, null, 'clear')).toBeNull();
     ckpt(d, '20260101-mine.md', 'lane-a', CLEAR_MAX_AGE_MS + 60_000);
     expect(pick(d, 'lane-a', 'clear')).toBeNull();
+  });
+  test('the cue names the installed restore command (prefix mode patches the name: line)', () => {
+    const root = tmp('resume-cmd-');
+    expect(restoreCommand(root)).toBe('context-restore');
+    mkdirSync(join(root, 'context-restore'));
+    writeFileSync(join(root, 'context-restore', 'SKILL.md'), '---\nname: gstack-context-restore\npreamble-tier: 2\n---\n');
+    expect(restoreCommand(root)).toBe('gstack-context-restore');
+    expect(instruction('clear', 'x.md', restoreCommand(root))).toContain('run /gstack-context-restore before anything else');
+    expect(instruction('resume', 'x.md', 'gstack-context-restore')).toContain('run /gstack-context-restore for the full text');
   });
   test('the clear instruction runs /context-restore unless the user starts unrelated work', () => {
     expect(instruction('clear', 'x.md')).toContain('run /context-restore before anything else');
